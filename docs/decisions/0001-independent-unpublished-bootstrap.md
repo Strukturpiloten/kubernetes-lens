@@ -1,6 +1,6 @@
 # ADR 0001: Independent unpublished bootstrap
 
-Status: Accepted
+Status: Accepted; empty-library/public-API statements superseded by ADR 0003
 
 ## Context
 

@@ -1,9 +1,12 @@
 # Platform support
 
-The native library has no supported Kubernetes versions or runtime profiles yet. Kubernetes 1.20
-is a future compatibility anchor, not an operational dependency to advance with Renovate.
-The Rust build contract is edition 2024 and MSRV 1.85.0. CI uses ubuntu-24.04 for repository checks.
+The byte-oriented offline Rust foundation uses edition 2024 and MSRV 1.85.0. Explicit file/directory
+acquisition currently supports Linux only, with regular-file identity and opened-descriptor
+containment verification through procfs. If those checks are unavailable or fail, acquisition
+refuses input. Other platforms can supply bounded UTF-8 bytes directly; acquisition fails closed.
+Focused execution evidence currently covers Linux amd64 in the shared development environment.
 
-Shared tools belong to BoxFerry; its Kubernetes tooling is delivered in #445/#447, and #446 tracks
-remaining arm64 execution evidence. A successful bootstrap gate does not prove native Kubernetes,
-arm64 runtime or cluster conformance. Follow-up #7 owns native implementation and evidence.
+No Kubernetes minor, renderer backend, arm64 runtime, API server or live cluster conformance is
+claimed. Kubernetes 1.20–1.37 are frozen target/source facts, not a supported runtime-version list.
+Shared tools remain BoxFerry-owned; #446 tracks upstream arm64 evidence. Native cohorts and
+independent runtime/renderer evidence remain separately required by #7 and the completion gate.

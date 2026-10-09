@@ -8,3 +8,6 @@ shared consumers and external follow-ups. The [public status page](public/status
 
 The [frozen compatibility contract](compatibility/README.md) records executable expectations and
 pending native evidence for the agreed version/kind slice.
+
+The [foundation API](foundation-api.md) records delivered offline behavior, private evidence and
+sealed cohort integration. Runtime and renderer conformance remain pending.

@@ -3,12 +3,12 @@ name = "kubernetes-lens"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85.0"
-description = "Independent Kubernetes native-format library (unpublished bootstrap)"
+description = "Independent Kubernetes native-format library (unpublished offline foundation)"
 readme = "README.md"
 repository = "https://github.com/Strukturpiloten/kubernetes-lens"
 license = "MPL-2.0"
 publish = false
-include = ["/src/**", "/Cargo.toml", "/Cargo.lock", "/LICENSE", "/README.md", "/CHANGELOG.md"]
+include = ["/src/**", "/Cargo.toml", "/Cargo.lock", "/LICENSE", "/README.md", "/CHANGELOG.md", "/schemas/capabilities/**", "/docs/compatibility/licenses/**", "/tests/foundation.rs", "/tests/foundation/**", "/fixtures/foundation/**"]
 
 [workspace]
 resolver = "3"
@@ -30,3 +30,11 @@ panic = "warn"
 todo = "warn"
 unimplemented = "warn"
 unwrap_used = "warn"
+
+[dependencies]
+serde = "=1.0.229"
+serde_json = { version = "=1.0.151", features = ["raw_value"] }
+yaml-rust2 = { version = "=0.13.0", default-features = false }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "=0.2.190"
