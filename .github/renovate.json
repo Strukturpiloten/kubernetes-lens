@@ -127,6 +127,16 @@
       "dependencyDashboardApproval": true,
       "automerge": false,
       "pinDigests": true
+    },
+    {
+      "description": [
+        "Review bundled native timezone data after generic automerge rules; recognition is versioned evidence"
+      ],
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["jiff-tzdb"],
+      "groupName": "Native timezone data",
+      "dependencyDashboardApproval": true,
+      "automerge": false
     }
   ]
 }

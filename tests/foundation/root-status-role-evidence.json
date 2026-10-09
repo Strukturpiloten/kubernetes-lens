@@ -1,0 +1,389 @@
+{
+  "format_version": 1,
+  "evidence_kind": "authenticated-schema-observation-only",
+  "report_sha256": "ea9308ea8a4220132c7036b425ee7ebe189cd48e2a05f16679cbbb891f335228",
+  "ledger_sha256": "747adc51d5646a1977fd1a6fa0d022414cdab72520d31470696aaf4e5b0d2c08",
+  "witness_sha256": "539a6f61f1b6116373f743efc3ac1322020680d1e919f9852bd8a085d5102a44",
+  "schemas": [
+    {
+      "schema_id": "k8s-1.20-0",
+      "minor": "1.20",
+      "source_sha256": "c7354e6ab4034a89873229a9b7c1fa31fa6242b2e5f5a9b67c3be4fc67cb903c"
+    },
+    {
+      "schema_id": "k8s-1.21-0",
+      "minor": "1.21",
+      "source_sha256": "128a984dbb5a4e5ceceef9dea0db575267678d333f53ed606300a2132d2539cc"
+    },
+    {
+      "schema_id": "k8s-1.22-0",
+      "minor": "1.22",
+      "source_sha256": "d6718670e062681e4dc9e2b9dadf2b311c147cfdabcac628b9018011165d8773"
+    },
+    {
+      "schema_id": "k8s-1.23-0",
+      "minor": "1.23",
+      "source_sha256": "4a744e0c28180c3fe90256d69ebdf57d31b8579d9d5dfcdff141cd4e2d7a3b4a"
+    },
+    {
+      "schema_id": "k8s-1.24-0",
+      "minor": "1.24",
+      "source_sha256": "0d43576f2097092c8a3f203368a8edc0d605540c9757125dae116031f182e53a"
+    },
+    {
+      "schema_id": "k8s-1.25-0",
+      "minor": "1.25",
+      "source_sha256": "96354682390d446dde77eb2246fe022baa89697133a8248612ca2573e4a12120"
+    },
+    {
+      "schema_id": "k8s-1.26-0",
+      "minor": "1.26",
+      "source_sha256": "a04c5cc1dcb45730940f1bd44a198369830934550b598ca0bccd09625af5dd60"
+    },
+    {
+      "schema_id": "k8s-1.27-0",
+      "minor": "1.27",
+      "source_sha256": "09a502c5b98190a3e47604d6df835f23e7a334dfbbc3fb80729f7bb2cabf8fc4"
+    },
+    {
+      "schema_id": "k8s-1.28-0",
+      "minor": "1.28",
+      "source_sha256": "c3d62644ad31aeca618e6f640178caf39f917ba296b4919443d9838a22a10be1"
+    },
+    {
+      "schema_id": "k8s-1.29-0",
+      "minor": "1.29",
+      "source_sha256": "84c20b1e2bcedce1d9d09c03e0ccb02500cd96e62e4fa54651b0e97b3a211046"
+    },
+    {
+      "schema_id": "k8s-1.30-0",
+      "minor": "1.30",
+      "source_sha256": "94ca7544416a4f27d8cb3f8a332630d41325c5edeb2408a5aefe37ba3fd6af6d"
+    },
+    {
+      "schema_id": "k8s-1.31-0",
+      "minor": "1.31",
+      "source_sha256": "ac357350d9d00ee233ea9a172d7c868201ff405332fec8ffe0fda25dee3e41b4"
+    },
+    {
+      "schema_id": "k8s-1.32-0",
+      "minor": "1.32",
+      "source_sha256": "0ba99bb42a1cf0bd35959fe82965f4eec50d404221ca299e9ef79b900e15dc00"
+    },
+    {
+      "schema_id": "k8s-1.33-0",
+      "minor": "1.33",
+      "source_sha256": "2af5abf98554af1599e516f31f7f1698085e6faa12b816401f569c097b9f7ef6"
+    },
+    {
+      "schema_id": "k8s-1.34-0",
+      "minor": "1.34",
+      "source_sha256": "d3b0cdc2fda15c753206d25ab459dc7c12df64e2fd652b6809687471ea751c37"
+    },
+    {
+      "schema_id": "k8s-1.35-0",
+      "minor": "1.35",
+      "source_sha256": "483500149ee52ce5753d75f5639101d985bb4f5e902cc05b1ba7627465d62446"
+    },
+    {
+      "schema_id": "k8s-1.36-0",
+      "minor": "1.36",
+      "source_sha256": "dcede2063da1d7ad62ecb5af8adb6d7fabd0b52385a7fa0048afb491dac90450"
+    },
+    {
+      "schema_id": "k8s-1.37-0",
+      "minor": "1.37",
+      "source_sha256": "465276aedf437726de5a6ed23a41b86d78bb0d347edf251a755ae26a93cdd8a6"
+    }
+  ],
+  "apis": [
+    {
+      "api_version": "admissionregistration.k8s.io/v1beta1",
+      "kind": "MutatingWebhookConfiguration",
+      "admitted": [20, 21],
+      "status": null
+    },
+    {
+      "api_version": "admissionregistration.k8s.io/v1beta1",
+      "kind": "ValidatingWebhookConfiguration",
+      "admitted": [20, 21],
+      "status": null
+    },
+    {
+      "api_version": "admissionregistration.k8s.io/v1",
+      "kind": "MutatingWebhookConfiguration",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "admissionregistration.k8s.io/v1",
+      "kind": "ValidatingWebhookConfiguration",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "apiextensions.k8s.io/v1beta1",
+      "kind": "CustomResourceDefinition",
+      "admitted": [20, 21],
+      "status": [20, 21]
+    },
+    {
+      "api_version": "apiextensions.k8s.io/v1",
+      "kind": "CustomResourceDefinition",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "apps/v1",
+      "kind": "DaemonSet",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "apps/v1",
+      "kind": "Deployment",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "apps/v1",
+      "kind": "ReplicaSet",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "apps/v1",
+      "kind": "StatefulSet",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "autoscaling/v1",
+      "kind": "HorizontalPodAutoscaler",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "autoscaling/v2beta1",
+      "kind": "HorizontalPodAutoscaler",
+      "admitted": [20, 24],
+      "status": [20, 24]
+    },
+    {
+      "api_version": "autoscaling/v2beta2",
+      "kind": "HorizontalPodAutoscaler",
+      "admitted": [20, 25],
+      "status": [20, 25]
+    },
+    {
+      "api_version": "autoscaling/v2",
+      "kind": "HorizontalPodAutoscaler",
+      "admitted": [23, 37],
+      "status": [23, 37]
+    },
+    {
+      "api_version": "batch/v1beta1",
+      "kind": "CronJob",
+      "admitted": [20, 24],
+      "status": [20, 24]
+    },
+    {
+      "api_version": "batch/v1",
+      "kind": "CronJob",
+      "admitted": [21, 37],
+      "status": [21, 37]
+    },
+    {
+      "api_version": "batch/v1",
+      "kind": "Job",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "discovery.k8s.io/v1beta1",
+      "kind": "EndpointSlice",
+      "admitted": [20, 24],
+      "status": null
+    },
+    {
+      "api_version": "discovery.k8s.io/v1",
+      "kind": "EndpointSlice",
+      "admitted": [21, 37],
+      "status": null
+    },
+    {
+      "api_version": "extensions/v1beta1",
+      "kind": "Ingress",
+      "admitted": [20, 21],
+      "status": [20, 21]
+    },
+    {
+      "api_version": "networking.k8s.io/v1beta1",
+      "kind": "Ingress",
+      "admitted": [20, 21],
+      "status": [20, 21]
+    },
+    {
+      "api_version": "networking.k8s.io/v1beta1",
+      "kind": "IngressClass",
+      "admitted": [20, 21],
+      "status": null
+    },
+    {
+      "api_version": "networking.k8s.io/v1",
+      "kind": "Ingress",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "networking.k8s.io/v1",
+      "kind": "IngressClass",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "networking.k8s.io/v1",
+      "kind": "NetworkPolicy",
+      "admitted": [20, 37],
+      "status": [24, 27]
+    },
+    {
+      "api_version": "node.k8s.io/v1beta1",
+      "kind": "RuntimeClass",
+      "admitted": [20, 24],
+      "status": null
+    },
+    {
+      "api_version": "node.k8s.io/v1",
+      "kind": "RuntimeClass",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "policy/v1beta1",
+      "kind": "PodDisruptionBudget",
+      "admitted": [20, 24],
+      "status": [20, 24]
+    },
+    {
+      "api_version": "policy/v1beta1",
+      "kind": "PodSecurityPolicy",
+      "admitted": [20, 24],
+      "status": null
+    },
+    {
+      "api_version": "policy/v1",
+      "kind": "PodDisruptionBudget",
+      "admitted": [21, 37],
+      "status": [21, 37]
+    },
+    {
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "kind": "ClusterRole",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "kind": "ClusterRoleBinding",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "kind": "Role",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "kind": "RoleBinding",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "storage.k8s.io/v1",
+      "kind": "StorageClass",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "v1",
+      "kind": "ConfigMap",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "v1",
+      "kind": "Endpoints",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "v1",
+      "kind": "LimitRange",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "v1",
+      "kind": "Namespace",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "v1",
+      "kind": "PersistentVolume",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "v1",
+      "kind": "PersistentVolumeClaim",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "v1",
+      "kind": "Pod",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "v1",
+      "kind": "ReplicationController",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "v1",
+      "kind": "ResourceQuota",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "v1",
+      "kind": "Secret",
+      "admitted": [20, 37],
+      "status": null
+    },
+    {
+      "api_version": "v1",
+      "kind": "Service",
+      "admitted": [20, 37],
+      "status": [20, 37]
+    },
+    {
+      "api_version": "v1",
+      "kind": "ServiceAccount",
+      "admitted": [20, 37],
+      "status": null
+    }
+  ]
+}

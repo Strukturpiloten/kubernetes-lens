@@ -1,4 +1,6 @@
 //! Fixed codec aggregator. Cohort slots are declarations, not placeholder implementations.
+pub mod common;
+pub mod workloads;
 use crate::{
     capability::DECLARED_APIS,
     diagnostic::Finding,
@@ -24,6 +26,6 @@ pub(crate) fn registry() -> Result<RegistryBuilder, Vec<Finding>> {
             .register_list(TypedListRegistration { gvk, item_gvk })
             .map_err(|e| vec![e])?;
     }
-    // Actual register calls are added only when the independently owned cohort files exist.
+    workloads::roots::register(&mut registry).map_err(|e| vec![e])?;
     Ok(registry)
 }

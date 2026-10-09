@@ -1,0 +1,220 @@
+{
+  "format": "local_workload_code_evidence_v1",
+  "status": "offline_code_tested_only",
+  "issue": 9,
+  "canonical_ledger": {
+    "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
+    "sha256": "747adc51d5646a1977fd1a6fa0d022414cdab72520d31470696aaf4e5b0d2c08"
+  },
+  "roots": [
+    {
+      "kind": "Pod",
+      "api_version": "v1",
+      "selected_field_catalogue_pointer": "/resources/0/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/workloads/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "Deployment",
+      "api_version": "apps/v1",
+      "selected_field_catalogue_pointer": "/resources/1/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/workloads/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "StatefulSet",
+      "api_version": "apps/v1",
+      "selected_field_catalogue_pointer": "/resources/2/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/workloads/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "DaemonSet",
+      "api_version": "apps/v1",
+      "selected_field_catalogue_pointer": "/resources/3/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/workloads/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "ReplicaSet",
+      "api_version": "apps/v1",
+      "selected_field_catalogue_pointer": "/resources/4/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/workloads/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "ReplicationController",
+      "api_version": "v1",
+      "selected_field_catalogue_pointer": "/resources/5/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/workloads/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "Job",
+      "api_version": "batch/v1",
+      "selected_field_catalogue_pointer": "/resources/6/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/workloads/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "CronJob",
+      "api_version": "batch/v1",
+      "selected_field_catalogue_pointer": "/resources/7/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.21",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/workloads/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "CronJob",
+      "api_version": "batch/v1beta1",
+      "selected_field_catalogue_pointer": "/resources/7/proposed_admitted_api_profiles/1",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.24"
+        }
+      ],
+      "code_registration": "src/resources/workloads/roots.rs",
+      "native_case_status": "pending"
+    }
+  ],
+  "field_selection_rule": "Only the canonical selected root pointers and recursively selected helper members; no prefix admission. Case coverage remains pending.",
+  "source_sha256": {
+    "src/generation.rs": "0b0040d2e732f36a7725570deae942e6f6db03aabda73d55d42e64ab48107014",
+    "src/graph.rs": "87b90bdf51539eab13cdea987dc9a51cb4634b22406ad7acdda2ede3bcbe1d5e",
+    "src/model.rs": "e2c7dc8b64caf5de862d32652ada034f3f0166e30c6eee52c5644efd534d41ba",
+    "src/registry.rs": "48b2fae1222186558047e8a942aab08e14b6513ee1e58fdecbb7c605c700e887",
+    "src/resources/common.rs": "838c63d20d5138519acb47cb9fa148ad6cb3da39a2e2ae21018cdf462d441b38",
+    "src/resources/common/native_helpers.rs": "d807e072942ca8df513b6b369df9fe0f4486a2b464bb42a4599fa79354781733",
+    "src/resources/common/native_time.rs": "cd908b02ab3a00dea47b028a5c241e14e8c79f75894b21d14c979cc4de8436b1",
+    "src/resources/common/workload_specs.rs": "5b302801a6668d45ca79a261be683041af6268c1749cef07f95848291368aa92",
+    "src/resources/mod.rs": "9c10dc5e4fd8c5b0916d460b5799859423189aac51076e28e0162e4649474898",
+    "src/resources/workloads.rs": "f314730dfc93548dd39eaf43d65cf94552b9187909dbe9494238928dbc7c4583",
+    "src/resources/workloads/capabilities.rs": "71268750cdbad52c8c3e3845f09f98ead1e9febc1eee6805698c04f70ccfb6c0",
+    "src/resources/workloads/facts.rs": "33b0bf7a1abbb32c5be95012ab809fc11838a0701324e9d25e59c28aafed98af",
+    "src/resources/workloads/gates.rs": "a4085fa14dc127fde65a44b9d5bda7009c805efef107bed443017cf8d45fec76",
+    "src/resources/workloads/roots.rs": "00499da839951f5b45b1cb8ed4030744df7300ae34208dc0fa55a92f22f9a9bc",
+    "src/resources/workloads/rules.rs": "20a78c0003fa0ca552b51e8cc977bfacbd575fd4acf5b11e3a4de6ccaff1338e",
+    "src/resources/workloads/schedule.rs": "30b7287b7656727e8e3c20b6631b9a0f57b13b0ef864c0152dd19210752213ff",
+    "src/resources/workloads/validation.rs": "bd2a035096ac9065ed94639400b556b77bd2660036b9c196747a9bfe6de778a9",
+    "src/source.rs": "3a5181ff9c6f2b66981c850fa79a705d2b320976ff9da8d3d6dd65c1b5c8ed3c",
+    "src/syntax.rs": "09c34a8e69cbb0f7252c20b8a30e3c48bf91ef1b457e87d4872b94b38cd27879",
+    "src/value.rs": "a24826a8b7295da236e51f0bce9f364993c900d7a2ce4ab605c567b28859aea8",
+    "tests/foundation/graph.rs": "05f802b82ba1f3586dfef1579c7e88c2c8339bd5087378c6ec167cd932ed3013",
+    "tests/workloads.rs": "24ef1d1c9d8f1a0c6933a628ad6e2ac027cdf4647ef4267136458ce12e4d4653"
+  },
+  "demonstrated_workload_tests": [
+    "named_ports_follow_native_grammar_in_every_pod_binding",
+    "relaxed_environment_forms_require_evidence_and_floor_uses_legacy_grammar",
+    "environment_equals_is_invalid_for_names_and_prefixes_across_templates",
+    "unknown_volume_neighbors_do_not_hide_known_source_contradictions",
+    "azure_file_secret_dependency_is_explicit_and_namespaced_in_every_binding",
+    "concrete_roots_have_fixed_served_api_identity",
+    "omitted_null_and_zero_replicas_stay_distinct",
+    "surge_above_one_hundred_is_valid_but_unavailability_is_not",
+    "nested_unknown_member_survives_a_typed_image_edit",
+    "protected_native_payloads_are_redacted_and_output_requires_permission",
+    "independent_invalid_native_pod_cases_have_path_findings",
+    "sidecars_need_init_role_and_an_enabled_stage",
+    "cron_served_api_and_stable_timezone_boundaries_are_explicit",
+    "cron_dialect_accepts_native_forms_and_rejects_extensions",
+    "timestamp_lexeme_retains_long_precision_and_checks_calendar",
+    "author_fresh_native_values_without_any_source_manifest",
+    "explicit_selector_mismatch_is_invalid",
+    "portworx_parent_stays_unadmitted",
+    "authored_source_evidence_is_generated_and_positionless",
+    "authoring_scalar_resource_node_depth_and_cumulative_byte_boundaries",
+    "native_enum_action_and_optional_reference_shapes_are_checked",
+    "emitted_key_references_keep_object_key_optional_and_private_evidence_distinct",
+    "job_indexed_policies_validate_restart_counts_and_intervals",
+    "timezone_recognition_is_exact_and_inline_tz_rejection_is_versioned",
+    "sidecar_role_and_gate_checks_propagate_through_every_served_template",
+    "explicit_gate_enable_cannot_bypass_a_stable_only_field_boundary",
+    "heterogeneous_source_free_collection_and_duplicates_use_native_identity",
+    "native_looking_free_form_keys_are_data_not_validation_references_or_protection",
+    "actual_native_protocol_references_and_protected_fields_keep_their_bindings",
+    "inline_timezone_requires_explicit_creation_context_in_validation_and_generation",
+    "typed_and_explicit_schedule_edits_do_not_infer_creation_or_update",
+    "malformed_inline_syntax_and_timezone_conflicts_remain_errors_under_both_intents",
+    "exact_template_and_ephemeral_claim_observations_preserve_neighbors_across_all_bindings",
+    "standalone_ephemeral_containers_use_original_and_effective_tree_at_the_stable_boundary",
+    "unsupported_template_status_and_ephemeral_containers_are_not_stripped",
+    "external_common_consumer_uses_single_helper_identity_and_private_source_free_output",
+    "full_claim_status_and_metadata_follow_reordered_effective_tree_and_explicit_patches",
+    "qualified_label_prefixes_keep_native_selector_facts_known"
+  ],
+  "additional_core_regressions": [
+    "graph::tests::malformed_public_checked_references_never_become_missing_or_optional",
+    "graph::tests::malformed_labels_cannot_certify_selector_membership"
+  ],
+  "local_run": {
+    "command": "cargo test --offline --locked --lib --test foundation --test workloads --no-fail-fast; cargo clippy --offline --locked --all-targets --all-features -- -D warnings",
+    "exit_code": 0,
+    "library_tests": 48,
+    "foundation_tests": 30,
+    "workload_tests": 38,
+    "strict_clippy": "passed",
+    "log_sha256": "8ea1f5b15030707108234614ef53182df52a430879e890650017978d62dce49a"
+  },
+  "conformance": {
+    "supported_kubernetes_versions": [],
+    "field_cases": "pending",
+    "native_kind_scenarios": "pending",
+    "tool_commands": "pending",
+    "api_server": "pending",
+    "runtime": "pending"
+  },
+  "limitations": [
+    "Exact target-default evidence for relaxed environment-name validation is unadmitted; later nonlegacy printable forms carry NativeContextRequired.",
+    "Per-kind identity/naming completion belongs to shared issue12 integration.",
+    "Supplied facts prove finite offline relationships, never deployed/controller behavior.",
+    "No renderer or live-cluster acquisition interface is delivered by this cohort."
+  ]
+}

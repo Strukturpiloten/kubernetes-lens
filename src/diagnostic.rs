@@ -22,6 +22,8 @@ pub enum FindingCode {
     InvalidIdentity,
     /// Two supplied records represent the same object.
     DuplicateIdentity,
+    /// Distinct supplied Pod/volume rules predict the same claim identity.
+    ClaimIdentityCollision,
     /// A supplied reference resolves to more than one object.
     AmbiguousReference,
     /// A supplied reference has no target.
@@ -42,6 +44,8 @@ pub enum FindingCode {
     UnknownKind,
     /// A native field is invalid.
     NativeFieldInvalid,
+    /// A reviewed native rule requires an explicit operation context.
+    NativeContextRequired,
     /// The target API is not served in the selected profile.
     UnavailableApi,
     /// The target field is not available.
@@ -90,6 +94,7 @@ impl FindingCode {
             Self::UnsupportedScalar => "unsupported-scalar",
             Self::InvalidIdentity => "invalid-identity",
             Self::DuplicateIdentity => "duplicate-identity",
+            Self::ClaimIdentityCollision => "claim-identity-collision",
             Self::AmbiguousReference => "ambiguous-reference",
             Self::MissingReference => "unresolved-reference",
             Self::SelectorNoMatches => "selector-no-matches",
@@ -100,6 +105,7 @@ impl FindingCode {
             Self::UnadmittedKind => "unadmitted-kind",
             Self::UnknownKind => "unknown-kind",
             Self::NativeFieldInvalid => "native-field-invalid",
+            Self::NativeContextRequired => "native-context-required",
             Self::UnavailableApi => "unavailable-api",
             Self::UnavailableField => "unavailable-field",
             Self::UnadmittedField => "unadmitted-field",

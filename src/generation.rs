@@ -27,9 +27,20 @@ pub enum JsonShape {
     /// A generic Kubernetes List.
     KubernetesList,
 }
+/// Explicit native validation operation; never inferred from source or output origin.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum NativeValidationIntent {
+    /// Operation-dependent rules remain unverified and produce safe findings.
+    #[default]
+    Unspecified,
+    /// Validate the reviewed create-specific rules, without executing a request.
+    Create,
+}
 /// Native source intent independent of source origin.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OutputIntent {
+    /// Retain supplied observations under the same target/opaque/protected checks.
+    PreserveObservation,
     /// Retain observations unless explicitly edited.
     PreserveDocument,
     /// Remove only recognized server-owned fields with findings.
@@ -70,6 +81,8 @@ pub struct GenerationOptions {
     pub json_shape: JsonShape,
     /// Explicit output intent.
     pub intent: OutputIntent,
+    /// Native operation context, independent of output intent and source origin.
+    pub validation_intent: NativeValidationIntent,
     /// Explicit YAML/JSON collection policy.
     pub collections: CollectionOutput,
 }
@@ -80,6 +93,7 @@ impl Default for GenerationOptions {
             opaque_fields: OpaqueFieldPolicy::Block,
             json_shape: JsonShape::KubernetesList,
             intent: OutputIntent::PreserveDocument,
+            validation_intent: NativeValidationIntent::Unspecified,
             collections: CollectionOutput::PreserveWrappers,
         }
     }
@@ -203,6 +217,16 @@ fn validate_wrapper(list: &crate::model::ListDocument, target: &TargetProfile, f
 /// Validate current resources and every retained List against the explicit target.
 #[must_use]
 pub fn validate_for_target(resources: &ResourceSet, target: &TargetProfile) -> Vec<Finding> {
+    validate_for_target_with_intent(resources, target, NativeValidationIntent::Unspecified)
+}
+/// Validate the same effective native trees with explicitly supplied operation context.
+/// This does not establish API-server conformance or authorize execution.
+#[must_use]
+pub fn validate_for_target_with_intent(
+    resources: &ResourceSet,
+    target: &TargetProfile,
+    intent: NativeValidationIntent,
+) -> Vec<Finding> {
     let mut findings = target.findings();
     findings.extend(resources.identity_findings());
     for list in &resources.lists {
@@ -212,11 +236,18 @@ pub fn validate_for_target(resources: &ResourceSet, target: &TargetProfile) -> V
         let tree = match document.current_tree(Some(target)) {
             Ok(tree) => tree,
             Err(error) => {
+                if error.code == FindingCode::MergeConflict {
+                    let mut native =
+                        Finding::error(FindingCode::NativeFieldInvalid, Phase::Validation).for_resource(document.id);
+                    native.path.clone_from(&error.path);
+                    native.source = error.source;
+                    findings.push(native);
+                }
                 findings.push(error.for_resource(document.id));
                 continue;
             }
         };
-        let identity = match document.identity() {
+        let identity = match crate::model::identity(&tree, document.original_identity.scope) {
             Ok(identity) => identity,
             Err(error) => {
                 findings.push(error.for_resource(document.id));
@@ -282,11 +313,35 @@ pub fn validate_for_target(resources: &ResourceSet, target: &TargetProfile) -> V
                 .for_resource(document.id),
             );
         }
-        if let Some(resource) = &document.resource {
-            resource.validate(&ValidationContext { target }, &mut findings);
-        }
+        validate_native(document, &tree, &identity, target, intent, &mut findings);
     }
     findings
+}
+fn validate_native(
+    document: &crate::model::ResourceDocument,
+    tree: &TreeNode,
+    identity: &crate::model::ResourceIdentity,
+    target: &TargetProfile,
+    intent: NativeValidationIntent,
+    findings: &mut Vec<Finding>,
+) {
+    if let Some(decode) = document.decode {
+        match decode(
+            tree,
+            &document.evidence,
+            &crate::registry::DecodeContext {
+                gvk: &identity.gvk,
+                scope: identity.scope,
+            },
+        ) {
+            Ok(resource) => {
+                let mut native = Vec::new();
+                resource.validate(&ValidationContext { intent, target }, &mut native);
+                findings.extend(native.into_iter().map(|finding| finding.for_resource(document.id)));
+            }
+            Err(errors) => findings.extend(errors.into_iter().map(|finding| finding.for_resource(document.id))),
+        }
+    }
 }
 pub(crate) fn field_nodes<'a>(tree: &'a TreeNode, pointer: &str) -> Vec<&'a TreeNode> {
     let Ok(path) = FieldPath::parse(pointer) else {
@@ -319,23 +374,28 @@ pub fn generate(
     format: OutputFormat,
     options: &GenerationOptions,
 ) -> Result<GeneratedArtifact, Vec<Finding>> {
-    let mut findings = validate_for_target(resources, target);
+    let mut findings = validate_for_target_with_intent(resources, target, options.validation_intent);
     let mut trees = BTreeMap::new();
     for doc in &resources.documents {
-        let mut tree = match doc.current_tree(Some(target)) {
-            Ok(tree) => tree,
-            Err(f) => {
-                findings.push(f.for_resource(doc.id));
+        let projection = match doc.project(Some(target)) {
+            Ok(projection) => projection,
+            Err(errors) => {
+                findings.extend(errors);
                 continue;
             }
         };
+        findings.extend(projection.findings);
+        let mut tree = projection.tree;
+        if options.intent == OutputIntent::AuthoredIntent {
+            strip_observation_paths(&mut tree, Some(doc.id), &projection.observations, &mut findings);
+        }
         if options.opaque_fields == OpaqueFieldPolicy::Block
             && (doc.resource.is_none() || has_unknown_fields(&tree, doc.capability.as_ref().map_or(&[], |c| c.fields)))
         {
             findings.push(Finding::error(FindingCode::OpaqueOutputDenied, Phase::Generation).for_resource(doc.id));
         }
         let mut protected_paths = Vec::new();
-        if let Some(resource) = &doc.resource {
+        if let Some(resource) = &projection.resource {
             resource.collect_protected_paths(&mut protected_paths);
         }
         let codec_protected = protected_paths
@@ -351,9 +411,6 @@ pub fn generate(
                 ))
         {
             findings.push(Finding::error(FindingCode::ProtectedOutputDenied, Phase::Generation).for_resource(doc.id));
-        }
-        if options.intent == OutputIntent::AuthoredIntent {
-            strip_observed(&mut tree, Some(doc.id), &mut findings);
         }
         if contains_tags(&tree) {
             findings.push(Finding::error(FindingCode::UnsupportedScalar, Phase::Generation).for_resource(doc.id));
@@ -553,16 +610,7 @@ fn rewrap(
     })
 }
 fn strip_wrapper_observed(tree: &mut TreeNode, findings: &mut Vec<Finding>) {
-    strip_observed(tree, None, findings);
-    for key in ["continue", "remainingItemCount"] {
-        let path = FieldPath(vec!["metadata".into(), key.into()]);
-        if tree.get_path(&path).is_some() {
-            let _ = apply_edit(tree, &FieldEdit::Remove { path: path.clone() });
-            let mut finding = Finding::warning(FindingCode::ObservedFieldRemoved, Phase::Generation).at_path(path);
-            finding.severity = Severity::Information;
-            findings.push(finding);
-        }
-    }
+    strip_observation_paths(tree, None, &crate::source::list_observation_paths(), findings);
 }
 fn wrapper_unknown_paths(tree: &TreeNode) -> Vec<FieldPath> {
     let mut paths = Vec::new();
@@ -626,25 +674,49 @@ fn contains_tags(tree: &TreeNode) -> bool {
         _ => false,
     }
 }
-fn strip_observed(tree: &mut TreeNode, id: Option<ResourceId>, findings: &mut Vec<Finding>) {
-    let mut paths = vec![FieldPath(vec!["status".into()])];
-    for name in [
-        "uid",
-        "resourceVersion",
-        "managedFields",
-        "creationTimestamp",
-        "generation",
-        "selfLink",
-    ] {
-        paths.push(FieldPath(vec!["metadata".into(), name.into()]));
-    }
+fn strip_observation_paths(
+    tree: &mut TreeNode,
+    id: Option<ResourceId>,
+    observations: &[crate::source::ObservationPath],
+    findings: &mut Vec<Finding>,
+) {
+    let mut paths = observations
+        .iter()
+        .filter(|observation| {
+            matches!(
+                observation.role,
+                crate::source::ObservationRole::ServerOwned | crate::source::ObservationRole::SubresourceOnly
+            )
+        })
+        .map(|observation| observation.path.clone())
+        .collect::<Vec<_>>();
+    paths.sort_by(|left, right| left.0.len().cmp(&right.0.len()).then(left.cmp(right)));
+    let mut removed: Vec<FieldPath> = Vec::new();
     for path in paths {
-        if tree.get_path(&path).is_some() {
-            let _ = apply_edit(tree, &FieldEdit::Remove { path: path.clone() });
-            let mut f = Finding::warning(FindingCode::ObservedFieldRemoved, Phase::Generation).at_path(path);
-            f.resource = id;
-            f.severity = Severity::Information;
-            findings.push(f);
+        if removed.iter().any(|parent| path.0.starts_with(&parent.0)) || tree.get_path(&path).is_none() {
+            continue;
+        }
+        match apply_edit(tree, &FieldEdit::Remove { path: path.clone() }) {
+            Ok(()) => {
+                // Retain source validation findings, but stripped opaque observations no longer block output.
+                for finding in findings.iter_mut().filter(|finding| {
+                    finding.resource == id
+                        && finding.code == FindingCode::UnadmittedField
+                        && finding
+                            .path
+                            .as_ref()
+                            .is_some_and(|finding| finding.0.starts_with(&path.0))
+                }) {
+                    finding.severity = Severity::Warning;
+                }
+                let mut finding =
+                    Finding::warning(FindingCode::ObservedFieldRemoved, Phase::Generation).at_path(path.clone());
+                finding.resource = id;
+                finding.severity = Severity::Information;
+                findings.push(finding);
+                removed.push(path);
+            }
+            Err(finding) => findings.push(finding),
         }
     }
 }
@@ -703,14 +775,17 @@ fn unknown_descendants(raw: &TreeNode, known: &TreeNode) -> bool {
         _ => false,
     }
 }
-pub(crate) fn merge_delta(
+fn merge_delta_inner(
     raw: &TreeNode,
     before: &TreeNode,
     after: &TreeNode,
     path: &FieldPath,
     fields: &[FieldCapability],
     resolutions: &[FieldEdit],
+    context: MergeContext<'_>,
 ) -> Result<TreeNode, Finding> {
+    let gvk = context.gvk;
+    let target = context.target;
     if before.semantic_eq(after)
         || resolutions.iter().any(|edit| {
             let edited = match edit {
@@ -730,7 +805,15 @@ pub(crate) fn merge_delta(
                     set_child(
                         &mut out,
                         key,
-                        Some(merge_delta(original, old, new, &path.child(key), fields, resolutions)?),
+                        Some(merge_delta_inner(
+                            original,
+                            old,
+                            new,
+                            &path.child(key),
+                            fields,
+                            resolutions,
+                            context,
+                        )?),
                     )?;
                 } else {
                     let child = path.child(key);
@@ -758,27 +841,37 @@ pub(crate) fn merge_delta(
                 if keys.is_empty() {
                     return Err(conflict().at_path(path.clone()));
                 }
-                let old = keyed(before_items, keys)?;
-                let raw = keyed(raw_items, keys)?;
-                let new = keyed(after_items, keys)?;
+                let old = keyed(before_items, keys, path, gvk, target)?;
+                let raw = keyed(raw_items, keys, path, gvk, target)?;
+                let new = keyed(after_items, keys, path, gvk, target)?;
+                for (key, previous) in &old {
+                    if !new.contains_key(key)
+                        && raw
+                            .get(key)
+                            .is_some_and(|original| unknown_descendants(original, previous))
+                    {
+                        return Err(conflict().at_path(path.clone()));
+                    }
+                }
                 let mut out = Vec::new();
-                for node in after_items {
-                    let key = list_key(node, keys)?;
+                for (index, node) in after_items.iter().enumerate() {
+                    let key = list_key(node, keys, path, gvk, target)?;
                     if let (Some(before), Some(original)) = (old.get(&key), raw.get(&key)) {
-                        out.push(merge_delta(
+                        out.push(merge_delta_inner(
                             original,
                             before,
                             node,
-                            &path.child("*"),
+                            &path.child(index.to_string()),
                             fields,
                             resolutions,
+                            context,
                         )?);
                     } else {
                         out.push(node.clone());
                     }
                 }
                 // Validation of duplicate keys above is independent of reordering/removal.
-                let _ = new;
+                let _ = keyed(&out, keys, path, gvk, target)?;
                 Ok(TreeNode {
                     value: TreeValue::Sequence(out),
                     start: raw_items.first().and_then(|n| n.start),
@@ -793,10 +886,40 @@ pub(crate) fn merge_delta(
         _ => Ok(after.clone()),
     }
 }
-fn list_key(node: &TreeNode, keys: &[&str]) -> Result<Vec<String>, Finding> {
+fn list_key(
+    node: &TreeNode,
+    keys: &[&str],
+    path: &FieldPath,
+    gvk: Option<&crate::model::GroupVersionKind>,
+    target: Option<&TargetProfile>,
+) -> Result<Vec<String>, Finding> {
+    let tcp = port_tcp_rule(path, gvk, target);
+    if tcp {
+        let port_key = if keys == ["port", "protocol"] {
+            "port"
+        } else if keys == ["containerPort", "protocol"] {
+            "containerPort"
+        } else {
+            return Err(conflict().at_path(path.clone()));
+        };
+        let valid_port = node.get(port_key).is_some_and(|node| matches!(&node.value, TreeValue::Number(number) if number.parse::<i32>().is_ok_and(|port| (1..=65535).contains(&port))));
+        let valid_protocol = node.get("protocol").is_none_or(|node| {
+            node.as_str()
+                .is_some_and(|protocol| matches!(protocol, "TCP" | "UDP" | "SCTP"))
+        });
+        if !valid_port || !valid_protocol {
+            return Err(conflict().at_path(path.clone()));
+        }
+    }
     keys.iter()
         .map(|key| {
-            let node = node.get(key).ok_or_else(conflict)?;
+            let Some(node) = node.get(key) else {
+                return if tcp && *key == "protocol" {
+                    Ok(String::from("\"TCP\""))
+                } else {
+                    Err(conflict().at_path(path.clone()))
+                };
+            };
             if matches!(
                 node.value,
                 TreeValue::Mapping(_) | TreeValue::Sequence(_) | TreeValue::Null | TreeValue::Tagged(..)
@@ -809,11 +932,17 @@ fn list_key(node: &TreeNode, keys: &[&str]) -> Result<Vec<String>, Finding> {
         })
         .collect()
 }
-fn keyed<'a>(items: &'a [TreeNode], keys: &[&str]) -> Result<BTreeMap<Vec<String>, &'a TreeNode>, Finding> {
+fn keyed<'a>(
+    items: &'a [TreeNode],
+    keys: &[&str],
+    path: &FieldPath,
+    gvk: Option<&crate::model::GroupVersionKind>,
+    target: Option<&TargetProfile>,
+) -> Result<BTreeMap<Vec<String>, &'a TreeNode>, Finding> {
     let mut out = BTreeMap::new();
     for node in items {
-        if out.insert(list_key(node, keys)?, node).is_some() {
-            return Err(conflict());
+        if out.insert(list_key(node, keys, path, gvk, target)?, node).is_some() {
+            return Err(conflict().at_path(path.clone()));
         }
     }
     Ok(out)
@@ -910,4 +1039,138 @@ pub(crate) fn json(node: &TreeNode, out: &mut String) -> Result<(), Finding> {
         TreeValue::Tagged(..) => return Err(Finding::error(FindingCode::UnsupportedScalar, Phase::Generation)),
     }
     Ok(())
+}
+
+/// Validate all declared map-list identities even when no semantic edit occurred.
+pub(crate) fn merge_native_delta(
+    raw: &TreeNode,
+    before: &TreeNode,
+    after: &TreeNode,
+    path: &FieldPath,
+    fields: &[FieldCapability],
+    resolutions: &[FieldEdit],
+    context: MergeContext<'_>,
+) -> Result<TreeNode, Finding> {
+    let merged = merge_delta_inner(raw, before, after, path, fields, resolutions, context)?;
+    // Explicit caller repair is applied to the checked view, never to immutable originals.
+    let mut checked = merged.clone();
+    for edit in resolutions {
+        let (edited, value) = match edit {
+            FieldEdit::Set { path, value } => (path, Some(value)),
+            FieldEdit::Remove { path } => (path, None),
+        };
+        if edited.0.starts_with(&path.0) {
+            let relative = FieldPath(edited.0[path.0.len()..].to_vec());
+            if relative.0.is_empty() {
+                checked = value.cloned().unwrap_or_else(|| TreeNode::new(TreeValue::Null));
+            } else {
+                let relative = match value {
+                    Some(value) => FieldEdit::Set {
+                        path: relative,
+                        value: value.clone(),
+                    },
+                    None => FieldEdit::Remove { path: relative },
+                };
+                apply_edit(&mut checked, &relative)?;
+            }
+        } else if path.0.starts_with(&edited.0) {
+            checked = TreeNode::new(TreeValue::Null);
+        }
+    }
+    check_supplied_list_duplicates(&checked, path, fields, context.gvk, context.target)?;
+    Ok(merged)
+}
+#[cfg(test)]
+pub(crate) fn merge_delta(
+    raw: &TreeNode,
+    before: &TreeNode,
+    after: &TreeNode,
+    path: &FieldPath,
+    fields: &[FieldCapability],
+    resolutions: &[FieldEdit],
+) -> Result<TreeNode, Finding> {
+    merge_native_delta(
+        raw,
+        before,
+        after,
+        path,
+        fields,
+        resolutions,
+        MergeContext {
+            gvk: None,
+            target: None,
+        },
+    )
+}
+fn check_supplied_list_duplicates(
+    tree: &TreeNode,
+    path: &FieldPath,
+    fields: &[FieldCapability],
+    gvk: Option<&crate::model::GroupVersionKind>,
+    target: Option<&TargetProfile>,
+) -> Result<(), Finding> {
+    match &tree.value {
+        TreeValue::Sequence(items) => {
+            if let MergeStrategy::MapList { keys } = strategy(path, fields) {
+                let mut seen = BTreeSet::new();
+                for item in items {
+                    // Preserve malformed unchanged source values for exact native validation.
+                    // Every valid key is still scanned, including those after malformed siblings.
+                    if let Ok(key) = list_key(item, keys, path, gvk, target) {
+                        if !seen.insert(key) {
+                            return Err(conflict().at_path(path.clone()));
+                        }
+                    }
+                }
+            }
+            for (index, item) in items.iter().enumerate() {
+                check_supplied_list_duplicates(item, &path.child(index.to_string()), fields, gvk, target)?;
+            }
+        }
+        TreeValue::Mapping(entries) => {
+            for (key, node) in entries {
+                check_supplied_list_duplicates(node, &path.child(key), fields, gvk, target)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+fn port_tcp_rule(
+    path: &FieldPath,
+    gvk: Option<&crate::model::GroupVersionKind>,
+    target: Option<&TargetProfile>,
+) -> bool {
+    let Some(gvk) = gvk else {
+        return false;
+    };
+    if target.is_some_and(|target| {
+        declaration(gvk)
+            .is_none_or(|declaration| !(declaration.first..=declaration.last).contains(&target.kubernetes.minor()))
+    }) {
+        return false;
+    }
+    let prefix = match (gvk.group.as_deref(), gvk.version.as_str(), gvk.kind.as_str()) {
+        (None, "v1", "Service") => return path.0 == ["spec", "ports"],
+        (None, "v1", "Pod") => "/spec",
+        (None, "v1", "ReplicationController")
+        | (Some("apps"), "v1", "Deployment" | "StatefulSet" | "DaemonSet" | "ReplicaSet")
+        | (Some("batch"), "v1", "Job") => "/spec/template/spec",
+        (Some("batch"), "v1" | "v1beta1", "CronJob") => "/spec/jobTemplate/spec/template/spec",
+        _ => return false,
+    };
+    let Ok(prefix) = FieldPath::parse(prefix) else {
+        return false;
+    };
+    path.0.len() == prefix.0.len() + 3
+        && path.0.starts_with(&prefix.0)
+        && matches!(path.0[prefix.0.len()].as_str(), "containers" | "initContainers")
+        && (path.0[prefix.0.len() + 1] == "*" || path.0[prefix.0.len() + 1].parse::<usize>().is_ok())
+        && path.0[prefix.0.len() + 2] == "ports"
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct MergeContext<'a> {
+    pub(crate) gvk: Option<&'a crate::model::GroupVersionKind>,
+    pub(crate) target: Option<&'a TargetProfile>,
 }

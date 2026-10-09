@@ -18,8 +18,11 @@ Generation applies structural deltas to original values and refuses unknown-data
 target fields/APIs, API relabeling, and unauthorized private output. There is no filesystem output,
 renderer execution, live cluster acquisition, mutation, or ambient namespace discovery.
 
-The five resource cohort slots have zero delivered codecs. Built-ins and custom documents are
-retained with structured preservation findings; retention is not typed or runtime capability.
-The frozen compatibility ledger and all named native evidence cells remain pending. See
+The workload cohort registers nine API roots for eight kinds; shared native helpers live in
+`resources::common`. Typed workload validation, facts, observations and generation use the
+same sealed registry and bounded core projection. The other cohorts and custom documents
+remain preservation-only with structured findings. The frozen compatibility ledger and all
+named native conformance cells remain pending; focused code tests are separate evidence. See
 [ADR 0003](decisions/0003-offline-native-foundation.md) and the
-[foundation integration contract](foundation-api.md).
+[foundation integration contract](foundation-api.md), supplemented by
+[ADR 0004](decisions/0004-native-authoring-facts-observations.md) and [workload limits](workloads.md).

@@ -82,3 +82,20 @@ Linux acquisition also pins libc 0.2.190 (Rust 1.65 MSRV, MIT OR Apache-2.0), so
 Its per-version registry record is unyanked, published 2026-10-02, and Cargo.lock records the
 normal verified registry checksum. The dependency is Linux-target-gated and owned by the same
 Cargo Renovate manager; source facts and runtime tool pins are unchanged.
+
+## Native timezone recognition
+
+The workload implementation uses exact `jiff-tzdb 0.1.9` with default features disabled.
+Its reviewed registry/archive SHA-256 is `fa8377070c6bae868759445e5a77f66d84f0b72f3a054bfb00e6d038b8282da7`;
+it has no dependencies, Rust 1.70 MSRV and `Unlicense OR MIT` licensing (the existing MIT allowance suffices).
+The embedded IANA release is 2026e, with 598 names and a 206,788-byte TZif payload.
+Exact-case name recognition uses `available()`; the case-insensitive `get()` lookup is not an admission oracle.
+Recognition against this bundled data is distinct from a Kubernetes server's Go/system/GOROOT timezone data.
+Names absent from the bundle cannot be declared universally invalid or accepted by an unknown server.
+No ambient timezone files or cluster input are read.
+
+The sole operational pin owner is the native Cargo manager. A later package rule isolates timezone-data
+updates, requires Dashboard approval and disables automerge after generic rules. Actual Renovate
+extraction and effective-policy regressions cover this owner and a rule-order mutation that would
+incorrectly enable automerge. Updating the bundle requires review of its data witness and native
+expectations; it does not expand the frozen Kubernetes/resource goal automatically.

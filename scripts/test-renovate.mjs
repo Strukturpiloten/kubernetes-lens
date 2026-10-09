@@ -278,6 +278,9 @@ assert(
   actual.filter((row) => row.manager === "cargo").length >= 3,
   "foundation parser Cargo dependencies must be owned",
 );
+const timezoneOwners = actual.filter((row) => row.dep.depName === "jiff-tzdb");
+assert.equal(timezoneOwners.length, 1, "bundled timezone pin has exactly one owner");
+assert.equal(timezoneOwners[0].manager, "cargo");
 const withoutCargo = structuredClone(config);
 withoutCargo.enabledManagers = withoutCargo.enabledManagers.filter(
   (manager) => manager !== "cargo",
@@ -513,6 +516,11 @@ for (const updateType of ["minor", "patch", "pin", "digest", "pinDigest"]) {
   assert.equal(normal.groupName, "Rust dependencies");
   assert.equal(normal.automerge, true);
   assert.equal(normal.minimumReleaseAge, "3 days");
+  const timezone = await policy({ manager: "cargo", datasource: "crate", depName: "jiff-tzdb", updateType });
+  assert.equal(timezone.groupName, "Native timezone data");
+  assert.equal(timezone.automerge, false);
+  assert.equal(timezone.dependencyDashboardApproval, true);
+  assert.equal(timezone.minimumReleaseAge, "3 days");
   const toolchain = await policy({
     manager: "rust-toolchain",
     datasource: "rust-version",
@@ -619,6 +627,9 @@ assert.equal(
   "negative rule-order mutation must expose the dangerous override",
 );
 assert.throws(() => assert.equal(unsafePolicy.automerge, false));
+const unsafeTimezone = await policy({ manager: "cargo", datasource: "crate", depName: "jiff-tzdb", updateType: "patch" }, reordered);
+assert.equal(unsafeTimezone.automerge, true, "negative rule-order mutation exposes unsafe timezone updates");
+assert.throws(() => assert.equal(unsafeTimezone.automerge, false));
 const unsafeImage = await policy(
   {
     manager: "custom.regex",
