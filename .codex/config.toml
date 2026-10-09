@@ -1,0 +1,9 @@
+# Task-specific maintainer selection supersedes the older manager default.
+model = "gpt-6.1-sol"
+model_reasoning_effort = "xhigh"
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 8
+default_subagent_model = "gpt-6.1-sol"
+default_subagent_reasoning_effort = "high"

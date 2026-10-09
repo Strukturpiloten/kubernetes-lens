@@ -1,0 +1,12 @@
+---
+name: Feature request
+description: Propose a scoped native-format or repository improvement
+title: "feat: "
+body:
+  - type: textarea
+    id: contract
+    attributes:
+      label: Contract and evidence
+      description: Describe caller intent, native boundary, versions, expected behavior and supporting evidence.
+    validations:
+      required: true

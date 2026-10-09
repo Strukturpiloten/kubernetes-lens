@@ -1,0 +1,130 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices"],
+  "enabledManagers": [
+    "cargo",
+    "github-actions",
+    "rust-toolchain",
+    "custom.regex"
+  ],
+  "dependencyDashboard": true,
+  "minimumReleaseAge": "3 days",
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "timezone": "Europe/Berlin",
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/target/**",
+    "**/fixtures/**",
+    "**/tests/**",
+    "docs/evidence/**",
+    "**/.shared-tools/**",
+    "**/.validation-base/**"
+  ],
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": [
+        "Track immutable shared tool and policy revisions; upstream owns its entire pin inventory"
+      ],
+      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
+      "matchStrings": [
+        "(?<indentation>[ \\t]*)# renovate: datasource=github-digest depName=(?<depName>Strukturpiloten/(?:boxferry|\\.github)) currentValue=(?<currentValue>main)\\n[ \\t]*ref:\\s*(?<currentDigest>[a-f0-9]{40})"
+      ],
+      "datasourceTemplate": "github-digest",
+      "versioningTemplate": "git",
+      "autoReplaceStringTemplate": "{{{indentation}}}# renovate: datasource=github-digest depName={{{depName}}} currentValue={{{newValue}}}\n{{{indentation}}}ref: {{{newDigest}}}"
+    },
+    {
+      "customType": "regex",
+      "description": [
+        "Update the immutable official Renovate operational-test image as one version/digest pair"
+      ],
+      "managerFilePatterns": ["/^scripts/renovate-tool\\.json$/"],
+      "matchStrings": [
+        "\"image\":\\s*\"(?<depName>ghcr\\.io/renovatebot/renovate):(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)@(?<currentDigest>sha256:[a-f0-9]{64})\""
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker",
+      "autoReplaceStringTemplate": "\"image\": \"{{{depName}}}:{{{newValue}}}@{{{newDigest}}}\""
+    }
+  ],
+  "packageRules": [
+    {
+      "description": ["Group compatible Rust updates"],
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest", "pinDigest"],
+      "groupName": "Rust dependencies"
+    },
+    {
+      "description": ["Keep Actions immutable and grouped"],
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["action", "workflow"],
+      "pinDigests": true,
+      "groupName": "GitHub Actions"
+    },
+    {
+      "description": [
+        "Automerge tested compatible updates only after required CI"
+      ],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest", "pinDigest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": false
+    },
+    {
+      "description": ["Lock maintenance has no new release-age comparison"],
+      "matchUpdateTypes": ["lockFileMaintenance"],
+      "minimumReleaseAge": "0 days",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": false
+    },
+    {
+      "description": ["Review toolchain changes separately"],
+      "matchManagers": ["rust-toolchain"],
+      "groupName": "Rust toolchain",
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": [
+        "Review shared checksum/image/feature ownership and policy changes after generic rules"
+      ],
+      "matchDatasources": ["github-digest"],
+      "groupName": "Shared workspace tooling and policy",
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": ["Review hosted runner environment changes"],
+      "matchDatasources": ["github-runners"],
+      "groupName": "GitHub-hosted runners",
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": [
+        "Node runtime comes from the reviewed shared inventory, not a second local version pin"
+      ],
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["uses-with"],
+      "matchPackageNames": ["actions/node-versions"],
+      "enabled": false
+    },
+    {
+      "description": [
+        "Review operational tool-image tag/digest and actual-engine evidence after generic automerge rules"
+      ],
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/renovatebot/renovate"],
+      "groupName": "Operational test tools",
+      "dependencyDashboardApproval": true,
+      "automerge": false,
+      "pinDigests": true
+    }
+  ]
+}

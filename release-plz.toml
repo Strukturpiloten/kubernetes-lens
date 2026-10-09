@@ -1,0 +1,11 @@
+[workspace]
+publish = false
+git_tag_enable = false
+git_release_enable = false
+pr_branch_prefix = "release-plz/"
+
+[[package]]
+name = "kubernetes-lens"
+publish = false
+git_tag_enable = false
+git_release_enable = false

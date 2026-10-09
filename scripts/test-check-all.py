@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""Execute production gate dispatch with fake tools, checking fail-fast contracts."""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parent.parent
+TOOLS = "actionlint bash cargo cargo-deny git lychee markdownlint-cli2 node prettier python3 realpath rustup shellcheck shfmt tombi zizmor".split()
+MOCK = r'''#!/bin/sh
+name=${0##*/}
+line="$name $*"
+printf '%s\n' "$line" >> "$GATE_TEST_LOG"
+case "$line" in
+  python3\ -c*) printf '1.85.0\n' ;;
+  realpath*) /usr/bin/realpath "$@" ;;
+  git\ ls-files*) printf 'README.md\000' ;;
+esac
+if [ -n "${GATE_TEST_FAILURE:-}" ]; then
+  case "$line" in *"$GATE_TEST_FAILURE"*) exit 17 ;; esac
+fi
+'''
+
+class GateTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory(prefix="kubernetes-lens-gate-test-")
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name) / "repository"
+        self.bin = Path(self.directory.name) / "bin"
+        (self.root / "scripts").mkdir(parents=True)
+        self.bin.mkdir()
+        for name in ("check-all.sh", "format-lint.sh", "run-checks.sh"):
+            shutil.copyfile(ROOT / "scripts" / name, self.root / "scripts" / name)
+        mock = self.bin / "mock"
+        mock.write_text(MOCK)
+        mock.chmod(0o755)
+        for tool in TOOLS:
+            (self.bin / tool).symlink_to("mock")
+        self.log = Path(self.directory.name) / "commands.log"
+        self.env = {**os.environ, "PATH": f"{self.bin}:/usr/bin:/bin", "GATE_TEST_LOG": str(self.log)}
+        self.env.pop("CARGO_TARGET_DIR", None)
+        self.env.pop("KUBERNETES_LENS_LINT_JOBS", None)
+        self.env.pop("CARGO_BUILD_JOBS", None)
+
+    def run_script(self, script: str, *args: str, **variables: str) -> subprocess.CompletedProcess:
+        self.log.write_text("")
+        return subprocess.run(["/bin/bash", str(self.root / "scripts" / script), *args],
+                              env={**self.env, **variables}, text=True, capture_output=True, check=False)
+
+    def commands(self) -> list[str]:
+        return self.log.read_text().splitlines()
+
+    def test_default_fix_and_check_dispatch_the_same_complete_phases(self) -> None:
+        for args, mode in (((), "--fix"), (("--fix",), "--fix"), (("--check",), "--check")):
+            with self.subTest(args=args):
+                result = self.run_script("check-all.sh", *args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                dispatched = [line for line in self.commands() if line.startswith("bash ")]
+                self.assertEqual(dispatched, [f"bash scripts/format-lint.sh {mode}"] +
+                                 [f"bash scripts/run-checks.sh {phase}" for phase in
+                                  ("rust", "msrv", "dependencies", "documentation")])
+
+    def test_each_phase_failure_propagates_without_running_later_phases(self) -> None:
+        phases = ["format-lint.sh", "run-checks.sh rust", "run-checks.sh msrv", "run-checks.sh dependencies", "run-checks.sh documentation"]
+        for index, phase in enumerate(phases):
+            with self.subTest(phase=phase):
+                result = self.run_script("check-all.sh", "--check", GATE_TEST_FAILURE=phase)
+                self.assertEqual(result.returncode, 17)
+                self.assertIn("complete validation failed", result.stderr)
+                for later in phases[index + 1:]:
+                    self.assertFalse(any(later in line for line in self.commands()))
+
+    def test_external_target_fails_before_validation(self) -> None:
+        result = self.run_script("check-all.sh", "--check", CARGO_TARGET_DIR="/tmp/shared-gate-target")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("inside this worktree", result.stderr)
+        self.assertFalse(any(line.startswith("bash ") for line in self.commands()))
+
+    def test_missing_tool_and_invalid_arguments_fail_closed(self) -> None:
+        (self.bin / "tombi").unlink()
+        result = self.run_script("check-all.sh", "--check")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("Missing required tool tombi", result.stderr)
+        for arguments in (("--skip-tests",), ("--check", "--fix")):
+            self.assertEqual(self.run_script("check-all.sh", *arguments).returncode, 2)
+            self.assertEqual(self.commands(), [])
+
+    def test_missing_msrv_or_renovate_cannot_become_a_success(self) -> None:
+        for failure in ("rustup run 1.85.0", "node -e"):
+            result = self.run_script("check-all.sh", "--check", GATE_TEST_FAILURE=failure)
+            self.assertEqual(result.returncode, 17)
+            self.assertFalse(any(line.startswith("bash ") for line in self.commands()))
+
+    def test_format_lint_executes_no_tests_and_caps_clippy(self) -> None:
+        result = self.run_script("format-lint.sh", "--check")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("cargo fmt --all -- --check", self.commands())
+        self.assertIn("cargo ci-clippy", self.commands())
+        self.assertFalse(any("ci-test" in line or "test-" in line for line in self.commands()))
+        self.assertIn("at most 2 Cargo build jobs", result.stdout)
+        self.assertEqual(self.run_script("format-lint.sh", KUBERNETES_LENS_LINT_JOBS="0").returncode, 2)
+
+    def test_lint_failure_stops_before_clippy(self) -> None:
+        result = self.run_script("format-lint.sh", "--check", GATE_TEST_FAILURE="actionlint")
+        self.assertEqual(result.returncode, 17)
+        self.assertNotIn("cargo ci-clippy", self.commands())
+
+    def test_shared_phase_failure_propagates(self) -> None:
+        for phase, failure, later in (("rust", "cargo ci-check", "cargo ci-clippy"),
+                                      ("msrv", "rustup run", "cargo +1.85.0 ci-check"),
+                                      ("documentation", "actionlint", "node scripts/test-renovate.mjs")):
+            result = self.run_script("run-checks.sh", phase, GATE_TEST_FAILURE=failure)
+            self.assertEqual(result.returncode, 17)
+            self.assertNotIn(later, self.commands())
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,19 @@
+---
+name: Release validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-validation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate unpublished package
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read

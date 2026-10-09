@@ -1,0 +1,32 @@
+[package]
+name = "kubernetes-lens"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85.0"
+description = "Independent Kubernetes native-format library (unpublished bootstrap)"
+readme = "README.md"
+repository = "https://github.com/Strukturpiloten/kubernetes-lens"
+license = "MPL-2.0"
+publish = false
+include = ["/src/**", "/Cargo.toml", "/Cargo.lock", "/LICENSE", "/README.md", "/CHANGELOG.md"]
+
+[workspace]
+resolver = "3"
+members = ["."]
+
+[lints.rust]
+missing_docs = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unsafe_code = "forbid"
+unused_lifetimes = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+unwrap_used = "warn"
