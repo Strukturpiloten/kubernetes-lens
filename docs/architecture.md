@@ -15,3 +15,7 @@ translation of external oracle code. Record external tool version, command, prov
 redistribution permission when future conformance evidence is introduced.
 
 [ADR 0001](decisions/0001-independent-unpublished-bootstrap.md) records these boundaries.
+
+[ADR 0002](decisions/0002-frozen-native-compatibility-contract.md) freezes the native compatibility
+specification. Its offline checks prove source facts and pending expectations; they do not add a
+native parser, public API or runtime capability.

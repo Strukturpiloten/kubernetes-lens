@@ -5,3 +5,6 @@ Start with [architecture](architecture.md), [the decision index](decisions/READM
 [testing](testing.md), [dependencies](dependency-policy.md), [releasing](releasing.md), and
 [platform support](platform-support.md). [Bootstrap parity](bootstrap-parity.md) records provenance,
 shared consumers and external follow-ups. The [public status page](public/status.md) states delivered scope.
+
+The [frozen compatibility contract](compatibility/README.md) records executable expectations and
+pending native evidence for the agreed version/kind slice.

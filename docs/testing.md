@@ -19,3 +19,9 @@ fallback as executed Python, not only as YAML strings.
 
 At most one complete or heavy workspace gate may run at a time. Use worktree-local target storage;
 never reuse another checkout's fixture-path-sensitive artifacts. Native runtime evidence is future work.
+
+The documentation phase checks the [frozen compatibility specification](compatibility/README.md),
+independent schema witnesses, concrete native-kind scenarios and exact gate/command evidence cells.
+Its regressions cover numeric version bounds, removed APIs, gate defaults/settings, template
+contexts, per-field/profile obligations and mutated source facts. All native outcomes remain pending.
+Compatibility documentation always selects the full validation plan.

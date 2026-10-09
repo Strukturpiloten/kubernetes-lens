@@ -19,7 +19,9 @@
     "**/tests/**",
     "docs/evidence/**",
     "**/.shared-tools/**",
-    "**/.validation-base/**"
+    "**/.validation-base/**",
+    "docs/compatibility/**",
+    "schemas/capabilities/**"
   ],
   "lockFileMaintenance": {
     "enabled": true
