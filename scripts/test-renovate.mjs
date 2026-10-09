@@ -151,6 +151,22 @@ const historical = new Map([['fixtures/old-workflow.yml', movedContent], ['docs/
 assert.deepEqual(await inventory(historical), [], 'historical evidence and nested upstream pins must not auto-advance');
 assert(!config.customManagers.some((m) => m.matchStrings.some((s) => /1\\\.20|checksum|FROM /.test(s))), 'future compatibility anchors and upstream checksums are not local custom-manager pins');
 
+// Frozen sources/versions are explicit exclusions even if future managers recognize them.
+const frozenFiles = new Map([
+  ['docs/compatibility/historical-anchor.md', movedContent],
+  ['schemas/capabilities/kubernetes-1.20-1.37.json', movedContent],
+]);
+const broaderManager = structuredClone(config);
+broaderManager.customManagers[0].managerFilePatterns = ['/^(?:docs\\/compatibility|schemas\\/capabilities)\\/.*$/'];
+for (const file of frozenFiles.keys()) assert(ignored(file, config), 'frozen contract paths must be explicitly excluded');
+assert.deepEqual(await inventory(frozenFiles, broaderManager), [], 'actual engine must preserve compatibility anchors');
+const missingExclusions = structuredClone(broaderManager);
+missingExclusions.ignorePaths = missingExclusions.ignorePaths.filter((pattern) => !['docs/compatibility/**', 'schemas/capabilities/**'].includes(pattern));
+assert((await inventory(frozenFiles, missingExclusions)).length > 0, 'removing frozen exclusions must expose real dependency extraction');
+const frozenLedger = JSON.parse(await fs.readFile(path.join(root, 'schemas/capabilities/kubernetes-1.20-1.37.json'), 'utf8'));
+assert.deepEqual(frozenLedger.frozen_scope.claimable_supported_minors, []);
+assert.equal(frozenLedger.canonical_tool_owner.commit.length, 40, 'operational tools retain one immutable external owner');
+
 // Real replacement writes only to a disposable scratch tree, then re-extracts using production managers.
 const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'kubernetes-lens-renovate-'));
 try {

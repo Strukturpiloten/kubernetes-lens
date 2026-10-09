@@ -1,0 +1,34 @@
+{
+  "format_version": 1,
+  "classification": "Frozen reviewed #8 command/tool/relationship expectations; immutable source hashes were verified independently; not native execution evidence",
+  "tools": {
+    "kind-0.14.0": "b981897033e080995c0f31aea37a0e0d05a7b41114facfcd6ae28056ba54aa44",
+    "kubectl-1.20.15": "a12937330cc1b07759a69db6443ee03738ddd8fc994834f5f6b3c8e5ace9ebcf",
+    "helm-3.22.0": "854925f6effe10ab883b5c5f62e729a1c4b5f8b3801a42e1fbdde637438323ac",
+    "kind-0.33.0": "327cda43c85c8ed514e27ad40742b7c4316f17a8ea467c321ec1896988477348",
+    "kubectl-1.37.0": "3fcc90cb42f8f74a96d48a00304f10a6fc5fbabdb0d769e54c681cf9968fbc19",
+    "helm-4.3.0": "030e50708e5d42cfca69f275f2a66efefb7e2f3e8bd5cc07d07e853bb4f58f85",
+    "kustomize-5.8.3": "a623c39b657081d792212c4399c021b00449fe90e70354cb85d18f5b946f9f33",
+    "kubectl-1.20.15-kustomize-2.0.3": "9f358d6874872c847721e63384c3a21c863be9eeea7eccb2969d06ec71a9aa25",
+    "kubectl-1.37.0-kustomize-5.8.1": "d47b38911c2b4cd8e4a225981cde314fdf6e47538ba6ca55ef4b1552fe08b346"
+  },
+  "canonical_tool_owner": "920116e2e6642ef2d5f2f9b9886dfae9269bb914cf39a8e4f4a0e628f4c33a6f",
+  "graph_relationships": "b60d7377043c0ec102b84407dca2a00c4bc90b5539a59eaab4a00280593cec42",
+  "commands": {
+    "documents": "3e2a8d72b67610bc20b1f62a7de295676f6869d004e1140c7ec4fdf6e02b935c",
+    "kubectl-export-yaml": "e6c336db109ab8a88c4574d63c72356102b682232e3d2c2473ae964cc7a25069",
+    "kubectl-export-json": "dde0ea94be930e9f74b8b88e6227886d7a27dd4bb70f02a79c1148d34554f3f9",
+    "helm-release-manifest": "ae07c8f90470ffc85cc82c8d98c825db7bdceb843d28f916a0597e3dad64a7cb",
+    "helm-release-hooks": "2bd88436ab0fc2bdf05b070e5552cfd7a6c0ac784c2ddf9c3a837285b924e20e",
+    "helm-local-template": "40fdf1c158577e61dc5ba20219094a6d032347df1cbe8ffb883e8c359afd8e39",
+    "helm-generated-lint": "3ae9ebbffe80ff1b0c61ae99f555826c7f396a45c45127886c80f7885cd05e52",
+    "helm-generated-package": "5cc8b3f4900d27668a0c0deb4576155c60fe064ebd1dccc79ce3c7ab6e74a2b7",
+    "kustomize-build": "a7c18b6bc9fca00d1d8c66a09f07d13eaea3e385049ad85a48c975c495d35100",
+    "kubectl-kustomize": "09d71e2b48eef4c3db739460e168f910e65bdce0c2d2abc5c564acad411d54c8",
+    "legacy-server-acceptance": "0e2c503252e60d96a72a3cb521c3105f3ddf6d20461fd7f99b28f532ccdf2b95",
+    "modern-server-acceptance": "486dc34455907332929242e0f472fb80fc8c19efa025d2042335ed234a4e8fca",
+    "kind-create": "2cdf25f20e0883f41c88e3d309cf4a6b4e996d718350396879b9cfa14debb8fc",
+    "kind-delete": "09eeee4ba428fef0c824f998cad09fc47597c440b98ef9bbb8382a580fea1243",
+    "helm-generated-template": "c23229a3818c3268bd54ff1056e49a6ad17e1962c4df6feeaf8031aec9dda1b6"
+  }
+}

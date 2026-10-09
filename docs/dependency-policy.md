@@ -49,3 +49,14 @@ Sources: [regex manager](https://github.com/renovatebot/renovate/blob/main/lib/m
 and [package rules](https://docs.renovatebot.com/configuration-options/#packagerules), retrieved through
 Context7 on 2026-10-09. RE2 does not support lookahead or backreferences, and later matching rules override
 previous options. A Python regex match alone is insufficient evidence.
+
+## Frozen compatibility inputs
+
+`docs/compatibility/**` and `schemas/capabilities/**` are explicit Renovate exclusions. Historical
+conformance tools, node images, immutable schema/feature sources and the 1.20–1.37 ceiling are
+reviewed fixture/specification anchors, not operational update targets. Their exact provenance,
+licenses, checksums and exclusions live in the capability ledger. Modern profiles reference the
+canonical immutable BoxFerry installer instead of introducing another checksum owner or manager.
+Actual Renovate/RE2 regressions verify exclusions and show that removing them exposes extraction
+even if a future manager recognizes a compatibility path. Operational shared-reference/image
+managers, grouping, manual approvals and native conformance boundaries remain unchanged.

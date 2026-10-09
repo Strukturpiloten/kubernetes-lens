@@ -1,0 +1,3891 @@
+{
+  "format_version": 1,
+  "native_success_count": 0,
+  "kind_scenarios": [
+    {
+      "kind": "Pod",
+      "positive_document": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "containers": [
+            {
+              "name": "app",
+              "image": "example.invalid/app:1",
+              "ports": [
+                {
+                  "name": "http",
+                  "containerPort": 8080
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/containers/0/name",
+        "value": "INVALID_NAME"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/containers/0/name",
+        "reason": "container name must be DNS label"
+      },
+      "state": "pending",
+      "owner_issue": 9,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "containers": [
+                {
+                  "name": "app",
+                  "image": "example.invalid/app:1",
+                  "ports": [
+                    {
+                      "name": "http",
+                      "containerPort": 8080
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/containers/0/name",
+            "value": "INVALID_NAME"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "Deployment",
+      "positive_document": {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "selector": {
+            "matchLabels": {
+              "app": "demo"
+            }
+          },
+          "template": {
+            "metadata": {
+              "labels": {
+                "app": "demo"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "name": "app",
+                  "image": "example.invalid/app:1",
+                  "ports": [
+                    {
+                      "name": "http",
+                      "containerPort": 8080
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/selector/matchLabels/app",
+        "value": "other"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/selector/matchLabels/app",
+        "reason": "selector must match template labels"
+      },
+      "state": "pending",
+      "owner_issue": 9,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "apps/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "selector": {
+                "matchLabels": {
+                  "app": "demo"
+                }
+              },
+              "template": {
+                "metadata": {
+                  "labels": {
+                    "app": "demo"
+                  }
+                },
+                "spec": {
+                  "containers": [
+                    {
+                      "name": "app",
+                      "image": "example.invalid/app:1",
+                      "ports": [
+                        {
+                          "name": "http",
+                          "containerPort": 8080
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/selector/matchLabels/app",
+            "value": "other"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "StatefulSet",
+      "positive_document": {
+        "apiVersion": "apps/v1",
+        "kind": "StatefulSet",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "selector": {
+            "matchLabels": {
+              "app": "demo"
+            }
+          },
+          "template": {
+            "metadata": {
+              "labels": {
+                "app": "demo"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "name": "app",
+                  "image": "example.invalid/app:1",
+                  "ports": [
+                    {
+                      "name": "http",
+                      "containerPort": 8080
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "serviceName": "demo",
+          "replicas": 2,
+          "volumeClaimTemplates": [
+            {
+              "metadata": {
+                "name": "data"
+              },
+              "spec": {
+                "accessModes": ["ReadWriteOnce"],
+                "resources": {
+                  "requests": {
+                    "storage": "1Gi"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/serviceName",
+        "value": ""
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/serviceName",
+        "reason": "serviceName required and supplied headless Service reference unresolved"
+      },
+      "state": "pending",
+      "owner_issue": 9,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "apps/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "apps/v1",
+            "kind": "StatefulSet",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "selector": {
+                "matchLabels": {
+                  "app": "demo"
+                }
+              },
+              "template": {
+                "metadata": {
+                  "labels": {
+                    "app": "demo"
+                  }
+                },
+                "spec": {
+                  "containers": [
+                    {
+                      "name": "app",
+                      "image": "example.invalid/app:1",
+                      "ports": [
+                        {
+                          "name": "http",
+                          "containerPort": 8080
+                        }
+                      ]
+                    }
+                  ]
+                }
+              },
+              "serviceName": "demo",
+              "replicas": 2,
+              "volumeClaimTemplates": [
+                {
+                  "metadata": {
+                    "name": "data"
+                  },
+                  "spec": {
+                    "accessModes": ["ReadWriteOnce"],
+                    "resources": {
+                      "requests": {
+                        "storage": "1Gi"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/serviceName",
+            "value": ""
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "DaemonSet",
+      "positive_document": {
+        "apiVersion": "apps/v1",
+        "kind": "DaemonSet",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "selector": {
+            "matchLabels": {
+              "app": "demo"
+            }
+          },
+          "template": {
+            "metadata": {
+              "labels": {
+                "app": "demo"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "name": "app",
+                  "image": "example.invalid/app:1",
+                  "ports": [
+                    {
+                      "name": "http",
+                      "containerPort": 8080
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/updateStrategy",
+        "value": {
+          "type": "RollingUpdate",
+          "rollingUpdate": {
+            "maxSurge": 0,
+            "maxUnavailable": 0
+          }
+        }
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/updateStrategy",
+        "reason": "rollout cannot have both surge and unavailable zero"
+      },
+      "state": "pending",
+      "owner_issue": 9,
+      "invalid_minimum_minor": "1.25",
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "apps/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "apps/v1",
+            "kind": "DaemonSet",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "selector": {
+                "matchLabels": {
+                  "app": "demo"
+                }
+              },
+              "template": {
+                "metadata": {
+                  "labels": {
+                    "app": "demo"
+                  }
+                },
+                "spec": {
+                  "containers": [
+                    {
+                      "name": "app",
+                      "image": "example.invalid/app:1",
+                      "ports": [
+                        {
+                          "name": "http",
+                          "containerPort": 8080
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/updateStrategy",
+            "value": {
+              "type": "RollingUpdate",
+              "rollingUpdate": {
+                "maxSurge": 0,
+                "maxUnavailable": 0
+              }
+            }
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "ReplicaSet",
+      "positive_document": {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "selector": {
+            "matchLabels": {
+              "app": "demo"
+            }
+          },
+          "template": {
+            "metadata": {
+              "labels": {
+                "app": "demo"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "name": "app",
+                  "image": "example.invalid/app:1",
+                  "ports": [
+                    {
+                      "name": "http",
+                      "containerPort": 8080
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/selector/matchLabels/app",
+        "value": "other"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/selector/matchLabels/app",
+        "reason": "selector must match template labels"
+      },
+      "state": "pending",
+      "owner_issue": 9,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "apps/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "apps/v1",
+            "kind": "ReplicaSet",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "selector": {
+                "matchLabels": {
+                  "app": "demo"
+                }
+              },
+              "template": {
+                "metadata": {
+                  "labels": {
+                    "app": "demo"
+                  }
+                },
+                "spec": {
+                  "containers": [
+                    {
+                      "name": "app",
+                      "image": "example.invalid/app:1",
+                      "ports": [
+                        {
+                          "name": "http",
+                          "containerPort": 8080
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/selector/matchLabels/app",
+            "value": "other"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "ReplicationController",
+      "positive_document": {
+        "apiVersion": "v1",
+        "kind": "ReplicationController",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "selector": {
+            "app": "demo"
+          },
+          "template": {
+            "metadata": {
+              "labels": {
+                "app": "demo"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "name": "app",
+                  "image": "example.invalid/app:1",
+                  "ports": [
+                    {
+                      "name": "http",
+                      "containerPort": 8080
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/selector/app",
+        "value": "other"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/selector/app",
+        "reason": "selector must match template labels"
+      },
+      "state": "pending",
+      "owner_issue": 9,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "v1",
+            "kind": "ReplicationController",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "selector": {
+                "app": "demo"
+              },
+              "template": {
+                "metadata": {
+                  "labels": {
+                    "app": "demo"
+                  }
+                },
+                "spec": {
+                  "containers": [
+                    {
+                      "name": "app",
+                      "image": "example.invalid/app:1",
+                      "ports": [
+                        {
+                          "name": "http",
+                          "containerPort": 8080
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/selector/app",
+            "value": "other"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "Job",
+      "positive_document": {
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "completions": 1,
+          "template": {
+            "metadata": {
+              "labels": {
+                "app": "demo"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "name": "app",
+                  "image": "example.invalid/app:1",
+                  "ports": [
+                    {
+                      "name": "http",
+                      "containerPort": 8080
+                    }
+                  ]
+                }
+              ],
+              "restartPolicy": "Never"
+            }
+          }
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/template/spec/restartPolicy",
+        "value": "Always"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/template/spec/restartPolicy",
+        "reason": "Job restartPolicy must be Never or OnFailure"
+      },
+      "state": "pending",
+      "owner_issue": 9,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "batch/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "batch/v1",
+            "kind": "Job",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "completions": 1,
+              "template": {
+                "metadata": {
+                  "labels": {
+                    "app": "demo"
+                  }
+                },
+                "spec": {
+                  "containers": [
+                    {
+                      "name": "app",
+                      "image": "example.invalid/app:1",
+                      "ports": [
+                        {
+                          "name": "http",
+                          "containerPort": 8080
+                        }
+                      ]
+                    }
+                  ],
+                  "restartPolicy": "Never"
+                }
+              }
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/template/spec/restartPolicy",
+            "value": "Always"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "CronJob",
+      "positive_document": {
+        "apiVersion": "batch/v1",
+        "kind": "CronJob",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "schedule": "0 * * * *",
+          "jobTemplate": {
+            "spec": {
+              "template": {
+                "metadata": {
+                  "labels": {
+                    "app": "demo"
+                  }
+                },
+                "spec": {
+                  "containers": [
+                    {
+                      "name": "app",
+                      "image": "example.invalid/app:1",
+                      "ports": [
+                        {
+                          "name": "http",
+                          "containerPort": 8080
+                        }
+                      ]
+                    }
+                  ],
+                  "restartPolicy": "Never"
+                }
+              }
+            }
+          }
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.21",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/schedule",
+        "value": "not a cron expression"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/schedule",
+        "reason": "invalid cron schedule"
+      },
+      "state": "pending",
+      "owner_issue": 9,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "batch/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.21",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "batch/v1",
+            "kind": "CronJob",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "schedule": "0 * * * *",
+              "jobTemplate": {
+                "spec": {
+                  "template": {
+                    "metadata": {
+                      "labels": {
+                        "app": "demo"
+                      }
+                    },
+                    "spec": {
+                      "containers": [
+                        {
+                          "name": "app",
+                          "image": "example.invalid/app:1",
+                          "ports": [
+                            {
+                              "name": "http",
+                              "containerPort": 8080
+                            }
+                          ]
+                        }
+                      ],
+                      "restartPolicy": "Never"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/schedule",
+            "value": "not a cron expression"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        },
+        {
+          "api_version": "batch/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.24"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "batch/v1beta1",
+            "kind": "CronJob",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "schedule": "0 * * * *",
+              "jobTemplate": {
+                "spec": {
+                  "template": {
+                    "metadata": {
+                      "labels": {
+                        "app": "demo"
+                      }
+                    },
+                    "spec": {
+                      "containers": [
+                        {
+                          "name": "app",
+                          "image": "example.invalid/app:1",
+                          "ports": [
+                            {
+                              "name": "http",
+                              "containerPort": 8080
+                            }
+                          ]
+                        }
+                      ],
+                      "restartPolicy": "Never"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/schedule",
+            "value": "not a cron expression"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "Service",
+      "positive_document": {
+        "apiVersion": "v1",
+        "kind": "Service",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "selector": {
+            "app": "demo"
+          },
+          "ports": [
+            {
+              "name": "http",
+              "port": 80,
+              "targetPort": "http"
+            }
+          ]
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/ports/0/targetPort",
+        "value": 70000
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/ports/0/targetPort",
+        "reason": "numeric targetPort outside1..65535"
+      },
+      "state": "pending",
+      "owner_issue": 10,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "v1",
+            "kind": "Service",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "selector": {
+                "app": "demo"
+              },
+              "ports": [
+                {
+                  "name": "http",
+                  "port": 80,
+                  "targetPort": "http"
+                }
+              ]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/ports/0/targetPort",
+            "value": 70000
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "Endpoints",
+      "positive_document": {
+        "apiVersion": "v1",
+        "kind": "Endpoints",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "subsets": [
+          {
+            "addresses": [
+              {
+                "ip": "192.0.2.1"
+              }
+            ],
+            "ports": [
+              {
+                "port": 8080
+              }
+            ]
+          }
+        ]
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/subsets/0/addresses/0/ip",
+        "value": "not-an-ip"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/subsets/0/addresses/0/ip",
+        "reason": "invalid address"
+      },
+      "state": "pending",
+      "owner_issue": 10,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "v1",
+            "kind": "Endpoints",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "subsets": [
+              {
+                "addresses": [
+                  {
+                    "ip": "192.0.2.1"
+                  }
+                ],
+                "ports": [
+                  {
+                    "port": 8080
+                  }
+                ]
+              }
+            ]
+          },
+          "invalid_mutation": {
+            "pointer": "/subsets/0/addresses/0/ip",
+            "value": "not-an-ip"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "EndpointSlice",
+      "positive_document": {
+        "apiVersion": "discovery.k8s.io/v1",
+        "kind": "EndpointSlice",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "addressType": "IPv4",
+        "endpoints": [
+          {
+            "addresses": ["192.0.2.1"]
+          }
+        ],
+        "ports": [
+          {
+            "name": "http",
+            "port": 8080,
+            "protocol": "TCP"
+          }
+        ]
+      },
+      "profile_availability": [
+        {
+          "from": "1.21",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/endpoints/0/addresses/0",
+        "value": "2001:db8::1"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/endpoints/0/addresses/0",
+        "reason": "IPv6 value conflicts with addressType IPv4"
+      },
+      "state": "pending",
+      "owner_issue": 10,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "discovery.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.21",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "discovery.k8s.io/v1",
+            "kind": "EndpointSlice",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "addressType": "IPv4",
+            "endpoints": [
+              {
+                "addresses": ["192.0.2.1"]
+              }
+            ],
+            "ports": [
+              {
+                "name": "http",
+                "port": 8080,
+                "protocol": "TCP"
+              }
+            ]
+          },
+          "invalid_mutation": {
+            "pointer": "/endpoints/0/addresses/0",
+            "value": "2001:db8::1"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        },
+        {
+          "api_version": "discovery.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.24"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "discovery.k8s.io/v1beta1",
+            "kind": "EndpointSlice",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "addressType": "IPv4",
+            "endpoints": [
+              {
+                "addresses": ["192.0.2.1"]
+              }
+            ],
+            "ports": [
+              {
+                "name": "http",
+                "port": 8080,
+                "protocol": "TCP"
+              }
+            ]
+          },
+          "invalid_mutation": {
+            "pointer": "/endpoints/0/addresses/0",
+            "value": "2001:db8::1"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "Ingress",
+      "positive_document": {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "Ingress",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "rules": [
+            {
+              "host": "demo.example.org",
+              "http": {
+                "paths": [
+                  {
+                    "path": "/",
+                    "pathType": "Prefix",
+                    "backend": {
+                      "service": {
+                        "name": "demo",
+                        "port": {
+                          "number": 80
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/rules/0/http/paths/0/path",
+        "value": "relative"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/rules/0/http/paths/0/path",
+        "reason": "Prefix requires absolute path"
+      },
+      "state": "pending",
+      "owner_issue": 10,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "extensions/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.21"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "extensions/v1beta1",
+            "kind": "Ingress",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "rules": [
+                {
+                  "host": "demo.example.org",
+                  "http": {
+                    "paths": [
+                      {
+                        "path": "/",
+                        "pathType": "Prefix",
+                        "backend": {
+                          "serviceName": "demo",
+                          "servicePort": 80
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/rules/0/http/paths/0/path",
+            "value": "relative"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        },
+        {
+          "api_version": "networking.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "Ingress",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "rules": [
+                {
+                  "host": "demo.example.org",
+                  "http": {
+                    "paths": [
+                      {
+                        "path": "/",
+                        "pathType": "Prefix",
+                        "backend": {
+                          "service": {
+                            "name": "demo",
+                            "port": {
+                              "number": 80
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/rules/0/http/paths/0/path",
+            "value": "relative"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        },
+        {
+          "api_version": "networking.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.21"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "networking.k8s.io/v1beta1",
+            "kind": "Ingress",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "rules": [
+                {
+                  "host": "demo.example.org",
+                  "http": {
+                    "paths": [
+                      {
+                        "path": "/",
+                        "pathType": "Prefix",
+                        "backend": {
+                          "serviceName": "demo",
+                          "servicePort": 80
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/rules/0/http/paths/0/path",
+            "value": "relative"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "IngressClass",
+      "positive_document": {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "IngressClass",
+        "metadata": {
+          "name": "demo"
+        },
+        "spec": {
+          "controller": "example.org/ingress"
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/controller",
+        "value": ""
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/controller",
+        "reason": "controller domain/path required"
+      },
+      "state": "pending",
+      "owner_issue": 10,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "networking.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "IngressClass",
+            "metadata": {
+              "name": "demo"
+            },
+            "spec": {
+              "controller": "example.org/ingress"
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/controller",
+            "value": ""
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        },
+        {
+          "api_version": "networking.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.21"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "networking.k8s.io/v1beta1",
+            "kind": "IngressClass",
+            "metadata": {
+              "name": "demo"
+            },
+            "spec": {
+              "controller": "example.org/ingress"
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/controller",
+            "value": ""
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "NetworkPolicy",
+      "positive_document": {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "podSelector": {
+            "matchLabels": {
+              "app": "demo"
+            }
+          },
+          "policyTypes": ["Ingress"],
+          "ingress": [
+            {
+              "from": [
+                {
+                  "podSelector": {
+                    "matchLabels": {
+                      "app": "demo"
+                    }
+                  }
+                }
+              ],
+              "ports": [
+                {
+                  "port": 8080,
+                  "protocol": "TCP"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/ingress/0/ports/0/port",
+        "value": 70000
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/ingress/0/ports/0/port",
+        "reason": "port outside1..65535"
+      },
+      "state": "pending",
+      "owner_issue": 10,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "networking.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "NetworkPolicy",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "podSelector": {
+                "matchLabels": {
+                  "app": "demo"
+                }
+              },
+              "policyTypes": ["Ingress"],
+              "ingress": [
+                {
+                  "from": [
+                    {
+                      "podSelector": {
+                        "matchLabels": {
+                          "app": "demo"
+                        }
+                      }
+                    }
+                  ],
+                  "ports": [
+                    {
+                      "port": 8080,
+                      "protocol": "TCP"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/ingress/0/ports/0/port",
+            "value": 70000
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "ConfigMap",
+      "positive_document": {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "data": {
+          "config": "explicit"
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/data/config",
+        "value": 123
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/data/config",
+        "reason": "data values must strings"
+      },
+      "state": "pending",
+      "owner_issue": 11,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "data": {
+              "config": "explicit"
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/data/config",
+            "value": 123
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "Secret",
+      "positive_document": {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "type": "Opaque",
+        "stringData": {
+          "token": "protected-fixture-value"
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/data/token",
+        "value": "not-base64"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/data/token",
+        "reason": "data must valid base64; no secret echoed in findings"
+      },
+      "state": "pending",
+      "owner_issue": 11,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "type": "Opaque",
+            "stringData": {
+              "token": "protected-fixture-value"
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/data/token",
+            "value": "not-base64"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "PersistentVolumeClaim",
+      "positive_document": {
+        "apiVersion": "v1",
+        "kind": "PersistentVolumeClaim",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "accessModes": ["ReadWriteOnce"],
+          "resources": {
+            "requests": {
+              "storage": "1Gi"
+            }
+          }
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/resources/requests/storage",
+        "value": "-1Gi"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/resources/requests/storage",
+        "reason": "storage quantity must positive"
+      },
+      "state": "pending",
+      "owner_issue": 11,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "v1",
+            "kind": "PersistentVolumeClaim",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "accessModes": ["ReadWriteOnce"],
+              "resources": {
+                "requests": {
+                  "storage": "1Gi"
+                }
+              }
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/resources/requests/storage",
+            "value": "-1Gi"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "PersistentVolume",
+      "positive_document": {
+        "apiVersion": "v1",
+        "kind": "PersistentVolume",
+        "metadata": {
+          "name": "demo"
+        },
+        "spec": {
+          "capacity": {
+            "storage": "1Gi"
+          },
+          "accessModes": ["ReadWriteOnce"],
+          "persistentVolumeReclaimPolicy": "Retain",
+          "hostPath": {
+            "path": "/srv/data"
+          }
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/hostPath/path",
+        "value": ""
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/hostPath/path",
+        "reason": "hostPath path required"
+      },
+      "state": "pending",
+      "owner_issue": 11,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "v1",
+            "kind": "PersistentVolume",
+            "metadata": {
+              "name": "demo"
+            },
+            "spec": {
+              "capacity": {
+                "storage": "1Gi"
+              },
+              "accessModes": ["ReadWriteOnce"],
+              "persistentVolumeReclaimPolicy": "Retain",
+              "hostPath": {
+                "path": "/srv/data"
+              }
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/hostPath/path",
+            "value": ""
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "StorageClass",
+      "positive_document": {
+        "apiVersion": "storage.k8s.io/v1",
+        "kind": "StorageClass",
+        "metadata": {
+          "name": "demo"
+        },
+        "provisioner": "example.org/csi",
+        "reclaimPolicy": "Retain",
+        "volumeBindingMode": "Immediate"
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/provisioner",
+        "value": ""
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/provisioner",
+        "reason": "provisioner required"
+      },
+      "state": "pending",
+      "owner_issue": 11,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "storage.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "storage.k8s.io/v1",
+            "kind": "StorageClass",
+            "metadata": {
+              "name": "demo"
+            },
+            "provisioner": "example.org/csi",
+            "reclaimPolicy": "Retain",
+            "volumeBindingMode": "Immediate"
+          },
+          "invalid_mutation": {
+            "pointer": "/provisioner",
+            "value": ""
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "Namespace",
+      "positive_document": {
+        "apiVersion": "v1",
+        "kind": "Namespace",
+        "metadata": {
+          "name": "demo"
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/metadata/name",
+        "value": "Bad Namespace"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/metadata/name",
+        "reason": "invalid namespace DNS label"
+      },
+      "state": "pending",
+      "owner_issue": 12,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "v1",
+            "kind": "Namespace",
+            "metadata": {
+              "name": "demo"
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/metadata/name",
+            "value": "Bad Namespace"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "ServiceAccount",
+      "positive_document": {
+        "apiVersion": "v1",
+        "kind": "ServiceAccount",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "automountServiceAccountToken": false
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/automountServiceAccountToken",
+        "value": "false"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/automountServiceAccountToken",
+        "reason": "boolean must not string-coerce"
+      },
+      "state": "pending",
+      "owner_issue": 12,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "v1",
+            "kind": "ServiceAccount",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "automountServiceAccountToken": false
+          },
+          "invalid_mutation": {
+            "pointer": "/automountServiceAccountToken",
+            "value": "false"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "Role",
+      "positive_document": {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "Role",
+        "metadata": {
+          "name": "read",
+          "namespace": "demo"
+        },
+        "rules": [
+          {
+            "apiGroups": [""],
+            "resources": ["pods"],
+            "verbs": ["get", "list"]
+          }
+        ]
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/rules/0",
+        "value": {
+          "verbs": ["get"],
+          "resources": ["pods"],
+          "nonResourceURLs": ["/healthz"]
+        }
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/rules/0",
+        "reason": "resource and nonResource rule forms mutually exclusive"
+      },
+      "state": "pending",
+      "owner_issue": 12,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "rbac.authorization.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "rbac.authorization.k8s.io/v1",
+            "kind": "Role",
+            "metadata": {
+              "name": "read",
+              "namespace": "demo"
+            },
+            "rules": [
+              {
+                "apiGroups": [""],
+                "resources": ["pods"],
+                "verbs": ["get", "list"]
+              }
+            ]
+          },
+          "invalid_mutation": {
+            "pointer": "/rules/0",
+            "value": {
+              "verbs": ["get"],
+              "resources": ["pods"],
+              "nonResourceURLs": ["/healthz"]
+            }
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "RoleBinding",
+      "positive_document": {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "RoleBinding",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "roleRef": {
+          "apiGroup": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "read"
+        },
+        "subjects": [
+          {
+            "kind": "ServiceAccount",
+            "name": "demo",
+            "namespace": "demo"
+          }
+        ]
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/roleRef/kind",
+        "value": "Deployment"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/roleRef/kind",
+        "reason": "roleRef must Role or ClusterRole"
+      },
+      "state": "pending",
+      "owner_issue": 12,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "rbac.authorization.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "rbac.authorization.k8s.io/v1",
+            "kind": "RoleBinding",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "roleRef": {
+              "apiGroup": "rbac.authorization.k8s.io",
+              "kind": "Role",
+              "name": "read"
+            },
+            "subjects": [
+              {
+                "kind": "ServiceAccount",
+                "name": "demo",
+                "namespace": "demo"
+              }
+            ]
+          },
+          "invalid_mutation": {
+            "pointer": "/roleRef/kind",
+            "value": "Deployment"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "ClusterRole",
+      "positive_document": {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "ClusterRole",
+        "metadata": {
+          "name": "read"
+        },
+        "rules": [
+          {
+            "apiGroups": [""],
+            "resources": ["pods"],
+            "verbs": ["get"]
+          }
+        ]
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/rules/0",
+        "value": {
+          "verbs": [],
+          "apiGroups": [""],
+          "resources": ["pods"]
+        }
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/rules/0",
+        "reason": "verbs must nonempty"
+      },
+      "state": "pending",
+      "owner_issue": 12,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "rbac.authorization.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "rbac.authorization.k8s.io/v1",
+            "kind": "ClusterRole",
+            "metadata": {
+              "name": "read"
+            },
+            "rules": [
+              {
+                "apiGroups": [""],
+                "resources": ["pods"],
+                "verbs": ["get"]
+              }
+            ]
+          },
+          "invalid_mutation": {
+            "pointer": "/rules/0",
+            "value": {
+              "verbs": [],
+              "apiGroups": [""],
+              "resources": ["pods"]
+            }
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "ClusterRoleBinding",
+      "positive_document": {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "ClusterRoleBinding",
+        "metadata": {
+          "name": "demo"
+        },
+        "roleRef": {
+          "apiGroup": "rbac.authorization.k8s.io",
+          "kind": "ClusterRole",
+          "name": "read"
+        },
+        "subjects": [
+          {
+            "kind": "ServiceAccount",
+            "name": "demo",
+            "namespace": "demo"
+          }
+        ]
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/roleRef/kind",
+        "value": "Role"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/roleRef/kind",
+        "reason": "cluster binding roleRef requires ClusterRole"
+      },
+      "state": "pending",
+      "owner_issue": 12,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "rbac.authorization.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "rbac.authorization.k8s.io/v1",
+            "kind": "ClusterRoleBinding",
+            "metadata": {
+              "name": "demo"
+            },
+            "roleRef": {
+              "apiGroup": "rbac.authorization.k8s.io",
+              "kind": "ClusterRole",
+              "name": "read"
+            },
+            "subjects": [
+              {
+                "kind": "ServiceAccount",
+                "name": "demo",
+                "namespace": "demo"
+              }
+            ]
+          },
+          "invalid_mutation": {
+            "pointer": "/roleRef/kind",
+            "value": "Role"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "HorizontalPodAutoscaler",
+      "positive_document": {
+        "apiVersion": "autoscaling/v2",
+        "kind": "HorizontalPodAutoscaler",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "scaleTargetRef": {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "name": "demo"
+          },
+          "minReplicas": 1,
+          "maxReplicas": 3,
+          "metrics": [
+            {
+              "type": "Resource",
+              "resource": {
+                "name": "cpu",
+                "target": {
+                  "type": "Utilization",
+                  "averageUtilization": 70
+                }
+              }
+            }
+          ]
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.23",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/metrics/0/resource/target/value",
+        "value": "1"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/metrics/0/resource/target/value",
+        "reason": "Utilization target conflicts with value; exactly matching target required"
+      },
+      "state": "pending",
+      "owner_issue": 12,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "autoscaling/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "autoscaling/v1",
+            "kind": "HorizontalPodAutoscaler",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "scaleTargetRef": {
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "name": "demo"
+              },
+              "minReplicas": 1,
+              "maxReplicas": 3,
+              "targetCPUUtilizationPercentage": 70
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/maxReplicas",
+            "value": 0
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        },
+        {
+          "api_version": "autoscaling/v2",
+          "target_availability_ranges": [
+            {
+              "from": "1.23",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "autoscaling/v2",
+            "kind": "HorizontalPodAutoscaler",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "scaleTargetRef": {
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "name": "demo"
+              },
+              "minReplicas": 1,
+              "maxReplicas": 3,
+              "metrics": [
+                {
+                  "type": "Resource",
+                  "resource": {
+                    "name": "cpu",
+                    "target": {
+                      "type": "Utilization",
+                      "averageUtilization": 70
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/metrics/0/resource/target/value",
+            "value": "1"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        },
+        {
+          "api_version": "autoscaling/v2beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.24"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "autoscaling/v2beta1",
+            "kind": "HorizontalPodAutoscaler",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "scaleTargetRef": {
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "name": "demo"
+              },
+              "minReplicas": 1,
+              "maxReplicas": 3,
+              "metrics": [
+                {
+                  "type": "Resource",
+                  "resource": {
+                    "name": "cpu",
+                    "targetAverageUtilization": 70
+                  }
+                }
+              ]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/maxReplicas",
+            "value": 0
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        },
+        {
+          "api_version": "autoscaling/v2beta2",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.25"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "autoscaling/v2beta2",
+            "kind": "HorizontalPodAutoscaler",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "scaleTargetRef": {
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "name": "demo"
+              },
+              "minReplicas": 1,
+              "maxReplicas": 3,
+              "metrics": [
+                {
+                  "type": "Resource",
+                  "resource": {
+                    "name": "cpu",
+                    "target": {
+                      "type": "Utilization",
+                      "averageUtilization": 70
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/metrics/0/resource/target/value",
+            "value": "1"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "PodDisruptionBudget",
+      "positive_document": {
+        "apiVersion": "policy/v1",
+        "kind": "PodDisruptionBudget",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "minAvailable": 1,
+          "selector": {
+            "matchLabels": {
+              "app": "demo"
+            }
+          }
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.21",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/maxUnavailable",
+        "value": 1
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/maxUnavailable",
+        "reason": "minAvailable and maxUnavailable mutually exclusive"
+      },
+      "state": "pending",
+      "owner_issue": 12,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "policy/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.21",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "policy/v1",
+            "kind": "PodDisruptionBudget",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "minAvailable": 1,
+              "selector": {
+                "matchLabels": {
+                  "app": "demo"
+                }
+              }
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/maxUnavailable",
+            "value": 1
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        },
+        {
+          "api_version": "policy/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.24"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "policy/v1beta1",
+            "kind": "PodDisruptionBudget",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "minAvailable": 1,
+              "selector": {
+                "matchLabels": {
+                  "app": "demo"
+                }
+              }
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/maxUnavailable",
+            "value": 1
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "ResourceQuota",
+      "positive_document": {
+        "apiVersion": "v1",
+        "kind": "ResourceQuota",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "hard": {
+            "requests.cpu": "2",
+            "requests.memory": "1Gi"
+          }
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/hard/requests.cpu",
+        "value": "-1"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/hard/requests.cpu",
+        "reason": "quota quantities nonnegative"
+      },
+      "state": "pending",
+      "owner_issue": 12,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "v1",
+            "kind": "ResourceQuota",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "hard": {
+                "requests.cpu": "2",
+                "requests.memory": "1Gi"
+              }
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/hard/requests.cpu",
+            "value": "-1"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "LimitRange",
+      "positive_document": {
+        "apiVersion": "v1",
+        "kind": "LimitRange",
+        "metadata": {
+          "name": "demo",
+          "namespace": "demo"
+        },
+        "spec": {
+          "limits": [
+            {
+              "type": "Container",
+              "min": {
+                "cpu": "100m"
+              },
+              "max": {
+                "cpu": "2"
+              }
+            }
+          ]
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/limits/0/min/cpu",
+        "value": "3"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/limits/0/min/cpu",
+        "reason": "minimum cannot exceed maximum"
+      },
+      "state": "pending",
+      "owner_issue": 12,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "v1",
+            "kind": "LimitRange",
+            "metadata": {
+              "name": "demo",
+              "namespace": "demo"
+            },
+            "spec": {
+              "limits": [
+                {
+                  "type": "Container",
+                  "min": {
+                    "cpu": "100m"
+                  },
+                  "max": {
+                    "cpu": "2"
+                  }
+                }
+              ]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/limits/0/min/cpu",
+            "value": "3"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "PriorityClass",
+      "positive_document": {
+        "apiVersion": "scheduling.k8s.io/v1",
+        "kind": "PriorityClass",
+        "metadata": {
+          "name": "demo"
+        },
+        "value": 1000,
+        "globalDefault": false
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/value",
+        "value": 1000000001
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/value",
+        "reason": "user priority cannot exceed1e9"
+      },
+      "state": "pending",
+      "owner_issue": 12,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "scheduling.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "scheduling.k8s.io/v1",
+            "kind": "PriorityClass",
+            "metadata": {
+              "name": "demo"
+            },
+            "value": 1000,
+            "globalDefault": false
+          },
+          "invalid_mutation": {
+            "pointer": "/value",
+            "value": 1000000001
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "RuntimeClass",
+      "positive_document": {
+        "apiVersion": "node.k8s.io/v1",
+        "kind": "RuntimeClass",
+        "metadata": {
+          "name": "demo"
+        },
+        "handler": "runc"
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/handler",
+        "value": "Not A Handler"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/handler",
+        "reason": "handler DNS label required; availability external prerequisite"
+      },
+      "state": "pending",
+      "owner_issue": 12,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "node.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "node.k8s.io/v1",
+            "kind": "RuntimeClass",
+            "metadata": {
+              "name": "demo"
+            },
+            "handler": "runc"
+          },
+          "invalid_mutation": {
+            "pointer": "/handler",
+            "value": "Not A Handler"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        },
+        {
+          "api_version": "node.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.24"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "node.k8s.io/v1beta1",
+            "kind": "RuntimeClass",
+            "metadata": {
+              "name": "demo"
+            },
+            "handler": "runc"
+          },
+          "invalid_mutation": {
+            "pointer": "/handler",
+            "value": "Not A Handler"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "PodSecurityPolicy",
+      "positive_document": {
+        "apiVersion": "policy/v1beta1",
+        "kind": "PodSecurityPolicy",
+        "metadata": {
+          "name": "demo"
+        },
+        "spec": {
+          "privileged": false,
+          "runAsUser": {
+            "rule": "RunAsAny"
+          },
+          "seLinux": {
+            "rule": "RunAsAny"
+          },
+          "supplementalGroups": {
+            "rule": "RunAsAny"
+          },
+          "fsGroup": {
+            "rule": "RunAsAny"
+          },
+          "volumes": ["configMap"]
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.24"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/runAsUser",
+        "value": {
+          "rule": "MustRunAs"
+        }
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/runAsUser",
+        "reason": "MustRunAs requires a valid min/max range"
+      },
+      "state": "pending",
+      "owner_issue": 12,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "policy/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.24"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "policy/v1beta1",
+            "kind": "PodSecurityPolicy",
+            "metadata": {
+              "name": "demo"
+            },
+            "spec": {
+              "privileged": false,
+              "runAsUser": {
+                "rule": "RunAsAny"
+              },
+              "seLinux": {
+                "rule": "RunAsAny"
+              },
+              "supplementalGroups": {
+                "rule": "RunAsAny"
+              },
+              "fsGroup": {
+                "rule": "RunAsAny"
+              },
+              "volumes": ["configMap"]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/runAsUser",
+            "value": {
+              "rule": "MustRunAs"
+            }
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "CustomResourceDefinition",
+      "positive_document": {
+        "apiVersion": "apiextensions.k8s.io/v1",
+        "kind": "CustomResourceDefinition",
+        "metadata": {
+          "name": "widgets.example.org"
+        },
+        "spec": {
+          "group": "example.org",
+          "names": {
+            "plural": "widgets",
+            "singular": "widget",
+            "kind": "Widget"
+          },
+          "scope": "Namespaced",
+          "versions": [
+            {
+              "name": "v1",
+              "served": true,
+              "storage": true,
+              "schema": {
+                "openAPIV3Schema": {
+                  "type": "object",
+                  "properties": {
+                    "spec": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/spec/versions/0/storage",
+        "value": false
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/spec/versions/0/storage",
+        "reason": "exactly one storage version required"
+      },
+      "state": "pending",
+      "owner_issue": 13,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "apiextensions.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "apiextensions.k8s.io/v1",
+            "kind": "CustomResourceDefinition",
+            "metadata": {
+              "name": "widgets.example.org"
+            },
+            "spec": {
+              "group": "example.org",
+              "names": {
+                "plural": "widgets",
+                "singular": "widget",
+                "kind": "Widget"
+              },
+              "scope": "Namespaced",
+              "versions": [
+                {
+                  "name": "v1",
+                  "served": true,
+                  "storage": true,
+                  "schema": {
+                    "openAPIV3Schema": {
+                      "type": "object",
+                      "properties": {
+                        "spec": {
+                          "type": "object",
+                          "properties": {
+                            "count": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/versions/0/storage",
+            "value": false
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        },
+        {
+          "api_version": "apiextensions.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.21"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "apiextensions.k8s.io/v1beta1",
+            "kind": "CustomResourceDefinition",
+            "metadata": {
+              "name": "widgets.example.org"
+            },
+            "spec": {
+              "group": "example.org",
+              "names": {
+                "plural": "widgets",
+                "singular": "widget",
+                "kind": "Widget"
+              },
+              "scope": "Namespaced",
+              "versions": [
+                {
+                  "name": "v1",
+                  "served": true,
+                  "storage": true,
+                  "schema": {
+                    "openAPIV3Schema": {
+                      "type": "object",
+                      "properties": {
+                        "spec": {
+                          "type": "object",
+                          "properties": {
+                            "count": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "invalid_mutation": {
+            "pointer": "/spec/versions/0/storage",
+            "value": false
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "MutatingWebhookConfiguration",
+      "positive_document": {
+        "apiVersion": "admissionregistration.k8s.io/v1",
+        "kind": "MutatingWebhookConfiguration",
+        "metadata": {
+          "name": "demo"
+        },
+        "webhooks": [
+          {
+            "name": "demo.example.org",
+            "admissionReviewVersions": ["v1"],
+            "sideEffects": "None",
+            "clientConfig": {
+              "service": {
+                "name": "webhook",
+                "namespace": "demo",
+                "path": "/admit",
+                "port": 443
+              }
+            },
+            "rules": [
+              {
+                "apiGroups": [""],
+                "apiVersions": ["v1"],
+                "resources": ["pods"],
+                "operations": ["CREATE"]
+              }
+            ]
+          }
+        ]
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/webhooks/0/clientConfig/url",
+        "value": "https://example.org/admit"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/webhooks/0/clientConfig/url",
+        "reason": "clientConfig cannot have both url and service"
+      },
+      "state": "pending",
+      "owner_issue": 13,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "admissionregistration.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "admissionregistration.k8s.io/v1",
+            "kind": "MutatingWebhookConfiguration",
+            "metadata": {
+              "name": "demo"
+            },
+            "webhooks": [
+              {
+                "name": "demo.example.org",
+                "admissionReviewVersions": ["v1"],
+                "sideEffects": "None",
+                "clientConfig": {
+                  "service": {
+                    "name": "webhook",
+                    "namespace": "demo",
+                    "path": "/admit",
+                    "port": 443
+                  }
+                },
+                "rules": [
+                  {
+                    "apiGroups": [""],
+                    "apiVersions": ["v1"],
+                    "resources": ["pods"],
+                    "operations": ["CREATE"]
+                  }
+                ]
+              }
+            ]
+          },
+          "invalid_mutation": {
+            "pointer": "/webhooks/0/clientConfig/url",
+            "value": "https://example.org/admit"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        },
+        {
+          "api_version": "admissionregistration.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.21"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "admissionregistration.k8s.io/v1beta1",
+            "kind": "MutatingWebhookConfiguration",
+            "metadata": {
+              "name": "demo"
+            },
+            "webhooks": [
+              {
+                "name": "demo.example.org",
+                "admissionReviewVersions": ["v1"],
+                "sideEffects": "None",
+                "clientConfig": {
+                  "service": {
+                    "name": "webhook",
+                    "namespace": "demo",
+                    "path": "/admit",
+                    "port": 443
+                  }
+                },
+                "rules": [
+                  {
+                    "apiGroups": [""],
+                    "apiVersions": ["v1"],
+                    "resources": ["pods"],
+                    "operations": ["CREATE"]
+                  }
+                ]
+              }
+            ]
+          },
+          "invalid_mutation": {
+            "pointer": "/webhooks/0/clientConfig/url",
+            "value": "https://example.org/admit"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "ValidatingWebhookConfiguration",
+      "positive_document": {
+        "apiVersion": "admissionregistration.k8s.io/v1",
+        "kind": "ValidatingWebhookConfiguration",
+        "metadata": {
+          "name": "demo"
+        },
+        "webhooks": [
+          {
+            "name": "demo.example.org",
+            "admissionReviewVersions": ["v1"],
+            "sideEffects": "None",
+            "clientConfig": {
+              "service": {
+                "name": "webhook",
+                "namespace": "demo",
+                "path": "/admit",
+                "port": 443
+              }
+            },
+            "rules": [
+              {
+                "apiGroups": [""],
+                "apiVersions": ["v1"],
+                "resources": ["pods"],
+                "operations": ["CREATE"]
+              }
+            ]
+          }
+        ]
+      },
+      "profile_availability": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "positive_expected": {
+        "parse": "typed selected kind; finite members only",
+        "validate": "no native-field-invalid; unresolved supplied references become explicit external/unresolved findings",
+        "generate": "explicit values and authored absence retained; no status/default materialization; second generation byte-identical",
+        "sensitive": "protected Secret strings absent from default diagnostics/reports"
+      },
+      "invalid_mutation": {
+        "pointer": "/webhooks/0/clientConfig/url",
+        "value": "https://example.org/admit"
+      },
+      "invalid_expected": {
+        "diagnostic": "native-field-invalid",
+        "pointer": "/webhooks/0/clientConfig/url",
+        "reason": "clientConfig cannot have both url and service"
+      },
+      "state": "pending",
+      "owner_issue": 13,
+      "fixture_provenance": {
+        "origin": "Repository-authored synthetic fixture, independent of oracle implementation",
+        "license": "MPL-2.0",
+        "redistribution": "permitted; no copied chart/operator output",
+        "source_revision": "this contract revision; native execution pending"
+      },
+      "api_documents": [
+        {
+          "api_version": "admissionregistration.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "admissionregistration.k8s.io/v1",
+            "kind": "ValidatingWebhookConfiguration",
+            "metadata": {
+              "name": "demo"
+            },
+            "webhooks": [
+              {
+                "name": "demo.example.org",
+                "admissionReviewVersions": ["v1"],
+                "sideEffects": "None",
+                "clientConfig": {
+                  "service": {
+                    "name": "webhook",
+                    "namespace": "demo",
+                    "path": "/admit",
+                    "port": 443
+                  }
+                },
+                "rules": [
+                  {
+                    "apiGroups": [""],
+                    "apiVersions": ["v1"],
+                    "resources": ["pods"],
+                    "operations": ["CREATE"]
+                  }
+                ]
+              }
+            ]
+          },
+          "invalid_mutation": {
+            "pointer": "/webhooks/0/clientConfig/url",
+            "value": "https://example.org/admit"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        },
+        {
+          "api_version": "admissionregistration.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.21"
+            }
+          ],
+          "positive_document": {
+            "apiVersion": "admissionregistration.k8s.io/v1beta1",
+            "kind": "ValidatingWebhookConfiguration",
+            "metadata": {
+              "name": "demo"
+            },
+            "webhooks": [
+              {
+                "name": "demo.example.org",
+                "admissionReviewVersions": ["v1"],
+                "sideEffects": "None",
+                "clientConfig": {
+                  "service": {
+                    "name": "webhook",
+                    "namespace": "demo",
+                    "path": "/admit",
+                    "port": 443
+                  }
+                },
+                "rules": [
+                  {
+                    "apiGroups": [""],
+                    "apiVersions": ["v1"],
+                    "resources": ["pods"],
+                    "operations": ["CREATE"]
+                  }
+                ]
+              }
+            ]
+          },
+          "invalid_mutation": {
+            "pointer": "/webhooks/0/clientConfig/url",
+            "value": "https://example.org/admit"
+          },
+          "expected_diagnostic": "native-field-invalid",
+          "state": "pending"
+        }
+      ]
+    }
+  ],
+  "semantic_boundary_scenarios": [
+    {
+      "id": "pdb.policy-v1beta1.empty",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1beta1",
+      "selector": {},
+      "expected_selected_pods": 0,
+      "state": "pending"
+    },
+    {
+      "id": "pdb.policy-v1.empty",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "selector": {},
+      "expected_selected_pods": "all supplied namespace pods",
+      "state": "pending"
+    },
+    {
+      "id": "pdb.absent",
+      "kind": "PodDisruptionBudget",
+      "api_versions": ["policy/v1", "policy/v1beta1"],
+      "selector_state": "absent",
+      "expected_selected_pods": 0,
+      "state": "pending"
+    },
+    {
+      "id": "pdb.api-relabel",
+      "source_api": "policy/v1beta1",
+      "target_api": "policy/v1",
+      "selector": {},
+      "expected": "unsupported-semantic-conversion; caller decision required; no apiVersion-only relabel",
+      "state": "pending"
+    }
+  ]
+}

@@ -19,7 +19,7 @@
     ]
   },
   "public_documentation_root": "docs/public/",
-  "full_documentation_roots": [],
+  "full_documentation_roots": ["docs/compatibility/"],
   "executable_documentation_roots": [],
   "executable_documentation_paths": [],
   "documentation_examples_manifest": null,

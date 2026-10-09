@@ -68,6 +68,15 @@ class ValidationPlanTests(unittest.TestCase):
     def plan(self, base: str, head: str) -> dict:
         return planner.make_plan(arguments(self.root, "pull_request", base, head), POLICY)
 
+    def test_frozen_compatibility_docs_remain_full_when_prose_scope_expands(self) -> None:
+        write(self.root, "docs/compatibility/README.md", "# Contract\n\nChanged frozen boundary.\n")
+        head = self.commit()
+        policy = {**POLICY, "public_documentation_root": "docs/"}
+        self.assertIn("docs/compatibility/", policy["full_documentation_roots"])
+        plan = planner.make_plan(arguments(self.root, "pull_request", self.base, head), policy)
+        self.assertEqual(plan["profile"], "full")
+        self.assertTrue(all(plan["jobs"].values()))
+
     def test_public_prose_selects_only_file_and_lockfile_checks(self) -> None:
         write(self.root, "docs/public/concepts/index.md", "# Concepts\n\nUpdated prose.\n")
         head = self.commit()
