@@ -3,7 +3,13 @@ use crate::{
     diagnostic::{FieldPath, Finding, FindingCode, Phase, SourcePosition},
     source::{DocumentFormat, ParseLimits, SourceId},
 };
-use std::{collections::BTreeSet, fmt, sync::Arc};
+use std::{
+    cell::Cell,
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    rc::Rc,
+    sync::Arc,
+};
 
 pub(crate) type NodeId = usize;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -132,13 +138,12 @@ impl TreeNode {
     pub(crate) fn semantic_eq(&self, other: &Self) -> bool {
         match (&self.value, &other.value) {
             (TreeValue::Mapping(left), TreeValue::Mapping(right)) => {
-                left.len() == right.len()
-                    && left.iter().all(|(key, value)| {
-                        right
-                            .iter()
-                            .find(|(other, _)| other == key)
-                            .is_some_and(|(_, other)| value.semantic_eq(other))
-                    })
+                if left.len() != right.len() {
+                    return false;
+                }
+                let index: BTreeMap<_, _> = right.iter().map(|(key, value)| (key, value)).collect();
+                left.iter()
+                    .all(|(key, value)| index.get(key).is_some_and(|other| value.semantic_eq(other)))
             }
             (TreeValue::Sequence(left), TreeValue::Sequence(right)) => {
                 left.len() == right.len() && left.iter().zip(right).all(|(left, right)| left.semantic_eq(right))
@@ -247,6 +252,17 @@ impl SyntaxDocument {
 pub struct UnknownFields {
     pub(crate) entries: Vec<(String, OpaqueNode)>,
 }
+impl PartialEq for UnknownFields {
+    fn eq(&self, other: &Self) -> bool {
+        let right: BTreeMap<_, _> = other.entries.iter().map(|(key, value)| (key, value)).collect();
+        self.entries.len() == other.entries.len()
+            && self
+                .entries
+                .iter()
+                .all(|(key, node)| right.get(key).is_some_and(|value| node.0.semantic_eq(&value.0)))
+    }
+}
+impl Eq for UnknownFields {}
 impl UnknownFields {
     /// Number of retained unknown immediate fields.
     #[must_use]
@@ -258,13 +274,6 @@ impl UnknownFields {
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Sealed cohort extension; no production codecs are delivered yet"
-        )
-    )]
     pub(crate) fn capture(node: &TreeNode, known: &[&str]) -> Self {
         Self {
             entries: node
@@ -315,13 +324,6 @@ impl SyntaxBuilder {
     pub(crate) const fn new() -> Self {
         Self { root: None }
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Sealed cohort extension; no production codecs are delivered yet"
-        )
-    )]
     pub(crate) fn set_root(&mut self, root: TreeNode) {
         self.root = Some(root);
     }
@@ -329,4 +331,253 @@ impl SyntaxBuilder {
         self.root
             .ok_or_else(|| Finding::error(FindingCode::NativeFieldInvalid, Phase::Generation))
     }
+}
+
+/// Shared construction accounting; cloning a context never resets its allowance.
+#[derive(Clone)]
+pub(crate) struct EncodingBudget(Rc<EncodingCounters>);
+struct EncodingCounters {
+    limits: crate::source::AuthoringLimits,
+    nodes: Cell<usize>,
+    events: Cell<usize>,
+    bytes: Cell<usize>,
+    scalar_bytes: Cell<usize>,
+    verified_scalar_bytes: Cell<usize>,
+    verified_nodes: Cell<usize>,
+    verified_events: Cell<usize>,
+}
+impl EncodingBudget {
+    pub(crate) fn new(limits: crate::source::AuthoringLimits) -> Self {
+        Self(Rc::new(EncodingCounters {
+            limits,
+            nodes: Cell::new(0),
+            events: Cell::new(0),
+            bytes: Cell::new(0),
+            scalar_bytes: Cell::new(0),
+            verified_scalar_bytes: Cell::new(0),
+            verified_nodes: Cell::new(0),
+            verified_events: Cell::new(0),
+        }))
+    }
+    pub(crate) fn check_len(&self, len: usize, path: &FieldPath) -> Result<(), Finding> {
+        let limits = self.0.limits.parser;
+        if !self.0.limits.valid()
+            || len > limits.max_nodes.saturating_sub(self.0.nodes.get())
+            || len > limits.max_events.saturating_sub(self.0.events.get())
+        {
+            return Err(encoding_limit(path));
+        }
+        Ok(())
+    }
+    pub(crate) fn scalar(&self, len: usize, path: &FieldPath) -> Result<(), Finding> {
+        if len > self.0.limits.parser.max_scalar_bytes {
+            return Err(encoding_limit(path));
+        }
+        let total = self
+            .0
+            .scalar_bytes
+            .get()
+            .checked_add(len)
+            .ok_or_else(|| encoding_limit(path))?;
+        if total > self.0.limits.max_total_snapshot_bytes {
+            return Err(encoding_limit(path));
+        }
+        self.node(path)?;
+        self.0.scalar_bytes.set(total);
+        Ok(())
+    }
+    pub(crate) fn node(&self, path: &FieldPath) -> Result<(), Finding> {
+        self.check_len(1, path)?;
+        if path.0.len() > self.0.limits.parser.max_depth {
+            return Err(encoding_limit(path));
+        }
+        self.0.nodes.set(self.0.nodes.get() + 1);
+        self.0.events.set(self.0.events.get() + 1);
+        Ok(())
+    }
+    pub(crate) fn clone_node(&self, node: &TreeNode, path: &FieldPath) -> Result<TreeNode, Finding> {
+        let value = match &node.value {
+            TreeValue::Null => {
+                self.node(path)?;
+                TreeValue::Null
+            }
+            TreeValue::Bool(value) => {
+                self.node(path)?;
+                TreeValue::Bool(*value)
+            }
+            TreeValue::Number(value) => {
+                self.scalar(value.len(), path)?;
+                TreeValue::Number(value.clone())
+            }
+            TreeValue::String(value) => {
+                self.scalar(value.len(), path)?;
+                TreeValue::String(value.clone())
+            }
+            TreeValue::Sequence(items) => {
+                self.node(path)?;
+                self.check_len(items.len(), path)?;
+                let mut out = Vec::with_capacity(items.len());
+                for (index, item) in items.iter().enumerate() {
+                    out.push(self.clone_node(item, &path.child(index.to_string()))?);
+                }
+                TreeValue::Sequence(out)
+            }
+            TreeValue::Mapping(entries) => {
+                self.node(path)?;
+                self.check_len(entries.len().checked_mul(2).ok_or_else(|| encoding_limit(path))?, path)?;
+                let mut out = Vec::with_capacity(entries.len());
+                for (key, value) in entries {
+                    let child = path.child(key);
+                    self.scalar(key.len(), &child)?;
+                    out.push((key.clone(), self.clone_node(value, &child)?));
+                }
+                TreeValue::Mapping(out)
+            }
+            TreeValue::Tagged(..) => {
+                return Err(Finding::error(FindingCode::UnsupportedScalar, Phase::Generation).at_path(path.clone()));
+            }
+        };
+        Ok(TreeNode::new(value))
+    }
+    /// Verify the final shape independently of trusted codec accounting.
+    pub(crate) fn verify(&self, node: &TreeNode) -> Result<(), Finding> {
+        let check = Self::new(self.0.limits);
+        check.0.nodes.set(self.0.verified_nodes.get());
+        check.0.events.set(self.0.verified_events.get());
+        check.0.scalar_bytes.set(self.0.verified_scalar_bytes.get());
+        check.inspect(node, &FieldPath::default())?;
+        self.0.verified_nodes.set(check.0.nodes.get());
+        self.0.verified_events.set(check.0.events.get());
+        self.0.verified_scalar_bytes.set(check.0.scalar_bytes.get());
+        Ok(())
+    }
+    fn inspect(&self, node: &TreeNode, path: &FieldPath) -> Result<(), Finding> {
+        match &node.value {
+            TreeValue::String(value) | TreeValue::Number(value) => self.scalar(value.len(), path)?,
+            TreeValue::Mapping(entries) => {
+                self.node(path)?;
+                let mut keys = BTreeSet::new();
+                for (key, value) in entries {
+                    let child = path.child(key);
+                    self.scalar(key.len(), &child)?;
+                    if !keys.insert(key) {
+                        return Err(Finding::error(FindingCode::DuplicateKey, Phase::Generation).at_path(child));
+                    }
+                    self.inspect(value, &child)?;
+                }
+            }
+            TreeValue::Sequence(items) => {
+                self.node(path)?;
+                for (index, value) in items.iter().enumerate() {
+                    self.inspect(value, &path.child(index.to_string()))?;
+                }
+            }
+            TreeValue::Tagged(..) => {
+                return Err(Finding::error(FindingCode::UnsupportedScalar, Phase::Generation).at_path(path.clone()));
+            }
+            _ => self.node(path)?,
+        }
+        Ok(())
+    }
+    /// Stream JSON directly into a checked byte buffer, with no unbounded intermediary.
+    pub(crate) fn snapshot(&self, node: &TreeNode) -> Result<Vec<u8>, Finding> {
+        self.verify(node)?;
+        let mut out = Vec::new();
+        self.json(node, &mut out, &FieldPath::default())?;
+        self.0.bytes.set(
+            self.0
+                .bytes
+                .get()
+                .checked_add(out.len())
+                .ok_or_else(|| encoding_limit(&FieldPath::default()))?,
+        );
+        Ok(out)
+    }
+    fn append(&self, out: &mut Vec<u8>, bytes: &[u8], path: &FieldPath) -> Result<(), Finding> {
+        let next = out.len().checked_add(bytes.len()).ok_or_else(|| encoding_limit(path))?;
+        if next > self.0.limits.parser.max_input_bytes
+            || next
+                > self
+                    .0
+                    .limits
+                    .max_total_snapshot_bytes
+                    .saturating_sub(self.0.bytes.get())
+        {
+            return Err(encoding_limit(path));
+        }
+        out.extend_from_slice(bytes);
+        Ok(())
+    }
+    fn quoted(&self, value: &str, out: &mut Vec<u8>, path: &FieldPath) -> Result<(), Finding> {
+        self.append(out, b"\"", path)?;
+        for byte in value.bytes() {
+            match byte {
+                b'"' => self.append(out, b"\\\"", path)?,
+                b'\\' => self.append(out, b"\\\\", path)?,
+                0..=31 => {
+                    let hex = b"0123456789abcdef";
+                    self.append(
+                        out,
+                        &[
+                            b'\\',
+                            b'u',
+                            b'0',
+                            b'0',
+                            hex[usize::from(byte >> 4)],
+                            hex[usize::from(byte & 15)],
+                        ],
+                        path,
+                    )?;
+                }
+                _ => self.append(out, &[byte], path)?,
+            }
+        }
+        self.append(out, b"\"", path)
+    }
+    fn json(&self, node: &TreeNode, out: &mut Vec<u8>, path: &FieldPath) -> Result<(), Finding> {
+        match &node.value {
+            TreeValue::Null => self.append(out, b"null", path),
+            TreeValue::Bool(value) => self.append(out, if *value { b"true" } else { b"false" }, path),
+            TreeValue::Number(value) => {
+                // The strict parser checks lexemes too; fail safely before writing malformed JSON.
+                if serde_json::from_str::<serde_json::Number>(value).is_err() {
+                    return Err(
+                        Finding::error(FindingCode::NativeFieldInvalid, Phase::Generation).at_path(path.clone())
+                    );
+                }
+                self.append(out, value.as_bytes(), path)
+            }
+            TreeValue::String(value) => self.quoted(value, out, path),
+            TreeValue::Sequence(items) => {
+                self.append(out, b"[", path)?;
+                for (index, item) in items.iter().enumerate() {
+                    if index > 0 {
+                        self.append(out, b",", path)?;
+                    }
+                    self.json(item, out, &path.child(index.to_string()))?;
+                }
+                self.append(out, b"]", path)
+            }
+            TreeValue::Mapping(entries) => {
+                self.append(out, b"{", path)?;
+                // The native codec supplies deterministic field order; maps supply BTreeMap order.
+                for (index, (key, item)) in entries.iter().enumerate() {
+                    if index > 0 {
+                        self.append(out, b",", path)?;
+                    }
+                    let child = path.child(key);
+                    self.quoted(key, out, &child)?;
+                    self.append(out, b":", &child)?;
+                    self.json(item, out, &child)?;
+                }
+                self.append(out, b"}", path)
+            }
+            TreeValue::Tagged(..) => {
+                Err(Finding::error(FindingCode::UnsupportedScalar, Phase::Generation).at_path(path.clone()))
+            }
+        }
+    }
+}
+fn encoding_limit(path: &FieldPath) -> Finding {
+    Finding::error(FindingCode::LimitExceeded, Phase::Generation).at_path(path.clone())
 }

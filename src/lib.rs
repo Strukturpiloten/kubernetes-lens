@@ -17,7 +17,7 @@ pub mod source;
 mod syntax;
 pub mod value;
 pub use diagnostic::{FieldPath, Finding, FindingCode, ResourceId};
-pub use generation::{generate, validate_for_target};
+pub use generation::{NativeValidationIntent, generate, validate_for_target, validate_for_target_with_intent};
 pub use parser::{ParsedInput, parse_source};
 pub use syntax::UnknownFields;
 

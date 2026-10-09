@@ -4,8 +4,11 @@ KubernetesLens is an independent Rust library repository for native Kubernetes c
 This **unpublished foundation** provides bounded strict YAML/JSON parsing, private source evidence,
 identities and Lists, explicit Kubernetes 1.20–1.37 target facts, supplied-only references,
 merge-safe edits, deterministic private in-memory output and explicit bounded Linux input reads.
-The five native resource cohorts remain preservation-only; no Kubernetes minor, renderer or
-runtime conformance is claimed. Renderer execution and live cluster operations are not delivered.
+Typed workload support covers Pod, Deployment, StatefulSet, DaemonSet, ReplicaSet,
+ReplicationController, Job and historical/current CronJob APIs, with validation, supplied facts
+and native generation. The other resource cohorts remain preservation-only. No Kubernetes minor,
+renderer or runtime conformance is claimed. Renderer execution and live cluster operations are
+not delivered. See [workload support and limits](docs/workloads.md).
 See the [foundation API and integration contract](docs/foundation-api.md).
 
 Rust edition 2024, minimum supported Rust 1.85.0, MPL-2.0. The existing license is preserved.

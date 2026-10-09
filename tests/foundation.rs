@@ -239,7 +239,7 @@ fn collisions_ignore_served_version_without_inventing_namespace() -> TestResult<
 }
 #[test]
 fn lists_rewrap_nested_metadata_and_typed_list_gvk() -> TestResult<()> {
-    let text = "apiVersion: v1\nkind: List\nmetadata: {resourceVersion: original}\nitems:\n- apiVersion: v1\n  kind: PodList\n  metadata: {continue: marker}\n  items:\n  - apiVersion: v1\n    kind: Pod\n    metadata: {name: one, namespace: ns}\n";
+    let text = "apiVersion: v1\nkind: List\nmetadata: {resourceVersion: original}\nitems:\n- apiVersion: v1\n  kind: PodList\n  metadata: {continue: marker}\n  items:\n  - apiVersion: v1\n    kind: Pod\n    metadata: {name: one, namespace: ns}\n    spec: {containers: [{name: main, image: example/app:v1}]}\n";
     let set = resources(text)?;
     assert_eq!(set.documents().len(), 1);
     assert_eq!(set.lists().len(), 2);
@@ -295,7 +295,7 @@ fn target_api_boundaries_and_finite_gate_settings() -> TestResult<()> {
 #[test]
 fn effective_edits_recheck_identity_and_do_not_overlay_stale_values() -> TestResult<()> {
     let mut set = resources(
-        "apiVersion: v1\nkind: Pod\nmetadata: {name: before, namespace: ns}\nspec: {field: old, nullValue: null, privateExtension: {nested: retained}}\n",
+        "apiVersion: v1\nkind: Pod\nmetadata: {name: before, namespace: ns}\nspec: {containers: [{name: main, image: example/app:v1}], field: old, nullValue: null, privateExtension: {nested: retained}}\n",
     )?;
     set.documents_mut()[0]
         .set_field_from_source(
@@ -367,7 +367,7 @@ fn supplied_graph_namespace_context_selectors_missing_external_and_cycles() -> T
     assert!(graph.findings.iter().any(|f| f.code == FindingCode::ReferenceCycle));
     assert_eq!(set.documents()[0].identity().required()?.namespace, Presence::Absent);
     let mut selector = LabelSelector::default();
-    selector.match_labels.insert("app".into(), "match".into());
+    selector.match_labels = Presence::Value(std::collections::BTreeMap::from([("app".into(), "match".into())]));
     let mut r = reference(0, "none")?;
     r.target = ReferenceTarget::LabelSelector {
         kinds: &[kubernetes_lens::capability::KindId::Pod],
@@ -425,7 +425,7 @@ fn exact_quantities_and_general_named_ports_do_not_round() -> TestResult<()> {
 #[test]
 fn json_single_resource_requires_one_document() -> TestResult<()> {
     let set = resources(
-        "apiVersion: v1\nkind: Pod\nmetadata: {name: one}\n---\napiVersion: v1\nkind: Pod\nmetadata: {name: two}\n",
+        "apiVersion: v1\nkind: Pod\nmetadata: {name: one}\nspec: {containers: [{name: main, image: example/app:v1}]}\n---\napiVersion: v1\nkind: Pod\nmetadata: {name: two}\nspec: {containers: [{name: main, image: example/app:v1}]}\n",
     )?;
     let mut options = preserve();
     options.json_shape = JsonShape::SingleResource;
@@ -503,9 +503,9 @@ impl<T> Require<T> for Option<T> {
         self.ok_or_else(|| "missing fixture condition".into())
     }
 }
-impl<T, E> Require<T> for Result<T, E> {
+impl<T, E: std::fmt::Debug> Require<T> for Result<T, E> {
     fn required(self) -> TestResult<T> {
-        self.map_err(|_| "fixture operation failed".into())
+        self.map_err(|error| format!("fixture operation failed: {error:?}").into())
     }
 }
 
@@ -538,13 +538,13 @@ fn target_field_and_gate_checks_cover_selected_families_and_nested_templates() -
 }
 #[test]
 fn strict_scalar_lexemes_and_yaml_quantity_strings_are_preserved() -> TestResult<()> {
-    let set=parsed(br#"{"apiVersion":"v1","kind":"Pod","metadata":{"name":"number","namespace":"ns"},"spec":{"exact":9007199254740993,"exponent":1.2300e+03}}"#,DocumentFormat::Json)?.flatten_resources().required()?;
+    let set=parsed(br#"{"apiVersion":"v1","kind":"Pod","metadata":{"name":"number","namespace":"ns"},"spec":{"containers":[{"name":"main","image":"example/app:v1"}],"exact":9007199254740993,"exponent":1.2300e+03}}"#,DocumentFormat::Json)?.flatten_resources().required()?;
     let artifact = generate(&set, &target(37)?, OutputFormat::Json, &preserve()).required()?;
     let text = std::str::from_utf8(bytes(&artifact))?;
     assert!(text.contains("9007199254740993"));
     assert!(text.contains("1.2300e+03"));
     let set = resources(
-        "apiVersion: v1\nkind: Pod\nmetadata: {name: quantities, namespace: ns}\nspec: {resources: {requests: {cpu: 100m, memory: 1Gi}}}\n",
+        "apiVersion: v1\nkind: Pod\nmetadata: {name: quantities, namespace: ns}\nspec: {containers: [{name: main, image: example/app:v1, resources: {requests: {cpu: 100m, memory: 1Gi}}}]}\n",
     )?;
     assert!(generate(&set, &target(37)?, OutputFormat::Yaml, &preserve()).is_ok());
     Ok(())
@@ -736,17 +736,22 @@ fn review_owner_malformed_values_and_unknown_fields_retain_safe_evidence() -> Te
         "[{apiVersion: v1, kind: Pod, name: parent, uid: 123}]",
         "[{apiVersion: v1, kind: Pod, name: parent, controller: private-marker}]",
     ] {
-        let set = resources(&format!(
+        let text = format!(
             "apiVersion: v1\nkind: Pod\nmetadata: {{name: child, namespace: demo, ownerReferences: {owner}}}\n"
-        ))?;
-        let graph = kubernetes_lens::graph::resolve_references(&set);
-        assert!(graph.edges.is_empty());
-        let finding = graph
-            .findings
+        );
+        let findings = match parsed(text.as_bytes(), DocumentFormat::YamlStream)?.flatten_resources() {
+            Ok(set) => {
+                let graph = kubernetes_lens::graph::resolve_references(&set);
+                assert!(graph.edges.is_empty());
+                graph.findings
+            }
+            Err(findings) => findings,
+        };
+        let finding = findings
             .iter()
             .find(|finding| finding.code == FindingCode::NativeFieldInvalid)
             .required()?;
-        assert_eq!(finding.resource, Some(set.documents()[0].id()));
+        assert_eq!(finding.resource, Some(kubernetes_lens::ResourceId(0)));
         assert!(
             finding
                 .path

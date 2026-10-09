@@ -28,6 +28,74 @@ pub enum InputOrigin {
     /// Source origin was not otherwise established.
     CallerSupplied,
 }
+/// Immutable evidence origin, distinct from a caller's input declaration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EvidenceOrigin {
+    /// Caller-supplied source with its declared origin.
+    Supplied(InputOrigin),
+    /// Library-created canonical snapshot of explicitly supplied typed native values.
+    NativeAuthored,
+}
+/// Finite cumulative native-authoring and parser construction limits.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AuthoringLimits {
+    /// Per-snapshot syntax limits; node/event budgets also apply cumulatively to construction.
+    pub parser: ParseLimits,
+    /// Maximum supplied native values, independently of byte size.
+    pub max_resources: usize,
+    /// Maximum aggregate canonical snapshot bytes.
+    pub max_total_snapshot_bytes: usize,
+}
+impl Default for AuthoringLimits {
+    fn default() -> Self {
+        let parser = ParseLimits::default();
+        Self {
+            max_resources: parser.max_documents,
+            max_total_snapshot_bytes: parser.max_input_bytes,
+            parser,
+        }
+    }
+}
+impl AuthoringLimits {
+    pub(crate) fn valid(self) -> bool {
+        self.parser.valid() && self.max_resources > 0 && self.max_total_snapshot_bytes > 0
+    }
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ObservationRole {
+    ServerOwned,
+    SubresourceOnly,
+}
+#[derive(Clone, Debug)]
+pub(crate) struct ObservationPath {
+    pub(crate) path: FieldPath,
+    pub(crate) role: ObservationRole,
+}
+pub(crate) fn append_metadata_observation_paths(base: &FieldPath, out: &mut Vec<ObservationPath>) {
+    for key in [
+        "uid",
+        "resourceVersion",
+        "managedFields",
+        "creationTimestamp",
+        "generation",
+        "selfLink",
+        "deletionTimestamp",
+        "deletionGracePeriodSeconds",
+    ] {
+        out.push(ObservationPath {
+            path: base.child(key),
+            role: ObservationRole::ServerOwned,
+        });
+    }
+}
+pub(crate) fn root_observation_paths() -> Vec<ObservationPath> {
+    let mut out = vec![ObservationPath {
+        path: FieldPath(vec!["status".into()]),
+        role: ObservationRole::ServerOwned,
+    }];
+    append_metadata_observation_paths(&FieldPath(vec!["metadata".into()]), &mut out);
+    out
+}
 /// Caller-supplied byte input; no ambient discovery is performed.
 #[derive(Clone, Copy)]
 pub struct SourceInput<'a> {
@@ -115,8 +183,8 @@ pub struct SourceEvidence {
     pub id: SourceId,
     /// Caller-selected format.
     pub format: DocumentFormat,
-    /// Caller-declared source origin.
-    pub origin: InputOrigin,
+    /// Exact immutable evidence origin, never inferred from a target.
+    pub origin: EvidenceOrigin,
     /// Caller-declared source version.
     pub source_version: Option<KubernetesVersion>,
     raw: Arc<[u8]>,
@@ -126,9 +194,18 @@ impl SourceEvidence {
         Self {
             id: input.id,
             format: input.format,
-            origin: input.origin,
+            origin: EvidenceOrigin::Supplied(input.origin),
             source_version: input.source_version,
             raw: Arc::from(input.bytes),
+        }
+    }
+    pub(crate) fn native_authored(id: SourceId, raw: Vec<u8>) -> Self {
+        Self {
+            id,
+            format: DocumentFormat::Json,
+            origin: EvidenceOrigin::NativeAuthored,
+            source_version: None,
+            raw: Arc::from(raw),
         }
     }
     /// Reveal immutable original bytes only after explicit authorization.
@@ -278,4 +355,215 @@ impl<'a> Positions<'a> {
         }
         self.at_byte(offset)
     }
+}
+
+// Authenticated finite OpenAPI observations; independent expectations/checksums live in
+// tests/foundation/root-status-role-evidence.json. These roles confer no typed admission.
+const ROOT_STATUS_ROLES: &[(&str, &str, &str, u8, u8)] = &[
+    ("apiextensions.k8s.io", "v1beta1", "CustomResourceDefinition", 20, 21),
+    ("apiextensions.k8s.io", "v1", "CustomResourceDefinition", 20, 37),
+    ("apps", "v1", "DaemonSet", 20, 37),
+    ("apps", "v1", "Deployment", 20, 37),
+    ("apps", "v1", "ReplicaSet", 20, 37),
+    ("apps", "v1", "StatefulSet", 20, 37),
+    ("autoscaling", "v1", "HorizontalPodAutoscaler", 20, 37),
+    ("autoscaling", "v2beta1", "HorizontalPodAutoscaler", 20, 24),
+    ("autoscaling", "v2beta2", "HorizontalPodAutoscaler", 20, 25),
+    ("autoscaling", "v2", "HorizontalPodAutoscaler", 23, 37),
+    ("batch", "v1beta1", "CronJob", 20, 24),
+    ("batch", "v1", "CronJob", 21, 37),
+    ("batch", "v1", "Job", 20, 37),
+    ("extensions", "v1beta1", "Ingress", 20, 21),
+    ("networking.k8s.io", "v1beta1", "Ingress", 20, 21),
+    ("networking.k8s.io", "v1", "Ingress", 20, 37),
+    ("networking.k8s.io", "v1", "NetworkPolicy", 24, 27),
+    ("policy", "v1beta1", "PodDisruptionBudget", 20, 24),
+    ("policy", "v1", "PodDisruptionBudget", 21, 37),
+    ("", "v1", "Namespace", 20, 37),
+    ("", "v1", "PersistentVolume", 20, 37),
+    ("", "v1", "PersistentVolumeClaim", 20, 37),
+    ("", "v1", "Pod", 20, 37),
+    ("", "v1", "ReplicationController", 20, 37),
+    ("", "v1", "ResourceQuota", 20, 37),
+    ("", "v1", "Service", 20, 37),
+];
+pub(crate) fn root_status_role(gvk: &crate::model::GroupVersionKind, version: Option<KubernetesVersion>) -> bool {
+    if gvk.group.as_deref() == Some("") {
+        return false;
+    }
+    let Some(api) = crate::capability::declaration(gvk) else {
+        return false;
+    };
+    ROOT_STATUS_ROLES.iter().any(|(group, served, kind, first, last)| {
+        gvk.group.as_deref().unwrap_or("") == *group
+            && gvk.version == *served
+            && gvk.kind == *kind
+            && version.map_or(*first == api.first && *last == api.last, |version| {
+                (api.first..=api.last).contains(&version.minor()) && (*first..=*last).contains(&version.minor())
+            })
+    })
+}
+pub(crate) fn list_observation_paths() -> Vec<ObservationPath> {
+    ["resourceVersion", "selfLink", "continue", "remainingItemCount"]
+        .into_iter()
+        .map(|member| ObservationPath {
+            path: FieldPath(vec!["metadata".into(), member.into()]),
+            role: ObservationRole::ServerOwned,
+        })
+        .collect()
+}
+
+/// Core recheck of sealed descriptors against the finite native occurrence vocabulary.
+pub(crate) fn retain_reviewed_observations(
+    tree: &crate::syntax::TreeNode,
+    gvk: &crate::model::GroupVersionKind,
+    version: Option<KubernetesVersion>,
+    observations: &mut Vec<ObservationPath>,
+) {
+    observations.retain(|observation| {
+        if tree.get_path(&observation.path).is_none() {
+            return false;
+        }
+        let path = &observation.path.0;
+        let supported = crate::capability::declaration(gvk).is_some_and(|declaration| {
+            version.is_none_or(|version| (declaration.first..=declaration.last).contains(&version.minor()))
+        });
+        if observation.role == ObservationRole::SubresourceOnly {
+            return supported
+                && gvk.group.is_none()
+                && gvk.version == "v1"
+                && gvk.kind == "Pod"
+                && path == &["spec", "ephemeralContainers"]
+                && version.is_some_and(|version| version.minor() >= 25);
+        }
+        if path == &["status"] {
+            return root_status_role(gvk, version);
+        }
+        let server_member = path.last().is_some_and(|field| {
+            matches!(
+                field.as_str(),
+                "uid"
+                    | "resourceVersion"
+                    | "managedFields"
+                    | "creationTimestamp"
+                    | "generation"
+                    | "selfLink"
+                    | "deletionTimestamp"
+                    | "deletionGracePeriodSeconds"
+            )
+        });
+        if path.len() == 2 && path[0] == "metadata" && server_member {
+            return true;
+        }
+        if !supported {
+            return false;
+        }
+        if gvk.group.as_deref() == Some("apps")
+            && gvk.version == "v1"
+            && gvk.kind == "StatefulSet"
+            && path.len() >= 4
+            && path[0] == "spec"
+            && path[1] == "volumeClaimTemplates"
+            && path[2].parse::<usize>().is_ok()
+        {
+            return path.len() == 4 && path[3] == "status" || path.len() == 5 && path[3] == "metadata" && server_member;
+        }
+        if !server_member || path.len() < 2 || path[path.len() - 2] != "metadata" {
+            return false;
+        }
+        let metadata_base = &path[..path.len() - 2];
+        let pod_spec = match (gvk.group.as_deref(), gvk.version.as_str(), gvk.kind.as_str()) {
+            (None, "v1", "Pod") => vec!["spec"],
+            (None, "v1", "ReplicationController")
+            | (Some("apps"), "v1", "Deployment" | "StatefulSet" | "DaemonSet" | "ReplicaSet")
+            | (Some("batch"), "v1", "Job") => {
+                if metadata_base == ["spec", "template"] {
+                    return true;
+                }
+                vec!["spec", "template", "spec"]
+            }
+            (Some("batch"), "v1" | "v1beta1", "CronJob") => {
+                if metadata_base == ["spec", "jobTemplate"]
+                    || metadata_base == ["spec", "jobTemplate", "spec", "template"]
+                {
+                    return true;
+                }
+                vec!["spec", "jobTemplate", "spec", "template", "spec"]
+            }
+            _ => return false,
+        };
+        metadata_base.len() == pod_spec.len() + 4
+            && metadata_base
+                .iter()
+                .take(pod_spec.len())
+                .map(String::as_str)
+                .eq(pod_spec.iter().copied())
+            && metadata_base[pod_spec.len()] == "volumes"
+            && metadata_base[pod_spec.len() + 1].parse::<usize>().is_ok()
+            && metadata_base[pod_spec.len() + 2] == "ephemeral"
+            && metadata_base[pod_spec.len() + 3] == "volumeClaimTemplate"
+    });
+}
+
+/// Refuse a descriptor wave before the sealed collector allocates its output.
+pub(crate) fn check_observation_budget(
+    tree: &crate::syntax::TreeNode,
+    gvk: &crate::model::GroupVersionKind,
+) -> Result<(), crate::diagnostic::Finding> {
+    let mut descriptors = 9usize;
+    let pod_spec = match (gvk.group.as_deref(), gvk.version.as_str(), gvk.kind.as_str()) {
+        (None, "v1", "Pod") => FieldPath(vec!["spec".into()]),
+        (None, "v1", "ReplicationController")
+        | (Some("apps"), "v1", "Deployment" | "StatefulSet" | "DaemonSet" | "ReplicaSet")
+        | (Some("batch"), "v1", "Job") => {
+            descriptors += 8;
+            FieldPath(vec!["spec".into(), "template".into(), "spec".into()])
+        }
+        (Some("batch"), "v1" | "v1beta1", "CronJob") => {
+            descriptors += 16;
+            FieldPath(vec![
+                "spec".into(),
+                "jobTemplate".into(),
+                "spec".into(),
+                "template".into(),
+                "spec".into(),
+            ])
+        }
+        _ => FieldPath::default(),
+    };
+    if gvk.group.as_deref() == Some("apps") && gvk.kind == "StatefulSet" {
+        if let Some(items) = tree
+            .get_path(&FieldPath(vec!["spec".into(), "volumeClaimTemplates".into()]))
+            .and_then(crate::syntax::TreeNode::as_sequence)
+        {
+            descriptors = descriptors.saturating_add(items.len().saturating_mul(9));
+        }
+    }
+    if !pod_spec.0.is_empty() {
+        if let Some(volumes) = tree
+            .get_path(&pod_spec.child("volumes"))
+            .and_then(crate::syntax::TreeNode::as_sequence)
+        {
+            let claims = volumes
+                .iter()
+                .filter(|volume| {
+                    volume
+                        .get("ephemeral")
+                        .and_then(|node| node.get("volumeClaimTemplate"))
+                        .is_some()
+                })
+                .count();
+            descriptors = descriptors.saturating_add(claims.saturating_mul(8));
+        }
+    }
+    if gvk.group.is_none() && gvk.kind == "Pod" {
+        descriptors = descriptors.saturating_add(1);
+    }
+    if descriptors > ParseLimits::default().max_nodes {
+        return Err(crate::diagnostic::Finding::error(
+            crate::diagnostic::FindingCode::LimitExceeded,
+            crate::diagnostic::Phase::Analysis,
+        ));
+    }
+    Ok(())
 }

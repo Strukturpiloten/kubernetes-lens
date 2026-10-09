@@ -4,7 +4,7 @@ use crate::{
     diagnostic::{FieldPath, Finding, FindingCode, Phase, ResourceId, WrapperSubject},
     parser::ParsedInput,
     registry::{self, DecodeContext, NativeResource, RegistryBuilder},
-    source::{FieldEvidence, FieldEvidenceMap, InputOrigin, SourceEvidence, SourceId, ValueOrigin},
+    source::{EvidenceOrigin, FieldEvidence, FieldEvidenceMap, InputOrigin, SourceEvidence, SourceId, ValueOrigin},
     syntax::{SyntaxDocument, TreeNode, TreeValue, UnknownFields},
     value::Presence,
 };
@@ -191,6 +191,8 @@ pub struct Metadata {
     pub labels: Presence<BTreeMap<String, String>>,
     /// Exact annotation map.
     pub annotations: Presence<BTreeMap<String, String>>,
+    /// Explicit native finalizer names; never inferred or stripped as observations.
+    pub finalizers: Presence<Vec<String>>,
     /// Exported UID evidence.
     pub uid: Presence<String>,
     /// Exported version evidence.
@@ -317,6 +319,7 @@ pub struct ResourceDocument {
     pub(crate) field_evidence: FieldEvidenceMap,
     pub(crate) original_known: Option<TreeNode>,
     pub(crate) resource: Option<Box<dyn NativeResource>>,
+    pub(crate) decode: Option<registry::DecodeFn>,
     pub(crate) capability: Option<KindCapability>,
     pub(crate) edits: Vec<FieldEdit>,
 }
@@ -403,20 +406,144 @@ impl ResourceDocument {
         self.edits.push(FieldEdit::Set { path, value });
         Ok(())
     }
+    pub(crate) fn project(
+        &self,
+        target: Option<&crate::capability::TargetProfile>,
+    ) -> Result<EffectiveProjection, Vec<Finding>> {
+        self.project_in(target, None)
+    }
+    pub(crate) fn project_in(
+        &self,
+        target: Option<&crate::capability::TargetProfile>,
+        ctx: Option<&registry::EncodeContext<'_>>,
+    ) -> Result<EffectiveProjection, Vec<Finding>> {
+        let tree = self
+            .current_tree_in(target, ctx)
+            .map_err(|finding| vec![finding.for_resource(self.id)])?;
+        let identity =
+            identity(&tree, self.original_identity.scope).map_err(|finding| vec![finding.for_resource(self.id)])?;
+        let (resource, findings) = match self
+            .decode
+            .map(|decode| {
+                decode(
+                    &tree,
+                    &self.evidence,
+                    &DecodeContext {
+                        gvk: &identity.gvk,
+                        scope: identity.scope,
+                    },
+                )
+            })
+            .transpose()
+        {
+            Ok(resource) => (resource, Vec::new()),
+            Err(findings) => (
+                None,
+                findings
+                    .into_iter()
+                    .map(|finding| {
+                        let mut finding = finding.for_resource(self.id);
+                        if self.evidence.origin == EvidenceOrigin::NativeAuthored {
+                            finding.source = None;
+                        }
+                        finding
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+        };
+        crate::source::check_observation_budget(&tree, &identity.gvk)
+            .map_err(|finding| vec![finding.for_resource(self.id)])?;
+        let mut observations = crate::source::root_observation_paths();
+        if let Some(resource) = &resource {
+            resource.collect_observation_paths(&tree, &mut observations);
+        }
+        crate::source::retain_reviewed_observations(
+            &tree,
+            &identity.gvk,
+            self.evidence
+                .source_version
+                .or_else(|| target.map(|target| target.kubernetes)),
+            &mut observations,
+        );
+        Ok(EffectiveProjection {
+            tree,
+            identity,
+            resource,
+            observations,
+            findings,
+            comparisons: std::cell::RefCell::new(BTreeMap::new()),
+        })
+    }
+    pub(crate) fn effective_evidence(
+        &self,
+        projection: &EffectiveProjection,
+        path: &FieldPath,
+        mut charge: impl FnMut(&TreeNode, &TreeNode) -> bool,
+    ) -> Option<FieldEvidence> {
+        let tree = &projection.tree;
+        let mut comparisons = projection.comparisons.borrow_mut();
+        let mut equal = |path: &FieldPath, before: &TreeNode, after: &TreeNode| -> Option<bool> {
+            if let Some(result) = comparisons.get(path) {
+                return Some(*result);
+            }
+            if !charge(before, after) {
+                return None;
+            }
+            let result = before.semantic_eq(after);
+            comparisons.insert(path.clone(), result);
+            Some(result)
+        };
+        let generated = FieldEvidence {
+            source: self.evidence.id,
+            position: None,
+            origin: ValueOrigin::Generated,
+        };
+        if self.evidence.origin == EvidenceOrigin::NativeAuthored {
+            return Some(generated);
+        }
+        for length in 0..path.0.len() {
+            let prefix = FieldPath(path.0[..length].to_vec());
+            if let (Some(before), Some(after)) = (self.original.get_path(&prefix), tree.get_path(&prefix)) {
+                if matches!(before.value, TreeValue::Sequence(_)) && !equal(&prefix, before, after)? {
+                    return Some(generated);
+                }
+            }
+        }
+        match (self.original.get_path(path), tree.get_path(path)) {
+            (Some(before), Some(after)) if equal(path, before, after)? => {
+                Some(self.field_evidence.0.get(path).cloned().unwrap_or(generated))
+            }
+            _ => Some(generated),
+        }
+    }
     pub(crate) fn current_tree(&self, target: Option<&crate::capability::TargetProfile>) -> Result<TreeNode, Finding> {
+        self.current_tree_in(target, None)
+    }
+    fn current_tree_in(
+        &self,
+        target: Option<&crate::capability::TargetProfile>,
+        ctx: Option<&registry::EncodeContext<'_>>,
+    ) -> Result<TreeNode, Finding> {
         let mut tree = if let (Some(resource), Some(original_known)) = (&self.resource, &self.original_known) {
-            let known = registry::encode(resource.as_ref(), target)?;
+            let known = match ctx {
+                Some(ctx) => registry::encode_in(resource.as_ref(), ctx)?,
+                None => registry::encode(resource.as_ref(), target)?,
+            };
             let encoded_identity = identity(&known, self.original_identity.scope)?;
             if encoded_identity.gvk != self.original_identity.gvk {
                 return Err(Finding::error(FindingCode::CodecIdentityMismatch, Phase::Generation));
             }
-            crate::generation::merge_delta(
+            crate::generation::merge_native_delta(
                 &self.original,
                 original_known,
                 &known,
                 &FieldPath::default(),
                 self.capability.as_ref().map_or(&[], |c| c.fields),
                 &self.edits,
+                crate::generation::MergeContext {
+                    gvk: Some(&self.original_identity.gvk),
+                    target,
+                },
             )?
         } else {
             self.original.clone()
@@ -476,6 +603,85 @@ impl fmt::Debug for ResourceSet {
     }
 }
 impl ResourceSet {
+    /// Build bounded canonical evidence from delivered typed native values and an explicit target.
+    /// No namespace, API version, name or native default is inferred.
+    /// # Errors
+    /// Refuses invalid targets, construction budgets, malformed native identity and validation errors.
+    pub fn from_authored(
+        values: Vec<AuthoredResource>,
+        target: &crate::capability::TargetProfile,
+        limits: &crate::source::AuthoringLimits,
+    ) -> Result<Self, Vec<Finding>> {
+        Self::authored_with_registry(values, target, limits, &crate::resources::registry()?)
+    }
+    pub(crate) fn authored_with_registry(
+        values: Vec<AuthoredResource>,
+        target: &crate::capability::TargetProfile,
+        limits: &crate::source::AuthoringLimits,
+        registry: &RegistryBuilder,
+    ) -> Result<Self, Vec<Finding>> {
+        let target_findings = target.findings();
+        if crate::diagnostic::has_errors(&target_findings) {
+            return Err(target_findings);
+        }
+        if !limits.valid() || values.len() > limits.max_resources || values.len() > limits.parser.max_documents {
+            return Err(vec![Finding::error(FindingCode::LimitExceeded, Phase::Generation)]);
+        }
+        let budget = crate::syntax::EncodingBudget::new(*limits);
+        let ctx = registry::EncodeContext {
+            target: Some(target),
+            include_unknown: true,
+            budget: budget.clone(),
+        };
+        // Check collection length before reserving its storage.
+        let mut inputs = Vec::with_capacity(values.len());
+        for (index, value) in values.into_iter().enumerate() {
+            let mut builder = crate::syntax::SyntaxBuilder::new();
+            value
+                .0
+                .encode_known(&ctx, &mut builder)
+                .map_err(|finding| vec![positionless(finding)])?;
+            let tree = builder.finish().map_err(|finding| vec![positionless(finding)])?;
+            let bytes = budget.snapshot(&tree).map_err(|finding| vec![positionless(finding)])?;
+            let id = SourceId(
+                u64::try_from(index)
+                    .map_err(|_| vec![Finding::error(FindingCode::LimitExceeded, Phase::Generation)])?,
+            );
+            let mut parsed = crate::parse_source(
+                crate::source::SourceInput {
+                    id,
+                    format: crate::source::DocumentFormat::Json,
+                    origin: InputOrigin::Authored,
+                    source_version: None,
+                    bytes: &bytes,
+                },
+                &limits.parser,
+            )
+            .map_err(|findings| findings.into_iter().map(positionless).collect::<Vec<_>>())?;
+            parsed.evidence = Arc::new(SourceEvidence::native_authored(id, bytes));
+            for tree in &mut parsed.trees {
+                clear_positions(tree);
+            }
+            inputs.push(parsed);
+        }
+        let mut set = Self::with_registry(inputs, registry)
+            .map_err(|findings| findings.into_iter().map(positionless).collect::<Vec<_>>())?;
+        let findings = crate::generation::validate_for_target(&set, target)
+            .into_iter()
+            .map(|finding| {
+                let mut finding = positionless(finding);
+                if finding.code == FindingCode::UnadmittedField {
+                    finding.severity = crate::diagnostic::Severity::Warning;
+                }
+                finding
+            })
+            .collect::<Vec<_>>();
+        if crate::diagnostic::has_errors(&findings) {
+            return Err(findings);
+        }
+        set.findings.extend(findings);
+        Ok(set)
+    }
     /// Materialize explicit parsed inputs, retaining unadmitted resources and every wrapper.
     /// # Errors
     /// Rejects malformed identities/Lists, conflicting scope evidence, and duplicate objects.
@@ -505,7 +711,7 @@ impl ResourceSet {
             set.sources.push(input.evidence);
         }
         set.resolve_crd_scopes().map_err(|e| vec![e])?;
-        let findings = set.identity_findings();
+        let findings = set.identity_findings_in(true);
         if crate::diagnostic::has_errors(&findings) {
             return Err(findings);
         }
@@ -539,6 +745,9 @@ impl ResourceSet {
     /// Recheck effective identities after edits; served versions are excluded from collisions.
     #[must_use]
     pub fn identity_findings(&self) -> Vec<Finding> {
+        self.identity_findings_in(false)
+    }
+    fn identity_findings_in(&self, original: bool) -> Vec<Finding> {
         let mut seen = BTreeMap::new();
         let mut out = Vec::new();
         let mut list_ids = BTreeSet::new();
@@ -558,7 +767,11 @@ impl ResourceSet {
             if !ids.insert(document.id) {
                 out.push(Finding::error(FindingCode::InvalidIdentity, Phase::Analysis).for_resource(document.id));
             }
-            match document.identity() {
+            match if original {
+                Ok(document.original_identity.clone())
+            } else {
+                document.identity()
+            } {
                 Ok(identity) => {
                     if let Some(key) = identity.collision_key() {
                         if let Some(previous) = seen.insert(key, document.id) {
@@ -628,8 +841,14 @@ impl ResourceSet {
             );
             (None, None, None)
         };
+        crate::source::check_observation_budget(&tree, &gvk)?;
+        let mut observations = crate::source::root_observation_paths();
+        if let Some(resource) = &resource {
+            resource.collect_observation_paths(&tree, &mut observations);
+        }
+        crate::source::retain_reviewed_observations(&tree, &gvk, evidence.source_version, &mut observations);
         let mut fields = FieldEvidenceMap::default();
-        collect_evidence(&tree, &FieldPath::default(), &evidence, &mut fields);
+        collect_evidence(&tree, &FieldPath::default(), &evidence, &observations, &mut fields);
         self.documents.push(ResourceDocument {
             id,
             source,
@@ -641,6 +860,7 @@ impl ResourceSet {
             field_evidence: fields,
             original_known,
             resource,
+            decode: registry.entries.get(&gvk).map(|entry| entry.decode),
             capability,
             edits: Vec::new(),
         });
@@ -789,6 +1009,40 @@ impl ResourceSet {
         Ok(())
     }
 }
+/// Opaque authoring input; only delivered native kinds provide public conversions.
+/// There is no public raw-JSON constructor or externally implementable codec.
+pub struct AuthoredResource(Box<dyn NativeResource>);
+impl AuthoredResource {
+    pub(crate) fn new(value: Box<dyn NativeResource>) -> Self {
+        Self(value)
+    }
+}
+impl fmt::Debug for AuthoredResource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("AuthoredResource(<private>)")
+    }
+}
+fn positionless(mut finding: Finding) -> Finding {
+    finding.source = None;
+    finding
+}
+fn clear_positions(node: &mut TreeNode) {
+    node.start = None;
+    match &mut node.value {
+        TreeValue::Mapping(entries) => {
+            for (_, value) in entries {
+                clear_positions(value);
+            }
+        }
+        TreeValue::Sequence(items) => {
+            for item in items {
+                clear_positions(item);
+            }
+        }
+        TreeValue::Tagged(_, value) => clear_positions(value),
+        _ => {}
+    }
+}
 fn invalid() -> Finding {
     Finding::error(FindingCode::InvalidIdentity, Phase::Decoding)
 }
@@ -836,20 +1090,23 @@ pub(crate) fn identity(tree: &TreeNode, scope: ResourceScope) -> Result<Resource
         generate_name,
     })
 }
-fn collect_evidence(node: &TreeNode, path: &FieldPath, source: &SourceEvidence, out: &mut FieldEvidenceMap) {
-    let observed = source.origin == InputOrigin::ClusterExport
-        && (path.0.first().is_some_and(|s| s == "status")
-            || path.0.first().is_some_and(|s| s == "metadata")
-                && path.0.get(1).is_some_and(|s| {
-                    matches!(
-                        s.as_str(),
-                        "uid" | "resourceVersion" | "managedFields" | "creationTimestamp" | "generation"
-                    )
-                }));
+fn collect_evidence(
+    node: &TreeNode,
+    path: &FieldPath,
+    source: &SourceEvidence,
+    observations: &[crate::source::ObservationPath],
+    out: &mut FieldEvidenceMap,
+) {
+    let observed = source.origin == EvidenceOrigin::Supplied(InputOrigin::ClusterExport)
+        && observations
+            .iter()
+            .any(|observation| path.0.starts_with(&observation.path.0));
     let origin = if observed {
         ValueOrigin::Observed
-    } else if source.origin == InputOrigin::Authored {
+    } else if source.origin == EvidenceOrigin::Supplied(InputOrigin::Authored) {
         ValueOrigin::Authored
+    } else if source.origin == EvidenceOrigin::NativeAuthored {
+        ValueOrigin::Generated
     } else {
         ValueOrigin::CallerSupplied
     };
@@ -857,21 +1114,34 @@ fn collect_evidence(node: &TreeNode, path: &FieldPath, source: &SourceEvidence, 
         path.clone(),
         FieldEvidence {
             source: source.id,
-            position: node.start,
+            position: if source.origin == EvidenceOrigin::NativeAuthored {
+                None
+            } else {
+                node.start
+            },
             origin,
         },
     );
     match &node.value {
         TreeValue::Mapping(entries) => {
             for (key, value) in entries {
-                collect_evidence(value, &path.child(key), source, out);
+                collect_evidence(value, &path.child(key), source, observations, out);
             }
         }
         TreeValue::Sequence(items) => {
             for (index, value) in items.iter().enumerate() {
-                collect_evidence(value, &path.child(index.to_string()), source, out);
+                collect_evidence(value, &path.child(index.to_string()), source, observations, out);
             }
         }
         _ => {}
     }
+}
+
+pub(crate) struct EffectiveProjection {
+    comparisons: std::cell::RefCell<BTreeMap<FieldPath, bool>>,
+    pub(crate) findings: Vec<Finding>,
+    pub(crate) tree: TreeNode,
+    pub(crate) identity: ResourceIdentity,
+    pub(crate) resource: Option<Box<dyn NativeResource>>,
+    pub(crate) observations: Vec<crate::source::ObservationPath>,
 }

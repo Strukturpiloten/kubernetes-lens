@@ -56,6 +56,9 @@ impl<T> Protected<T> {
     pub const fn reveal(&self, _access: &ExplicitSourceAccess) -> &T {
         &self.0
     }
+    pub(crate) const fn native_value(&self) -> &T {
+        &self.0
+    }
     /// Replace the actual native value without creating a placeholder.
     pub fn replace(&mut self, value: T) {
         self.0 = value;
@@ -281,6 +284,9 @@ impl Quantity {
     pub fn lexeme(&self, _access: &ExplicitSourceAccess) -> &str {
         &self.lexeme
     }
+    pub(crate) fn native_lexeme(&self) -> &str {
+        &self.lexeme
+    }
     /// Compare numeric equivalence while retaining separate source lexemes.
     #[must_use]
     pub fn equivalent_to(&self, other: &Self) -> bool {
@@ -329,13 +335,26 @@ pub struct SelectorRequirement {
     /// Finite operator.
     pub operator: SelectorOperator,
     /// Exact authored values.
-    pub values: Vec<String>,
+    pub values: Presence<Vec<String>>,
+    pub(crate) unknown: crate::syntax::UnknownFields,
+}
+impl SelectorRequirement {
+    /// Retain the caller's exact key, operator and value presence without defaults.
+    #[must_use]
+    pub fn new(key: String, operator: SelectorOperator, values: Presence<Vec<String>>) -> Self {
+        Self {
+            key,
+            operator,
+            values,
+            unknown: crate::syntax::UnknownFields::default(),
+        }
+    }
 }
 impl fmt::Debug for SelectorRequirement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SelectorRequirement")
             .field("operator", &self.operator)
-            .field("value_count", &self.values.len())
+            .field("value_count", &self.values.value().map_or(0, Vec::len))
             .finish_non_exhaustive()
     }
 }
@@ -343,61 +362,105 @@ impl fmt::Debug for SelectorRequirement {
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct LabelSelector {
     /// Exact equality keys and values.
-    pub match_labels: BTreeMap<String, String>,
+    pub match_labels: Presence<BTreeMap<String, String>>,
     /// All expression requirements must match.
-    pub match_expressions: Vec<SelectorRequirement>,
+    pub match_expressions: Presence<Vec<SelectorRequirement>>,
+    pub(crate) unknown: crate::syntax::UnknownFields,
 }
 impl LabelSelector {
+    /// Author selector members with explicit absence/null/value semantics.
+    #[must_use]
+    pub fn new(
+        match_labels: Presence<BTreeMap<String, String>>,
+        match_expressions: Presence<Vec<SelectorRequirement>>,
+    ) -> Self {
+        Self {
+            match_labels,
+            match_expressions,
+            unknown: crate::syntax::UnknownFields::default(),
+        }
+    }
+
+    /// Author an explicit equality map; even an empty map remains present.
+    #[must_use]
+    pub fn from_match_labels(match_labels: BTreeMap<String, String>) -> Self {
+        Self {
+            match_labels: Presence::Value(match_labels),
+            ..Self::default()
+        }
+    }
+
     /// Validate finite native label grammar and operator cardinalities.
     ///
     /// # Errors
     /// Reports fixed findings for invalid keys/values or operator/value combinations.
     pub fn validate(&self) -> Result<(), Finding> {
-        for (key, value) in &self.match_labels {
-            if !label_key(key) || !label_value(value) {
-                return Err(invalid_value());
+        if !self.unknown.is_empty()
+            || self
+                .match_expressions
+                .value()
+                .is_some_and(|items| items.iter().any(|item| !item.unknown.is_empty()))
+        {
+            return Err(Finding::error(FindingCode::UnadmittedField, Phase::Validation));
+        }
+        if matches!(self.match_labels, Presence::Null) || matches!(self.match_expressions, Presence::Null) {
+            return Err(invalid_value());
+        }
+        if let Some(labels) = self.match_labels.value() {
+            for (key, value) in labels {
+                if !label_key(key) || !label_value(value) {
+                    return Err(invalid_value());
+                }
             }
         }
-        for requirement in &self.match_expressions {
-            if !label_key(&requirement.key) || requirement.values.iter().any(|value| !label_value(value)) {
-                return Err(invalid_value());
-            }
-            let expects_values = matches!(requirement.operator, SelectorOperator::In | SelectorOperator::NotIn);
-            if expects_values == requirement.values.is_empty() {
-                return Err(invalid_value());
+        if let Some(requirements) = self.match_expressions.value() {
+            for requirement in requirements {
+                if !label_key(&requirement.key) || matches!(requirement.values, Presence::Null) {
+                    return Err(invalid_value());
+                }
+                let values = requirement.values.value().map_or(&[][..], Vec::as_slice);
+                if values.iter().any(|value| !label_value(value)) {
+                    return Err(invalid_value());
+                }
+                let expects = matches!(requirement.operator, SelectorOperator::In | SelectorOperator::NotIn);
+                if expects == values.is_empty() {
+                    return Err(invalid_value());
+                }
             }
         }
         Ok(())
     }
-    /// Match explicit supplied labels. This never queries a cluster.
-    ///
+    /// Match admitted supplied labels, preserving invalid/unadmitted selector outcomes.
     /// # Errors
-    /// Refuses invalid selectors before matching.
+    /// Null, unknown descendants, malformed keys and invalid operator cardinalities never match.
     pub fn matches(&self, labels: &BTreeMap<String, String>) -> Result<bool, Finding> {
         self.validate()?;
         if self
             .match_labels
-            .iter()
-            .any(|(key, value)| labels.get(key) != Some(value))
+            .value()
+            .is_some_and(|required| required.iter().any(|(key, value)| labels.get(key) != Some(value)))
         {
             return Ok(false);
         }
-        Ok(self.match_expressions.iter().all(|requirement| {
-            let value = labels.get(&requirement.key);
-            match requirement.operator {
-                SelectorOperator::In => value.is_some_and(|value| requirement.values.contains(value)),
-                SelectorOperator::NotIn => value.is_none_or(|value| !requirement.values.contains(value)),
-                SelectorOperator::Exists => value.is_some(),
-                SelectorOperator::DoesNotExist => value.is_none(),
-            }
+        Ok(self.match_expressions.value().is_none_or(|requirements| {
+            requirements.iter().all(|requirement| {
+                let value = labels.get(&requirement.key);
+                let values = requirement.values.value().map_or(&[][..], Vec::as_slice);
+                match requirement.operator {
+                    SelectorOperator::In => value.is_some_and(|value| values.contains(value)),
+                    SelectorOperator::NotIn => value.is_none_or(|value| !values.contains(value)),
+                    SelectorOperator::Exists => value.is_some(),
+                    SelectorOperator::DoesNotExist => value.is_none(),
+                }
+            })
         }))
     }
 }
 impl fmt::Debug for LabelSelector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LabelSelector")
-            .field("equality_count", &self.match_labels.len())
-            .field("expression_count", &self.match_expressions.len())
+            .field("equality_count", &self.match_labels.value().map_or(0, BTreeMap::len))
+            .field("expression_count", &self.match_expressions.value().map_or(0, Vec::len))
             .finish_non_exhaustive()
     }
 }
@@ -415,10 +478,24 @@ pub(crate) fn dns_label(value: &str) -> bool {
 }
 pub(crate) fn label_key(value: &str) -> bool {
     if let Some((prefix, name)) = value.split_once('/') {
-        dns_subdomain(prefix) && label_name(name, false)
+        qualified_label_prefix(prefix) && label_name(name, false)
     } else {
         label_name(value, false)
     }
+}
+// Qualified label prefixes use the native DNS subdomain envelope: the total
+// length is bounded, while individual components have no separate 63-byte cap.
+fn qualified_label_prefix(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 253
+        && value.split('.').all(|part| {
+            !part.is_empty()
+                && part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+                && part.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
+                && part.as_bytes().last().is_some_and(u8::is_ascii_alphanumeric)
+        })
 }
 fn label_name(value: &str, empty: bool) -> bool {
     if value.is_empty() {

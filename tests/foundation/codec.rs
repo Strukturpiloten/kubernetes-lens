@@ -241,9 +241,9 @@ impl<T> Require<T> for Option<T> {
         self.ok_or_else(|| "missing fixture condition".into())
     }
 }
-impl<T, E> Require<T> for Result<T, E> {
+impl<T, E: std::fmt::Debug> Require<T> for Result<T, E> {
     fn required(self) -> TestResult<T> {
-        self.map_err(|_| "fixture operation failed".into())
+        self.map_err(|error| format!("{error:?}").into())
     }
 }
 
@@ -444,3 +444,9 @@ fn review_internal_duplicate_wrapper_ids_cannot_overwrite_reconstruction() -> Te
     assert_eq!(subject.list, crate::model::ListId(0));
     Ok(())
 }
+
+#[path = "core.rs"]
+mod core_tests;
+
+#[path = "root_status.rs"]
+mod root_status;
