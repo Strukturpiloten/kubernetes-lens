@@ -42,4 +42,4 @@ for phase in rust msrv dependencies documentation; do
   printf '\nComplete validation phase: %s\n' "${phase}"
   bash scripts/run-checks.sh "${phase}"
 done
-printf '\nKubernetesLens complete validation passed. Native conformance and published API compatibility are unavailable in this bootstrap.\n'
+printf '\nKubernetesLens complete validation passed. Native conformance and published API compatibility are unavailable in this unpublished foundation.\n'

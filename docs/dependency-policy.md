@@ -1,6 +1,6 @@
 # Dependency and pin ownership
 
-Product dependencies are absent in bootstrap. Cargo.lock is committed, exact dependencies must be
+Foundation dependencies use exact reviewed Cargo pins and locked registry integrity. Cargo.lock is committed, exact dependencies must be
 reviewed with license and MSRV evidence, and normal builds use `--locked`. The normal toolchain is
 owned by the native `rust-toolchain` manager; MSRV 1.85.0 is a fixed compatibility anchor.
 
@@ -39,8 +39,7 @@ The official [container distribution](https://docs.renovatebot.com/getting-start
 was checked through Context7. Registry manifest bytes are retained in
 [evidence](evidence/renovate-image-2026-10-09.manifest); SHA-256 is the digest recorded in the production
 pin, with linux/amd64 and linux/arm64 descriptors. Actual extraction/RE2 evidence here is amd64 only.
-The inherited shared lockfile release-age guard remains unchanged and sees no new third-party Cargo
-or local npm graph in this bootstrap. [#17](https://github.com/Strukturpiloten/kubernetes-lens/issues/17)
+The inherited shared lockfile release-age guard remains unchanged and applies to the new Cargo graph; no local npm product graph is introduced. [#17](https://github.com/Strukturpiloten/kubernetes-lens/issues/17)
 records its separately observed metadata-budget limitation; no guard was weakened.
 
 No Renovate regression command opens PRs or performs platform writes. The pinned Renovate internal
@@ -60,3 +59,26 @@ canonical immutable BoxFerry installer instead of introducing another checksum o
 Actual Renovate/RE2 regressions verify exclusions and show that removing them exposes extraction
 even if a future manager recognizes a compatibility path. Operational shared-reference/image
 managers, grouping, manual approvals and native conformance boundaries remain unchanged.
+
+## Foundation parser dependency evidence
+
+The reviewed parser choice is yaml-rust2 0.13.0 with default encoding features disabled, using
+custom marked events rather than YamlLoader. Its declared MSRV is Rust 1.85; license is
+MIT OR Apache-2.0. Exact serde/serde_json pins and `raw_value` support ordered strict duplicate
+checking and preserved numeric lexemes; their declared MSRVs are below 1.85 and licenses are
+MIT OR Apache-2.0. Cargo.lock records normal registry checksums for all transitive packages.
+No checksum was invented, license policy weakened, or age guard bypassed. Current versions are
+owned once by Cargo declarations and the existing native Renovate Cargo manager; extraction,
+missing-manager and effective grouping/approval regressions cover the newly introduced pins.
+
+The embedded immutable Kubernetes capability ledger retains upstream source attribution and
+source/license links. Package inclusion explicitly retains the ledger and Apache-2.0 license
+asset. Those source/compatibility anchors remain excluded from operational Renovate updates.
+The separately tracked #17 npm whole-metadata budget problem does not justify an exception:
+the Cargo guard already requests bounded per-version crate metadata and still fails closed.
+
+Linux acquisition also pins libc 0.2.190 (Rust 1.65 MSRV, MIT OR Apache-2.0), solely for safe
+`OpenOptionsExt` no-follow/nonblocking/directory constants. It introduces no unsafe code.
+Its per-version registry record is unyanked, published 2026-10-02, and Cargo.lock records the
+normal verified registry checksum. The dependency is Linux-target-gated and owned by the same
+Cargo Renovate manager; source facts and runtime tool pins are unchanged.

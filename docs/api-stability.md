@@ -1,11 +1,13 @@
 # API stability
 
-The unpublished bootstrap exports no public types or functions. The manifest version is local
-package identity. Rustdoc and source form the initial local contract; there is no crates.io baseline
-and no registry comparison claiming published compatibility. The gate builds Rustdoc with warnings
-denied and packages the same locked source.
+The unpublished package now exports the offline [foundation API](foundation-api.md).
+[ADR 0003](decisions/0003-offline-native-foundation.md) supersedes ADR 0001's empty API statement.
+Rustdoc and independent foundation tests define the local source/behavior contract; no crates.io
+baseline or registry comparison is fabricated. Pre-1.0 intentional API breaks require an explicit
+ADR/migration decision. Publication remains separately authorized after the completion gate.
 
-Native implementation must define its public source and behavior contracts with independent tests
-before advertising support. Pre-1.0 intentional API breaks require an explicit ADR/migration decision.
-After the maintainer publishes, add a real published SemVer baseline rather than treating an absent
-release as success. KubernetesLens #7 and #15 own that transition.
+Private raw input/output, diagnostic redaction, finite target selection, unknown retention,
+null-versus-absence, current identity recomputation and preservation-versus-admission are public
+behavior boundaries. Sealed codec internals are crate-private integration contracts. Source-backed
+schema descriptors are not delivered native capability. Renderer execution is deferred; finite
+renderer identifiers do not freeze an invocation, artifact-tree or supervisor API.

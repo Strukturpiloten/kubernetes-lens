@@ -25,3 +25,20 @@ independent schema witnesses, concrete native-kind scenarios and exact gate/comm
 Its regressions cover numeric version bounds, removed APIs, gate defaults/settings, template
 contexts, per-field/profile obligations and mutated source facts. All native outcomes remain pending.
 Compatibility documentation always selects the full validation plan.
+
+## Offline foundation
+
+Run focused development checks with `cargo test --locked --lib --test foundation` and
+`cargo clippy --locked --lib --tests -- -D warnings`. Public tests cover strict source syntax,
+Unicode source positions, each parser budget, aliases, identities, Lists, target versions/gates,
+privacy, deterministic generation, explicit edits, supplied references and Linux acquisition.
+Genuine test-only codec tests independently exercise downcast edits, known-leaf deltas, keyed
+item reordering, retained unknown descendants, unchanged null/absence, atomic conflicts, and
+registry/identity divergence. Independent review regressions cover read-only provenance,
+cluster collision identity, owner scope and malformed-source evidence, empty opaque containers,
+and retained/flattened wrapper admission, privacy, observations and API removal boundaries.
+Wrapper-subject regressions distinguish equal-position sources, multiple documents, nested Lists
+and failed decode attempts without disclosing source values. They are not fake production codecs or runtime conformance.
+
+Foundation fixture provenance is in `fixtures/foundation/README.md`. All named compatibility
+cells remain pending. Focused checks never replace the primary agent's final complete gate.

@@ -31,8 +31,23 @@ def validate(files: dict[str, str]) -> None:
     assert hashlib.sha256(files["LICENSE"].encode()).hexdigest() == LICENSE_SHA256
     for section in ("dependencies", "dev-dependencies", "build-dependencies"):
         assert not any(name.startswith("boxferry") for name in manifest.get(section, {}))
+    dependencies = manifest.get("dependencies", {})
+    assert set(dependencies) >= {"serde", "serde_json", "yaml-rust2"}
+    target_dependencies = manifest["target"]['cfg(target_os = "linux")']["dependencies"]
+    assert set(target_dependencies) == {"libc"}
+    for dependency in [*dependencies.values(), *target_dependencies.values()]:
+        version = dependency if isinstance(dependency, str) else dependency["version"]
+        assert re.fullmatch(r"=\d+\.\d+\.\d+", version), "exact product dependency required"
+    assert "raw_value" in dependencies["serde_json"]["features"]
+    assert dependencies["yaml-rust2"]["default-features"] is False
+    assert "/schemas/capabilities/**" in package["include"]
+    assert "/docs/compatibility/licenses/**" in package["include"]
     lock = tomllib.loads(files["Cargo.lock"])
     assert any(p["name"] == package["name"] and p["version"] == package["version"] for p in lock["package"])
+    for entry in lock["package"]:
+        if entry["name"] != package["name"]:
+            assert entry.get("source") == "registry+https://github.com/rust-lang/crates.io-index"
+            assert re.fullmatch(r"[a-f0-9]{64}", entry.get("checksum", "")), "registry integrity required"
     toolchain = tomllib.loads(files["rust-toolchain.toml"])["toolchain"]
     assert re.fullmatch(r"\d+\.\d+\.\d+", toolchain["channel"])
     assert set(toolchain["components"]) >= {"clippy", "rustfmt"}
@@ -101,6 +116,16 @@ class RepositoryPolicyTests(unittest.TestCase):
         self.rejected("LICENSE", "Mozilla Public License", "Other License")
         self.rejected("Cargo.toml", 'rust-version = "1.85.0"', 'rust-version = "1.98.1"')
         self.rejected(".codex/config.toml", 'model = "gpt-6.1-sol"', 'model = "gpt-6-sol"')
+
+    def test_foundation_dependency_integrity_and_packaged_licenses(self) -> None:
+        dependency = re.search(r'version = "(=\d+\.\d+\.\d+)"', snapshot()["Cargo.toml"])
+        self.assertIsNotNone(dependency)
+        self.rejected("Cargo.toml", dependency.group(0), f'version = "{dependency.group(1)[1:]}"')
+        self.rejected("Cargo.toml", 'features = ["raw_value"]', 'features = []')
+        self.rejected("Cargo.toml", '"/docs/compatibility/licenses/**"', '"/missing-license/**"')
+        checksum = re.search(r'checksum = "([a-f0-9]{64})"', snapshot()["Cargo.lock"])
+        self.assertIsNotNone(checksum)
+        self.rejected("Cargo.lock", checksum.group(0), 'checksum = "invalid"')
 
     def test_removed_job_or_unpinned_action_fails(self) -> None:
         self.rejected(".github/workflows/ci.yml", "  msrv:\n", "  renamed-msrv:\n")
