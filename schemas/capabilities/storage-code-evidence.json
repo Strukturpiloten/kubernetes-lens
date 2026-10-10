@@ -4,7 +4,7 @@
   "issue": 11,
   "canonical_ledger": {
     "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
-    "sha256": "37e926f6e9d40fea1086808656864dc81ae98fc6799edfde7628e0571aac518a"
+    "sha256": "4d16a8ba154a8ce5a7c2e5d74768111c44154528a5600f8c6578fc01f397229c"
   },
   "roots": [
     {
@@ -76,12 +76,14 @@
   "field_selection_rule": "Catalogue pointers define selected inventory; finite typed codecs/validators admit only local behavior, preserving context and opaque outcomes.",
   "source_sha256": {
     "src/capability.rs": "dd9a69ee48aee45a5638fb38be7988c7c6d02ad0c176f697245ecf8a8a40ed40",
-    "src/generation.rs": "b4e5963e6a926f50ad290cbaf731caefde2878368052f190f9996fdd6d2d1366",
-    "src/graph.rs": "a8f0a202afdd6ba9f10d20bd43f4899de4f04a37063975aea23525184f5cda9f",
-    "src/model.rs": "f263ebfbafd45927081f1c094c705a6e5d5ab6b124a0f09d93b321fde85cbcd9",
+    "src/diagnostic.rs": "5ac5cab660f3bccee70057940dab03a671d676b4c18176d428bb9e0ef5e37f30",
+    "src/generation.rs": "9074d5a5c832fdb67e0d72e96e1d27e2c3379577da9906a79dd07f54f567c133",
+    "src/graph.rs": "cde872fb4ff06a993e17c3f48541a11a21b4be12385611c4567f61b6079d3405",
+    "src/model.rs": "e241166e68679275cfabddca496e08fad5bf708afa7525946217d97fc9a42561",
     "src/registry.rs": "5e03c877fbbb689c5122be45a1403f0bf4615e53a2d3ed043d7d8c363fcd2bab",
-    "src/resources/common.rs": "3f29b27b3b8891ef1d8443dc2109a292c5e8ccdefe95d3b318afdd31446d11d6",
+    "src/resources/common.rs": "4181861d0d7813af28ac077e862aae887d5928e6d4c8c1aa6d115fdc6488ccbb",
     "src/resources/common/native_helpers.rs": "ac2b96b49c9dad81ea2164406662370b1e5c87d894f476a7731d3dbf206474ba",
+    "src/resources/common/native_naming.rs": "7dae658af9aedaa84a878455e026f8bfb5a28ae292c4aa5bdf962efee53b0273",
     "src/resources/configuration_storage.rs": "139a4cef8dd27f2952a5b3a40b3e2fbecff72cce5b9a2c8c9444d268b9d37a6d",
     "src/resources/configuration_storage/capabilities.rs": "459049718ec11782e585c855a5ed82919a6ccf10a5ed18950a5e57ab0ca06285",
     "src/resources/configuration_storage/facts.rs": "9689cd35b8ffa08017359690462718053a6f6390effb5507e6cd04ceb51d825e",
@@ -99,7 +101,8 @@
     "tests/configuration_storage.rs": "2ecf0efacd3e1839c5ad558290b4f75edee98a60593a2ac382e63c00f697a0bb",
     "tests/configuration_storage/corrections.rs": "67a9865bb397d704de34b60fcf383e3a630cc7db49689fdbb338e9c53cc696d0",
     "tests/configuration_storage/pv_contract.rs": "d1f0a3da666d608387844b76a01027114ab4871e0c8c0ca9c87586404ccd211f",
-    "tests/configuration_storage/static_contract.rs": "0d5534373a83e5e4e070191bd7d2a402e3b542266aaf7a37b4c3f87a9adac451"
+    "tests/configuration_storage/static_contract.rs": "0d5534373a83e5e4e070191bd7d2a402e3b542266aaf7a37b4c3f87a9adac451",
+    "tests/native_naming.rs": "edb9bd2fea2f94781cd80152531a7d47b29e33efcd412dccc7ca0b1ee9bf91eb"
   },
   "independent_storage_tests": [
     "five_native_roots_decode_as_their_exact_served_kinds",

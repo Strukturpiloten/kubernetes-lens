@@ -118386,6 +118386,8 @@
       "nondeterministic-rendering",
       "schema-validation-unavailable",
       "native-field-invalid",
+      "native-context-required",
+      "native-naming-unverified",
       "invalid-target-profile",
       "unknown-kind"
     ],
@@ -465388,6 +465390,55 @@
     "Native execution remains pending. A pending case never proves runtime or typed support.",
     "Excluded gate/value/context fields remain PreserveOnly until a separately reviewed contract change; no future-review predicate admits them."
   ],
+  "native_naming_contract": {
+    "owner_issue": 36,
+    "status": "offline_code_obligations_only_native_conformance_pending",
+    "kind_count": 35,
+    "api_profile_count": 48,
+    "target_minors": [
+      "1.20",
+      "1.21",
+      "1.22",
+      "1.23",
+      "1.24",
+      "1.25",
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31",
+      "1.32",
+      "1.33",
+      "1.34",
+      "1.35",
+      "1.36",
+      "1.37"
+    ],
+    "source_rules": [
+      {
+        "path": "schemas/capabilities/native-naming-contract.json",
+        "sha256": "0678bed4e573777e5b6882fa763ef7795f7639e930c60907021166f7f8d243e8"
+      },
+      {
+        "path": "schemas/capabilities/native-naming-independent-cases.json",
+        "sha256": "07707bb8745737c2fe21d6a6768214008c8f09c456a6312adaa20cf00ac51e7a"
+      },
+      {
+        "path": "schemas/capabilities/native-naming-source-manifest.json",
+        "sha256": "8f05f47850db5f8b3029ea7d9b6203544b20067d7f052d8250d00d6332c82558"
+      },
+      {
+        "path": "schemas/capabilities/native-naming-source-witnesses.json",
+        "sha256": "95b93514e412fbe68508cabd4767d07cd44a90fa4eb869027339882d16fa4495"
+      }
+    ],
+    "diagnostic_rules": {
+      "historical_dns_prefix_hazard": "native-naming-unverified",
+      "operation_or_generated_name_context": "native-context-required"
+    },
+    "lookup_served_version_in_key": false
+  },
   "contract_test_obligations": [
     "Exactly35 unique built-in kinds and matching cohort coverage.",
     "All18 unique numeric minors with complete immutable schema/hash/license metadata.",

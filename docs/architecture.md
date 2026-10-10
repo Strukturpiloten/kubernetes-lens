@@ -40,3 +40,9 @@ named native conformance cells remain pending; focused code tests are separate e
 [ADR 0005](decisions/0005-native-networking-relations.md),
 [ADR 0006](decisions/0006-shared-native-processing.md), [workload limits](workloads.md) and
 [networking limits](networking.md).
+
+Shared native naming lives in resources::common and is selected by exact admitted GVK, target
+and operation intent. Metadata acquisition preserves bounded spelling independently. Validation,
+authoring and generation share the checker; target graph projections suppress native facts from
+invalid/unverified naming. Versionless collision equality remains exact supplied evidence. See
+[ADR 0013](decisions/0013-native-naming-and-source-identity.md).

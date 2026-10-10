@@ -371,9 +371,6 @@ fn owner_reference(node: &crate::syntax::TreeNode, path: FieldPath, id: Resource
     let kind = string("kind")?;
     let gvk = GroupVersionKind::new(api, kind).map_err(|_| owner_error(node, path.clone(), id))?;
     let name = string("name")?;
-    if !crate::value::dns_subdomain(name) {
-        return Err(owner_error(node, path.child("name"), id));
-    }
     let uid = crate::model::string_field(node.get("uid"))
         .map_err(|_| owner_error(node.get("uid").unwrap_or(node), path.child("uid"), id))?;
     if uid.value().is_some_and(String::is_empty) {
@@ -422,7 +419,14 @@ fn namespace<'a>(
     from: &'a ResourceIdentity,
     context: &'a ReferenceContext,
 ) -> Result<Option<&'a str>, SafeReason> {
-    match &r.scope {
+    namespace_for_scope(&r.scope, from, context)
+}
+fn namespace_for_scope<'a>(
+    scope: &'a ReferenceScope,
+    from: &'a ResourceIdentity,
+    context: &'a ReferenceContext,
+) -> Result<Option<&'a str>, SafeReason> {
+    match scope {
         ReferenceScope::Cluster => Ok(None),
         ReferenceScope::SameNamespace => from
             .namespace
@@ -1427,6 +1431,40 @@ fn preflight_projection_events(node: &crate::syntax::TreeNode, budget: &GraphBud
         TreeValue::Null | TreeValue::Bool(_) | TreeValue::String(_) | TreeValue::Number(_) => true,
     }
 }
+fn admit_projection(
+    projection: &mut crate::model::EffectiveProjection,
+    document: &crate::model::ResourceDocument,
+    target: Option<&crate::capability::TargetProfile>,
+    budget: &GraphBudget,
+    graph: &mut WorkingGraph,
+    failed: &mut BTreeMap<ResourceId, ResourceIdentity>,
+) {
+    graph.findings.extend(projection.findings.clone());
+    let naming_established = if let Some(target) = target {
+        let established = crate::resources::common::native_naming::validate(
+            &projection.tree,
+            &projection.identity.gvk,
+            target,
+            crate::generation::NativeValidationIntent::Unspecified,
+            &budget.processing,
+            Phase::Analysis,
+            &mut registry::ResourceFindingSink {
+                sink: &mut graph.findings,
+                resource: document.id,
+            },
+        );
+        if !established {
+            projection.resource = None;
+        }
+        established
+    } else {
+        true
+    };
+    if !naming_established || document.decode.is_some() && projection.resource.is_none() {
+        failed.insert(document.id, projection.identity.clone());
+    }
+}
+
 fn project_documents(
     resources: &ResourceSet,
     target: Option<&crate::capability::TargetProfile>,
@@ -1451,7 +1489,7 @@ fn project_documents(
                 .push(Finding::error(FindingCode::LimitExceeded, Phase::Analysis).for_resource(document.id));
             continue;
         }
-        let projection = match document.project_in(target, Some(&construction)) {
+        let mut projection = match document.project_in(target, Some(&construction)) {
             Ok(projection) => projection,
             Err(findings) => {
                 failed.insert(document.id, document.original_identity.clone());
@@ -1459,10 +1497,7 @@ fn project_documents(
                 continue;
             }
         };
-        graph.findings.extend(projection.findings.clone());
-        if document.decode.is_some() && projection.resource.is_none() {
-            failed.insert(document.id, projection.identity.clone());
-        }
+        admit_projection(&mut projection, document, target, budget, graph, &mut failed);
         identities.insert(document.id, projection.identity.clone());
         if let (Some(native), Some(capability)) = (&projection.resource, &document.capability) {
             let ctx = registry::ProjectionContext::new_in(
@@ -1695,7 +1730,57 @@ fn check_claim_collisions(
     }
 }
 impl GraphIndex<'_> {
+    fn failed_named_candidate(&self, reference: &Reference, identity: &ResourceIdentity) -> bool {
+        let (gvk, name) = match &reference.target {
+            ReferenceTarget::Exact { gvk: Some(gvk), name } => (gvk, Some(name)),
+            ReferenceTarget::Owner { gvk, name, .. } => (gvk, name.value()),
+            _ => return false,
+        };
+        if !self.identity_match_work(
+            identity,
+            gvk.group.as_deref(),
+            &gvk.kind,
+            name.map_or("", String::as_str),
+            None,
+        ) {
+            return true;
+        }
+        if identity.gvk.group != gvk.group
+            || identity.gvk.kind != gvk.kind
+            || name.is_none()
+            || identity.name.value() != name
+        {
+            return false;
+        }
+        let Some(from) = self.identities.get(&reference.from) else {
+            return false;
+        };
+        let owner_scope;
+        let scope = if matches!(reference.target, ReferenceTarget::Owner { .. }) {
+            if !self.budget.take(self.identities.len()) {
+                return true;
+            }
+            owner_scope = crate::graph::owner_scope(self.resources, self.identities, gvk);
+            &owner_scope
+        } else {
+            &reference.scope
+        };
+        namespace_for_scope(scope, from, self.context)
+            .is_ok_and(|selected| in_namespace(identity, selected, self.context))
+    }
     fn resolve_reference(&self, reference: &Reference, evidence: &mut Vec<FactEvidence>) -> Resolution {
+        let narrow_schema_or_operator =
+            matches!(&reference.target, ReferenceTarget::SuppliedCustomResourceVersion { .. })
+                || reference.relation == RelationshipKind::Operator
+                    && matches!(
+                        &reference.target,
+                        ReferenceTarget::External {
+                            kind: ExternalRefKind::Operator
+                        }
+                    );
+        if self.witness.is_some() && self.failed.contains_key(&reference.from) && !narrow_schema_or_operator {
+            return Resolution::Unsupported(SafeReason::InvalidIdentity);
+        }
         match &reference.target {
             ReferenceTarget::CheckedObject {
                 gvk,
@@ -1723,12 +1808,12 @@ impl GraphIndex<'_> {
             } => self.named_target_port(reference, selector, name.native_value(), protocol, evidence),
             ReferenceTarget::GeneratedClaims { pattern } => self.evaluate_claims(reference, pattern, evidence),
             _ => {
-                if self.failed.values().any(|identity| match &reference.target {
-                    ReferenceTarget::Exact { gvk: Some(gvk), .. } | ReferenceTarget::Owner { gvk, .. } => {
-                        identity.gvk.group == gvk.group && identity.gvk.kind == gvk.kind
+                if self.failed.iter().any(|(id, identity)| match &reference.target {
+                    ReferenceTarget::Exact { gvk: Some(_), .. } | ReferenceTarget::Owner { .. } => {
+                        self.failed_named_candidate(reference, identity)
                     }
                     ReferenceTarget::SuppliedCustomResourceVersion { descriptor } => {
-                        identity.gvk == *descriptor.crd_gvk()
+                        *id == descriptor.crd_resource_id() && identity.gvk == *descriptor.crd_gvk()
                     }
                     ReferenceTarget::LabelSelector { kinds, .. } => {
                         kinds.iter().any(|kind| kind.as_str() == identity.gvk.kind)
@@ -2304,7 +2389,20 @@ impl GraphIndex<'_> {
         }
         let mut matches = Vec::new();
         for (id, identity) in identities {
-            if !budget.take(1) {
+            if !self.identity_match_work(identity, gvk.group.as_deref(), &gvk.kind, name, namespace) {
+                return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+            }
+            if identity.gvk.group == gvk.group
+                && identity.gvk.kind == gvk.kind
+                && identity.name.value().is_some_and(|value| value == name)
+                && in_namespace(identity, namespace, context)
+                && !self.failed.contains_key(id)
+            {
+                matches.push(*id);
+            }
+        }
+        for identity in self.failed.values() {
+            if !self.identity_match_work(identity, gvk.group.as_deref(), &gvk.kind, name, namespace) {
                 return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
             }
             if identity.gvk.group == gvk.group
@@ -2312,18 +2410,11 @@ impl GraphIndex<'_> {
                 && identity.name.value().is_some_and(|value| value == name)
                 && in_namespace(identity, namespace, context)
             {
-                matches.push(*id);
+                return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
             }
         }
         if matches.len() > 1 {
             return Resolution::Ambiguous(matches);
-        }
-        if self
-            .failed
-            .values()
-            .any(|identity| identity.gvk.group == gvk.group && identity.gvk.kind == gvk.kind)
-        {
-            return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
         }
         let Some(object) = matches.first().copied() else {
             return if optional.value() == Some(&true) {
@@ -3889,7 +3980,7 @@ impl GraphIndex<'_> {
                 unknown_scope = true;
                 continue;
             }
-            if in_namespace(identity, namespace, self.context) {
+            if in_namespace(identity, namespace, self.context) && !self.failed.contains_key(resource) {
                 matches.push(*resource);
             }
         }
@@ -3900,9 +3991,13 @@ impl GraphIndex<'_> {
             if identity.gvk.group.as_deref() == group
                 && identity.gvk.kind == kind
                 && identity.name.value().is_some_and(|value| value == name)
+                && in_namespace(identity, namespace, self.context)
             {
                 failed = true;
             }
+        }
+        if failed {
+            return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
         }
         for resource in &matches {
             self.add_evidence(
@@ -3915,8 +4010,6 @@ impl GraphIndex<'_> {
             Resolution::Ambiguous(matches)
         } else if unknown_scope {
             Resolution::Unsupported(SafeReason::ScopeUnknown)
-        } else if failed {
-            Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence))
         } else if matches.is_empty() {
             Resolution::Missing
         } else {

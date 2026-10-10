@@ -324,6 +324,8 @@ pub(crate) fn validate_in(
         };
         validate_api(&identity, document.id, target, &mut findings);
         validate_source_fields(&tree, &identity.gvk, document.id, target, &mut findings);
+        validate_naming(&tree, &identity.gvk, document.id, target, intent, &mut findings);
+
         if let Some(capability) = &document.capability {
             if target.kubernetes < capability.api_since
                 || capability
@@ -393,6 +395,29 @@ fn validate_source_fields(
         &mut crate::registry::ResourceFindingSink {
             sink: findings,
             resource,
+        },
+    );
+}
+
+fn validate_naming(
+    tree: &TreeNode,
+    gvk: &crate::model::GroupVersionKind,
+    id: ResourceId,
+    target: &TargetProfile,
+    intent: NativeValidationIntent,
+    findings: &mut ProcessingReport,
+) {
+    let processing = findings.processing().clone();
+    crate::resources::common::native_naming::validate(
+        tree,
+        gvk,
+        target,
+        intent,
+        &processing,
+        Phase::Validation,
+        &mut crate::registry::ResourceFindingSink {
+            sink: findings,
+            resource: id,
         },
     );
 }
@@ -711,8 +736,21 @@ pub fn generate(
         let codec_protected = protected_paths
             .iter()
             .any(|path| tree.get_path(path).is_some_and(|node| node.value != TreeValue::Null));
+        let private_names = match crate::resources::common::native_naming::private_names(
+            &tree,
+            &projection.identity.gvk,
+            &processing,
+            Phase::Generation,
+        ) {
+            Ok(private) => private,
+            Err(finding) => {
+                findings.push(finding.for_resource(doc.id));
+                break;
+            }
+        };
         if options.protected_output == ProtectedOutput::Deny
-            && (codec_protected
+            && (private_names
+                || codec_protected
                 || protected(&tree)
                 || doc.original_identity.scope.namespaced().is_none()
                 || matches!(

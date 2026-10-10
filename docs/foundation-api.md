@@ -16,9 +16,9 @@ processing decisions. See [networking support and limits](networking.md) for exa
   coordinates `source()`, and enclosing wrapper path `collection()` are read-only getters;
   mutable document access cannot overwrite provenance or detach wrapper items. `ListDocument`
   likewise exposes `id()`, `source()`, `item_ids()` and `collection()` as read-only getters.
-  A usable authored
-  name or generated-name prefix is required. Cluster collision keys exclude namespace null/absence
-  while original identity retains that distinction. `resource`/`resource_mut`
+  Acquisition retains absent, null, empty and exact bounded name/prefix spelling. Selected
+  native validation requires a concrete name or reports explicit generation context. Cluster
+  collision keys exclude authored namespace while original identity retains its exact Presence. `resource`/`resource_mut`
   downcast only delivered native structs. Edits to supplied CRD group/kind/scope/served-version
   evidence are blocked until an explicit semantic conversion contract can recompute dependents. Explicit set-from-parsed-source, null, and remove
   patches preserve caller intent; invalid paths fail during derived-view/generation checks.
@@ -326,3 +326,11 @@ source-bound custom-document contract. [ADR 0011](decisions/0011-source-bound-cu
 and [extension support](extensions.md) define the exact offline schema subset, target requirements,
 private keyword provenance, cumulative budgets and stale-descriptor rejection. External operator
 prerequisites remain unverified. No callback, cluster discovery or controller execution occurs.
+
+Native identity acquisition retains exact bounded name, prefix and namespace strings and their
+Presence states. Native naming validation selects an exact admitted GVK, target and operation
+intent; target graphs use the same checker and reject positive evidence from invalid or
+unverified naming. No-profile graphs retain supplied equality semantics. Generated-only roots
+have no concrete collision key. Broader names and owner names require explicit protected output.
+The additive `FindingCode::NativeNamingUnverified` variant preserves the existing Finding shape;
+exhaustive code matches must handle it. See [ADR 0013](decisions/0013-native-naming-and-source-identity.md).

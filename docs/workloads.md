@@ -52,3 +52,10 @@ Reordered lists and explicit patches use effective coordinates; original evidenc
 remain immutable. Source-preserving output and successful offline library tests do not prove API
 acceptance, controller behavior or Kubernetes runtime conformance. The primary owns integration,
 public API documentation, remaining core corrections and the complete gate.
+
+Shared naming completion is tracked by #36, superseding the old #12 dependency link.
+[ADR 0013](decisions/0013-native-naming-and-source-identity.md) defines source retention and
+selected naming: StatefulSet uses labels from 1.27; CronJob's concrete 52-byte bound is Create-only;
+ReplicationController changes its direct-prefix check from 1.35. The shared checker retains exact
+prefix spelling and explicit unverified outcomes. Generated-only documents establish no concrete
+lookup identity. Naming code evidence is separate from the pending native acceptance cells.

@@ -15,4 +15,6 @@
 | [0010](0010-native-configuration-storage.md) | Accepted | Typed protected configuration and finite storage validation versus runtime behavior |
 | [0011](0011-source-bound-custom-resource-descriptors.md) | Accepted | Source-bound custom-resource descriptors and supplied-only graph dependencies |
 
+| [0013](0013-native-naming-and-source-identity.md) | Accepted | Exact bounded source identity and selected native naming versus server generation |
+
 Add a new numbered ADR when an accepted decision changes; preserve and supersede historical decisions.

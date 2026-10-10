@@ -1315,8 +1315,24 @@ fn networking_peer_conjunction_uses_admitted_namespaces_and_retains_partial_cand
     }
     Ok(())
 }
+fn assert_unverified_versionless_edge(graph: &ReferenceGraph, edge: &ResolvedReference, resources: &[ResourceId]) {
+    assert_eq!(
+        edge.resolution,
+        Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence))
+    );
+    for resource in resources {
+        assert!(graph.findings.iter().any(|finding| {
+            finding.resource == Some(*resource)
+                && finding.code == FindingCode::NativeNamingUnverified
+                && finding.path.as_ref() == Some(&path("/metadata/name"))
+                && finding.source.is_some()
+        }));
+        assert!(!edge.evidence.iter().any(|field| field.resource == *resource));
+    }
+}
+
 #[test]
-fn versionless_native_refs_use_group_kind_scope_name_and_never_prefer_served_versions() -> TestResult {
+fn versionless_native_refs_keep_undeclared_custom_naming_unverified() -> TestResult {
     let mut document = serde_json::json!({"apiVersion":"v1","kind":"List","items":[
         {"apiVersion":"networking.k8s.io/v1","kind":"Ingress","metadata":{"name":"source","namespace":"ns"},"spec":{"defaultBackend":{"resource":{"apiGroup":"example.org","kind":"Backend","name":"backend"}}}},
         {"apiVersion":"example.org/v2","kind":"Backend","metadata":{"name":"backend","namespace":"ns"}},
@@ -1363,12 +1379,7 @@ fn versionless_native_refs_use_group_kind_scope_name_and_never_prefer_served_ver
                 && edge.resolution == Resolution::External(ExternalRefKind::Operator)
         }));
     }
-    assert_eq!(
-        caller_edge.resolution,
-        Resolution::ResolvedSubjects(vec![GraphSubject::Object {
-            resource: ResourceId(1)
-        }])
-    );
+    assert_unverified_versionless_edge(&graph, caller_edge, &[ResourceId(1)]);
     document["items"].as_array_mut().required()?.push(serde_json::json!({"apiVersion":"example.org/v1","kind":"Backend","metadata":{"name":"initially-unique","namespace":"ns"}}));
     let mut resources = set(&serde_json::to_string(&document)?, InputOrigin::Authored)?;
     let patch = crate::parse_source(
@@ -1392,10 +1403,302 @@ fn versionless_native_refs_use_group_kind_scope_name_and_never_prefer_served_ver
     let mut caller_edges = graph.edges.iter().filter(|edge| is_caller_edge(edge));
     let caller_edge = caller_edges.next().required()?;
     assert!(caller_edges.next().is_none());
+    assert_unverified_versionless_edge(&graph, caller_edge, &[ResourceId(1), ResourceId(5)]);
+    assert!(graph.findings.iter().any(|finding| {
+        finding.resource == Some(ResourceId(5))
+            && finding.code == FindingCode::NativeNamingUnverified
+            && finding.source.is_some_and(|source| source.byte_offset == 0)
+    }));
+    assert!(graph.edges.iter().any(|edge| {
+        edge.reference.from == ResourceId(5)
+            && edge.reference.relation == RelationshipKind::Operator
+            && edge.resolution == Resolution::External(ExternalRefKind::Operator)
+    }));
+    Ok(())
+}
+
+fn rename_graph_candidate(resources: &mut ResourceSet, resource: usize, name: &str) -> TestResult {
+    let bytes = serde_json::to_vec(name)?;
+    let patch = crate::parse_source(
+        SourceInput {
+            id: SourceId(83),
+            format: DocumentFormat::Json,
+            origin: InputOrigin::Authored,
+            source_version: None,
+            bytes: &bytes,
+        },
+        &ParseLimits::default(),
+    )
+    .required()?;
+    resources.documents_mut()[resource].set_field_from_source(path("/metadata/name"), patch)?;
+    Ok(())
+}
+
+#[test]
+fn versionless_native_refs_use_group_kind_scope_name_and_never_prefer_served_versions() -> TestResult {
+    let document = serde_json::json!({"apiVersion":"v1","kind":"List","items":[
+        {"apiVersion":"networking.k8s.io/v1","kind":"Ingress","metadata":{"name":"source","namespace":"ns"},"spec":{"defaultBackend":{"resource":{"apiGroup":"policy","kind":"PodDisruptionBudget","name":"budget"}}}},
+        {"apiVersion":"policy/v1","kind":"PodDisruptionBudget","metadata":{"name":"budget","namespace":"ns"},"spec":{"maxUnavailable":1,"selector":{}}},
+        {"apiVersion":"policy/v1beta1","kind":"PodDisruptionBudget","metadata":{"name":"other-version","namespace":"ns"},"spec":{"maxUnavailable":1,"selector":{}}},
+        {"apiVersion":"policy/v1","kind":"PodDisruptionBudget","metadata":{"name":"budget","namespace":"elsewhere"},"spec":{"maxUnavailable":1,"selector":{}}},
+        {"apiVersion":"other.org/v1","kind":"PodDisruptionBudget","metadata":{"name":"budget","namespace":"ns"}},
+        {"apiVersion":"policy/v1","kind":"Other","metadata":{"name":"budget","namespace":"ns"}}
+    ]});
+    let mut resources = set(&serde_json::to_string(&document)?, InputOrigin::Authored)?;
+    let reference = Reference {
+        from: ResourceId(0),
+        path: path("/spec/defaultBackend/resource"),
+        relation: RelationshipKind::Dependency,
+        target: ReferenceTarget::GroupKindName {
+            group: Presence::Value("policy".into()),
+            kind: "PodDisruptionBudget".into(),
+            name: "budget".into(),
+        },
+        scope: ReferenceScope::SameNamespace,
+    };
+    let profile = TargetProfile::documented_defaults(KubernetesVersion::new(1, 24).required()?);
+    let resolve = |resources: &ResourceSet, reference: &Reference| {
+        resolve_supplied_references_for_target(
+            resources,
+            std::slice::from_ref(reference),
+            &ReferenceContext::default(),
+            &profile,
+        )
+    };
+    let graph = resolve(&resources, &reference);
+    let edge = graph
+        .edges
+        .iter()
+        .find(|edge| {
+            edge.reference.from == reference.from
+                && edge.reference.path == reference.path
+                && std::mem::discriminant(&edge.reference.target) == std::mem::discriminant(&reference.target)
+        })
+        .required()?;
     assert_eq!(
-        caller_edge.resolution,
-        Resolution::Ambiguous(vec![ResourceId(1), ResourceId(5)])
+        edge.resolution,
+        Resolution::ResolvedSubjects(vec![GraphSubject::Object {
+            resource: ResourceId(1)
+        }])
     );
+    assert!(edge.evidence.iter().any(|field| field.resource == ResourceId(1)
+        && field.path == path("/metadata/name")
+        && field.position.is_some()));
+    let mut cluster_reference = reference.clone();
+    cluster_reference.scope = ReferenceScope::Cluster;
+    let graph = resolve(&resources, &cluster_reference);
+    assert_eq!(
+        graph
+            .edges
+            .iter()
+            .find(|edge| edge.reference.from == cluster_reference.from
+                && edge.reference.path == cluster_reference.path
+                && std::mem::discriminant(&edge.reference.target) == std::mem::discriminant(&cluster_reference.target))
+            .required()?
+            .resolution,
+        Resolution::Unsupported(SafeReason::UnsupportedRelationship)
+    );
+    rename_graph_candidate(&mut resources, 2, "budget")?;
+    let graph = resolve(&resources, &reference);
+    let edge = graph
+        .edges
+        .iter()
+        .find(|edge| {
+            edge.reference.from == reference.from
+                && edge.reference.path == reference.path
+                && std::mem::discriminant(&edge.reference.target) == std::mem::discriminant(&reference.target)
+        })
+        .required()?;
+    assert_eq!(
+        edge.resolution,
+        Resolution::Ambiguous(vec![ResourceId(1), ResourceId(2)])
+    );
+    assert!(edge.evidence.iter().any(|field| field.resource == ResourceId(2)
+        && field.path == path("/metadata/name")
+        && field.source == resources.documents()[2].source()
+        && field.origin == ValueOrigin::Generated
+        && field.position.is_none()));
+    assert!(
+        !edge
+            .evidence
+            .iter()
+            .any(|field| [ResourceId(3), ResourceId(4), ResourceId(5)].contains(&field.resource))
+    );
+    Ok(())
+}
+
+fn naming_candidate_reference(checked_object: bool) -> TestResult<Reference> {
+    Ok(Reference {
+        from: ResourceId(0),
+        path: path("/spec/defaultBackend/resource"),
+        relation: RelationshipKind::Dependency,
+        target: if checked_object {
+            ReferenceTarget::CheckedObject {
+                gvk: GroupVersionKind::new("v1", "ConfigMap").required()?,
+                name: "config".into(),
+                predicate: None,
+                optional: Presence::Absent,
+            }
+        } else {
+            ReferenceTarget::GroupKindName {
+                group: Presence::Absent,
+                kind: "ConfigMap".into(),
+                name: "config".into(),
+            }
+        },
+        scope: ReferenceScope::SameNamespace,
+    })
+}
+
+fn naming_candidate_graph(
+    reference: &Reference,
+    minor: u8,
+    candidates: &[serde_json::Value],
+) -> TestResult<ReferenceGraph> {
+    let mut items = vec![
+        serde_json::json!({"apiVersion":"networking.k8s.io/v1","kind":"Ingress","metadata":{"name":"source","namespace":"ns"},"spec":{"defaultBackend":{"resource":{"kind":"ConfigMap","name":"config"}}}}),
+    ];
+    items.extend(candidates.iter().cloned().map(|mut candidate| {
+        if let Some(object) = candidate.as_object_mut() {
+            object.remove("desiredName");
+        }
+        candidate
+    }));
+    let mut resources = set(
+        &serde_json::to_string(&serde_json::json!({"apiVersion":"v1","kind":"List","items":items}))?,
+        InputOrigin::Authored,
+    )?;
+    for (index, candidate) in candidates.iter().enumerate() {
+        rename_graph_candidate(&mut resources, index + 1, candidate["desiredName"].as_str().required()?)?;
+    }
+    let profile = TargetProfile::documented_defaults(KubernetesVersion::new(1, minor).required()?);
+    Ok(resolve_supplied_references_for_target(
+        &resources,
+        std::slice::from_ref(reference),
+        &ReferenceContext::default(),
+        &profile,
+    ))
+}
+
+fn naming_candidate(id: usize, name: &str, namespace: &str, prefix: Option<&str>) -> serde_json::Value {
+    let mut candidate = serde_json::json!({"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":format!("initial-{id}"),"namespace":namespace},"data":{}});
+    // Test intent is stripped before parsing, so it cannot become unadmitted source configuration.
+    candidate["desiredName"] = serde_json::json!(name);
+    if let Some(prefix) = prefix {
+        candidate["metadata"]["generateName"] = serde_json::json!(prefix);
+    }
+    candidate
+}
+
+#[test]
+fn naming_failed_duplicates_never_establish_checked_or_versionless_ambiguity() -> TestResult {
+    for checked_object in [false, true] {
+        let reference = naming_candidate_reference(checked_object)?;
+        for (minor, prefix, code) in [
+            (20, "-", FindingCode::NativeNamingUnverified),
+            (24, "Bad/", FindingCode::NativeFieldInvalid),
+        ] {
+            for valid_count in [0, 1, 2] {
+                let mut candidates = (0..valid_count)
+                    .map(|id| naming_candidate(id, "config", "ns", None))
+                    .collect::<Vec<_>>();
+                candidates.extend(
+                    (valid_count..valid_count + 2).map(|id| naming_candidate(id, "config", "ns", Some(prefix))),
+                );
+                let graph = naming_candidate_graph(&reference, minor, &candidates)?;
+                let edge = graph
+                    .edges
+                    .iter()
+                    .find(|edge| {
+                        edge.reference.from == reference.from
+                            && edge.reference.path == reference.path
+                            && std::mem::discriminant(&edge.reference.target)
+                                == std::mem::discriminant(&reference.target)
+                    })
+                    .required()?;
+                assert_eq!(
+                    edge.resolution,
+                    Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence))
+                );
+                assert!(!edge.evidence.iter().any(|field| field.resource != ResourceId(0)));
+                for id in valid_count + 1..valid_count + 3 {
+                    assert!(
+                        graph
+                            .findings
+                            .iter()
+                            .any(|finding| finding.resource == Some(ResourceId(id as u64))
+                                && finding.code == code
+                                && finding.source.is_some())
+                    );
+                }
+            }
+        }
+        let graph = naming_candidate_graph(
+            &reference,
+            24,
+            &[
+                naming_candidate(1, "config", "ns", None),
+                naming_candidate(2, "config", "ns", None),
+            ],
+        )?;
+        assert_eq!(
+            graph
+                .edges
+                .iter()
+                .find(|edge| edge.reference.from == reference.from
+                    && edge.reference.path == reference.path
+                    && std::mem::discriminant(&edge.reference.target) == std::mem::discriminant(&reference.target))
+                .required()?
+                .resolution,
+            Resolution::Ambiguous(vec![ResourceId(1), ResourceId(2)])
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn naming_unrelated_failed_candidates_do_not_poison_checked_or_versionless_matches() -> TestResult {
+    for checked_object in [false, true] {
+        let reference = naming_candidate_reference(checked_object)?;
+        for (minor, prefix) in [(20, "-"), (24, "Bad/")] {
+            let mut wrong_kind = naming_candidate(4, "config", "ns", Some(prefix));
+            wrong_kind["kind"] = serde_json::json!("Secret");
+            let mut wrong_group = naming_candidate(5, "config", "ns", Some(prefix));
+            wrong_group["apiVersion"] = serde_json::json!("example.org/v1");
+            let unrelated = [
+                naming_candidate(2, "config", "elsewhere", Some(prefix)),
+                naming_candidate(3, "other", "ns", Some(prefix)),
+                wrong_kind,
+                wrong_group,
+            ];
+            for valid_count in [0, 1, 2] {
+                let mut candidates = (0..valid_count)
+                    .map(|id| naming_candidate(id, "config", "ns", None))
+                    .collect::<Vec<_>>();
+                candidates.extend_from_slice(&unrelated);
+                let graph = naming_candidate_graph(&reference, minor, &candidates)?;
+                let edge = graph
+                    .edges
+                    .iter()
+                    .find(|edge| {
+                        edge.reference.from == reference.from
+                            && edge.reference.path == reference.path
+                            && std::mem::discriminant(&edge.reference.target)
+                                == std::mem::discriminant(&reference.target)
+                    })
+                    .required()?;
+                let expected = match valid_count {
+                    0 => Resolution::Missing,
+                    1 => Resolution::ResolvedSubjects(vec![GraphSubject::Object {
+                        resource: ResourceId(1),
+                    }]),
+                    _ => Resolution::Ambiguous(vec![ResourceId(1), ResourceId(2)]),
+                };
+                assert_eq!(edge.resolution, expected);
+                assert!(!edge.evidence.iter().any(|field| field.resource.0 > valid_count as u64));
+            }
+        }
+    }
     Ok(())
 }
 

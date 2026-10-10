@@ -4,7 +4,7 @@
   "issue": 12,
   "canonical_ledger": {
     "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
-    "sha256": "37e926f6e9d40fea1086808656864dc81ae98fc6799edfde7628e0571aac518a"
+    "sha256": "4d16a8ba154a8ce5a7c2e5d74768111c44154528a5600f8c6578fc01f397229c"
   },
   "native_source_witnesses": {
     "path": "docs/evidence/access-native-specification.json",
@@ -249,9 +249,10 @@
   "field_selection_rule": "Only canonical selected root pointers and recursively selected helpers; no prefix admission. Native case coverage remains pending.",
   "source_sha256": {
     "src/capability.rs": "dd9a69ee48aee45a5638fb38be7988c7c6d02ad0c176f697245ecf8a8a40ed40",
-    "src/generation.rs": "b4e5963e6a926f50ad290cbaf731caefde2878368052f190f9996fdd6d2d1366",
-    "src/graph.rs": "a8f0a202afdd6ba9f10d20bd43f4899de4f04a37063975aea23525184f5cda9f",
-    "src/model.rs": "f263ebfbafd45927081f1c094c705a6e5d5ab6b124a0f09d93b321fde85cbcd9",
+    "src/diagnostic.rs": "5ac5cab660f3bccee70057940dab03a671d676b4c18176d428bb9e0ef5e37f30",
+    "src/generation.rs": "9074d5a5c832fdb67e0d72e96e1d27e2c3379577da9906a79dd07f54f567c133",
+    "src/graph.rs": "cde872fb4ff06a993e17c3f48541a11a21b4be12385611c4567f61b6079d3405",
+    "src/model.rs": "e241166e68679275cfabddca496e08fad5bf708afa7525946217d97fc9a42561",
     "src/registry.rs": "5e03c877fbbb689c5122be45a1403f0bf4615e53a2d3ed043d7d8c363fcd2bab",
     "src/resources/access.rs": "4f693b89c2736250531e593f460692403b8994cfd0ea838af45c3c7ffcff787d",
     "src/resources/access/capabilities.rs": "e16f6bba49d6e5c54e1beaa4ce6f3e0f958fe6231446e9f9d8c9b8263b7e6c80",
@@ -266,13 +267,15 @@
     "src/resources/access/roots.rs": "a05e9906e13248e045293c38f4a6966c97da5bc82c80b89b530b5b8672738690",
     "src/resources/access/types.rs": "d18e9b8ce621c54985bcb741e6e376bd8c15fecd5458f0149141e97755910a2b",
     "src/resources/access/validation.rs": "28aae8ca6708b988fd92038d7d4773b121133429db721f1b63ad1188c65f654d",
-    "src/resources/common.rs": "3f29b27b3b8891ef1d8443dc2109a292c5e8ccdefe95d3b318afdd31446d11d6",
+    "src/resources/common.rs": "4181861d0d7813af28ac077e862aae887d5928e6d4c8c1aa6d115fdc6488ccbb",
     "src/resources/common/native_helpers.rs": "ac2b96b49c9dad81ea2164406662370b1e5c87d894f476a7731d3dbf206474ba",
+    "src/resources/common/native_naming.rs": "7dae658af9aedaa84a878455e026f8bfb5a28ae292c4aa5bdf962efee53b0273",
     "src/resources/mod.rs": "6ac20bfc6dd7331f444b24d157f913a29c394c7e18d45f3f784c7ec603cc014e",
     "src/value.rs": "a8517e40b01c39bc373e4530c63abd699e7f0d7cbe3edf3f01b21efc014d69db",
     "src/value/native_quantity.rs": "91bae8b0fc21dca7bbb2e8b999feb82cdcec5542b98b69c68448c211e8fb524c",
     "tests/access.rs": "17ebf77e7b67ff3c5a8b4b92fcc2a1a1ebd54a9107f95b30b538976ead13f605",
-    "tests/access/native_rules.rs": "cf1398d98312befac341366bff7681d31a0555e0400f873dc7612c556b04be85"
+    "tests/access/native_rules.rs": "cf1398d98312befac341366bff7681d31a0555e0400f873dc7612c556b04be85",
+    "tests/native_naming.rs": "edb9bd2fea2f94781cd80152531a7d47b29e33efcd412dccc7ca0b1ee9bf91eb"
   },
   "independent_access_tests": [
     "every_concrete_root_has_native_authoring_lists_fixed_points_and_api_boundaries",

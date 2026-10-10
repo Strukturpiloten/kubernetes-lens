@@ -1049,7 +1049,7 @@ fn peer_pointer_nulls_do_not_count_as_effective_selectors() -> TestResult<()> {
 #[test]
 fn service_metadata_uses_native_label_and_prefix_callbacks_at_relaxed_gate_boundaries() -> TestResult<()> {
     use kubernetes_lens::source::AuthoringLimits;
-    for minor in [20, 33, 34, 36, 37] {
+    for minor in [20, 33, 34, 35, 36, 37] {
         let mut dotted = service();
         dotted["metadata"]["name"] = json!("svc.with.dot");
         invalid_at(&dotted, minor, "/metadata/name")?;
@@ -1062,17 +1062,21 @@ fn service_metadata_uses_native_label_and_prefix_callbacks_at_relaxed_gate_bound
         let findings = checks(&numeric, minor, Intent::Create)?;
         let parsed = resources(&numeric)?;
         let fresh = ResourceSet::from_authored(vec![author(&parsed)?], &target(minor)?, &AuthoringLimits::default());
-        if minor <= 33 {
-            invalid_at(&numeric, minor, "/metadata/name")?;
-            assert!(fresh.is_err());
+        let code = if minor <= 33 {
+            FindingCode::NativeFieldInvalid
         } else {
-            accepted(&numeric, minor)?;
-            assert_eq!(output(&fresh.required()?, minor)?["metadata"]["name"], "1svc");
-            assert_eq!(
-                has(&findings, FindingCode::NativeContextRequired, "/metadata/name")?,
-                minor < 37
-            );
-        }
+            FindingCode::UnadmittedField
+        };
+        assert!(has(&findings, code, "/metadata/name")?);
+        assert!(has(&fresh.err().required()?, code, "/metadata/name")?);
+        assert_eq!(
+            parsed.documents()[0].identity()?.name.value().map(String::as_str),
+            Some("1svc")
+        );
+        let failure = generate(&parsed, &target(minor)?, OutputFormat::Json, &options())
+            .err()
+            .required()?;
+        assert!(has(&failure, code, "/metadata/name")?);
         for prefix in ["svc-".to_owned(), "0-".to_owned(), format!("{}-", "a".repeat(63))] {
             let mut value = service();
             value["metadata"].as_object_mut().required()?.remove("name");
@@ -1095,103 +1099,151 @@ fn service_metadata_uses_native_label_and_prefix_callbacks_at_relaxed_gate_bound
         let mut numeric_prefix = service();
         numeric_prefix["metadata"].as_object_mut().required()?.remove("name");
         numeric_prefix["metadata"]["generateName"] = json!("1svc-");
-        if minor <= 33 {
-            invalid_at(&numeric_prefix, minor, "/metadata/generateName")?;
-        } else {
-            accepted(&numeric_prefix, minor)?;
-            assert_eq!(
-                has(
-                    &checks(&numeric_prefix, minor, Intent::Create)?,
-                    FindingCode::NativeContextRequired,
-                    "/metadata/generateName"
-                )?,
-                minor < 37
-            );
+        let findings = checks(&numeric_prefix, minor, Intent::Create)?;
+        assert!(has(&findings, code, "/metadata/generateName")?);
+        let supplied = resources(&numeric_prefix)?;
+        assert_eq!(
+            supplied.documents()[0]
+                .identity()?
+                .generate_name
+                .value()
+                .map(String::as_str),
+            Some("1svc-")
+        );
+        let failure =
+            ResourceSet::from_authored(vec![author(&supplied)?], &target(minor)?, &AuthoringLimits::default())
+                .err()
+                .required()?;
+        assert!(has(&failure, code, "/metadata/generateName")?);
+        let failure = generate(&supplied, &target(minor)?, OutputFormat::Json, &options())
+            .err()
+            .required()?;
+        assert!(has(&failure, code, "/metadata/generateName")?);
+    }
+    Ok(())
+}
+
+fn assert_selected_generated_prefix(set: &ResourceSet, prefix: &str, minor: u8) -> TestResult<()> {
+    let identity = set.documents()[0].identity()?;
+    assert!(identity.name.is_absent());
+    assert_eq!(identity.generate_name.value().map(String::as_str), Some(prefix));
+    assert!(identity.collision_key().is_none());
+    let findings = validate_for_target_with_intent(set, &target(minor)?, Intent::Create);
+    assert!(
+        !findings
+            .iter()
+            .any(|finding| finding.severity == kubernetes_lens::diagnostic::Severity::Error)
+    );
+    assert!(has(
+        &findings,
+        FindingCode::NativeContextRequired,
+        "/metadata/generateName"
+    )?);
+    let generated = output(set, minor)?;
+    assert_eq!(generated["metadata"]["generateName"], prefix);
+    assert!(generated["metadata"].get("name").is_none());
+    Ok(())
+}
+
+#[test]
+fn service_prefix_envelope_delegation_preserves_other_native_identity_checks() -> TestResult<()> {
+    use kubernetes_lens::source::AuthoringLimits;
+    for prefix in ["A-", "_-", "$-", "a.-"] {
+        for minor in [20, 37] {
+            for kind in ["Service", "Namespace", "Pod"] {
+                let mut value = match kind {
+                    "Service" => service(),
+                    "Namespace" => json!({"apiVersion":"v1","kind":"Namespace","metadata":{}}),
+                    _ => document(
+                        "v1",
+                        "Pod",
+                        json!({"spec":{"containers":[{"name":"main","image":"image"}]}}),
+                    ),
+                };
+                value["metadata"].as_object_mut().required()?.remove("name");
+                value["metadata"]["generateName"] = json!(prefix);
+                let supplied = resources(&value)?;
+                assert_eq!(
+                    supplied.documents()[0]
+                        .original_identity()
+                        .generate_name
+                        .value()
+                        .map(String::as_str),
+                    Some(prefix)
+                );
+                let authored = match kind {
+                    "Namespace" => supplied.documents()[0]
+                        .resource::<kubernetes_lens::resources::access::Namespace>()
+                        .required()?
+                        .clone()
+                        .into(),
+                    "Pod" => supplied.documents()[0]
+                        .resource::<kubernetes_lens::resources::workloads::Pod>()
+                        .required()?
+                        .clone()
+                        .into(),
+                    _ => author(&supplied)?,
+                };
+                let fresh = ResourceSet::from_authored(vec![authored], &target(minor)?, &AuthoringLimits::default())
+                    .required()?;
+                for set in [&supplied, &fresh] {
+                    assert_selected_generated_prefix(set, prefix, minor)?;
+                }
+            }
         }
     }
     Ok(())
 }
 
 #[test]
-fn service_prefix_envelope_delegation_preserves_other_native_identity_checks() -> TestResult<()> {
-    use kubernetes_lens::{
-        model::Metadata,
-        resources::{access::Namespace, workloads::Pod},
-        source::AuthoringLimits,
-        value::Presence,
-    };
-    for prefix in ["A-", "_-", "$-", "a.-"] {
-        for minor in [20, 37] {
-            let mut value = service();
-            value["metadata"].as_object_mut().required()?.remove("name");
-            value["metadata"]["generateName"] = json!(prefix);
-            accepted(&value, minor)?;
-            let supplied = resources(&value)?;
-            let fresh =
-                ResourceSet::from_authored(vec![author(&supplied)?], &target(minor)?, &AuthoringLimits::default())
-                    .required()?;
-            for set in [&supplied, &fresh] {
-                let generated = output(set, minor)?;
-                assert_eq!(generated["metadata"]["generateName"], prefix);
-                assert!(generated["metadata"].get("name").is_none());
-            }
-        }
-        let metadata = Metadata {
-            generate_name: Presence::Value(prefix.to_owned()),
-            ..Metadata::default()
-        };
-        let mut ns = Namespace::default();
-        ns.metadata = Presence::Value(metadata.clone());
-        assert!(ResourceSet::from_authored(vec![ns.into()], &target(37)?, &AuthoringLimits::default()).is_err());
-        let pod_value = document(
-            "v1",
-            "Pod",
-            json!({"spec":{"containers":[{"name":"main","image":"image"}]}}),
-        );
-        let supplied_pod = resources(&pod_value)?;
-        let mut pod = supplied_pod.documents()[0].resource::<Pod>().required()?.clone();
-        pod.metadata = Presence::Value(metadata);
-        assert!(ResourceSet::from_authored(vec![pod.into()], &target(37)?, &AuthoringLimits::default()).is_err());
-        for value in [
-            json!({"apiVersion":"v1","kind":"Namespace","metadata":{"generateName":prefix}}),
-            json!({"apiVersion":"v1","kind":"Pod","metadata":{"generateName":prefix},"spec":{"containers":[{"name":"main","image":"image"}]}}),
-        ] {
-            let bytes = serde_json::to_vec(&value)?;
-            let parsed = parse_source(
-                SourceInput {
-                    id: SourceId(180),
-                    format: DocumentFormat::Json,
-                    origin: InputOrigin::Authored,
-                    source_version: None,
-                    bytes: &bytes,
-                },
-                &ParseLimits::default(),
-            )
-            .required()?;
-            let failure = parsed.flatten_resources().err().required()?;
-            assert!(failure.iter().any(|f| f.code == FindingCode::InvalidIdentity));
-        }
-    }
+fn service_prefix_hazard_and_unicode_keep_acquisition_separate_from_selected_naming() -> TestResult<()> {
+    use kubernetes_lens::{graph::resolve_references_for_target, source::AuthoringLimits};
     for prefix in ["-", "é-"] {
         let mut value = service();
         value["metadata"].as_object_mut().required()?.remove("name");
         value["metadata"]["generateName"] = json!(prefix);
-        assert!(resources(&value).is_err());
-        let metadata = Metadata {
-            namespace: Presence::Value("ns".to_owned()),
-            generate_name: Presence::Value(prefix.to_owned()),
-            ..Metadata::default()
-        };
-        let supplied = resources(&service())?;
-        let mut native = supplied.documents()[0]
-            .resource::<kubernetes_lens::resources::networking::Service>()
-            .required()?
-            .clone();
-        native.metadata = Presence::Value(metadata);
-        let failure = ResourceSet::from_authored(vec![native.into()], &target(37)?, &AuthoringLimits::default())
-            .err()
-            .required()?;
-        assert!(failure.iter().any(|f| f.code == FindingCode::InvalidIdentity));
+        let supplied = resources(&value)?;
+        assert_eq!(
+            supplied.documents()[0]
+                .identity()?
+                .generate_name
+                .value()
+                .map(String::as_str),
+            Some(prefix)
+        );
+        assert!(supplied.documents()[0].identity()?.collision_key().is_none());
+        for minor in [20, 21, 22, 37] {
+            let code = if prefix == "-" && minor <= 21 {
+                FindingCode::NativeNamingUnverified
+            } else {
+                FindingCode::NativeFieldInvalid
+            };
+            let findings = checks(&value, minor, Intent::Create)?;
+            assert!(has(&findings, code, "/metadata/generateName")?);
+            let authored =
+                ResourceSet::from_authored(vec![author(&supplied)?], &target(minor)?, &AuthoringLimits::default());
+            if code == FindingCode::NativeNamingUnverified {
+                let authored = authored.required()?;
+                assert!(has(
+                    &validate_for_target(&authored, &target(minor)?),
+                    code,
+                    "/metadata/generateName"
+                )?);
+            } else {
+                assert!(has(&authored.err().required()?, code, "/metadata/generateName")?);
+                let failure = generate(&supplied, &target(minor)?, OutputFormat::Json, &options())
+                    .err()
+                    .required()?;
+                assert!(has(&failure, code, "/metadata/generateName")?);
+            }
+            let graph = resolve_references_for_target(&supplied, &target(minor)?);
+            assert!(has(&graph.findings, code, "/metadata/generateName")?);
+            assert!(!graph.edges.iter().any(|edge| matches!(
+                edge.resolution,
+                kubernetes_lens::graph::Resolution::ResolvedSubjects(_)
+                    | kubernetes_lens::graph::Resolution::Resolved(_)
+            )));
+        }
     }
     Ok(())
 }

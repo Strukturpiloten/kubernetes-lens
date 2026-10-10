@@ -670,24 +670,96 @@ fn deeply_nested_yaml_stops_before_recursive_loader_and_alias_budgets_span_docum
 }
 
 #[test]
-fn review_identity_requires_value_and_cluster_collision_ignores_namespace_presence() -> TestResult<()> {
-    for metadata in [
-        "{}",
-        "{name: null}",
-        "{generateName: null}",
-        "{name: null, generateName: null}",
+fn review_identity_preserves_presence_until_selected_native_naming_validation() -> TestResult<()> {
+    for (metadata, name, prefix) in [
+        ("{}", Presence::Absent, Presence::Absent),
+        ("{name: null}", Presence::Null, Presence::Absent),
+        ("{generateName: null}", Presence::Absent, Presence::Null),
+        ("{name: null, generateName: null}", Presence::Null, Presence::Null),
+        ("{namespace: ns}", Presence::Absent, Presence::Absent),
+        ("{namespace: ns, name: null}", Presence::Null, Presence::Absent),
+        ("{namespace: ns, generateName: null}", Presence::Absent, Presence::Null),
+        (
+            "{namespace: ns, name: null, generateName: null}",
+            Presence::Null,
+            Presence::Null,
+        ),
+        (
+            "{name: '', generateName: ''}",
+            Presence::Value(String::new()),
+            Presence::Value(String::new()),
+        ),
     ] {
         let input = parsed(
             format!("apiVersion: v1\nkind: Pod\nmetadata: {metadata}\n").as_bytes(),
             DocumentFormat::YamlStream,
         )?;
-        assert!(input.flatten_resources().is_err());
+        let set = input.flatten_resources().required()?;
+        let document = &set.documents()[0];
+        let identity = document.identity()?;
+        assert_eq!(identity.name, name);
+        assert_eq!(identity.generate_name, prefix);
+        let namespace = if metadata.contains("namespace: ns") {
+            Presence::Value("ns".to_owned())
+        } else {
+            Presence::Absent
+        };
+        assert_eq!(identity.namespace, namespace);
+        assert_eq!(document.original_identity().namespace, namespace);
+        assert_eq!(document.original_identity().name, name);
+        assert_eq!(document.original_identity().generate_name, prefix);
+        assert!(identity.collision_key().is_none());
+        let name_path = FieldPath::parse("/metadata/name")?;
+        for minor in [20, 37] {
+            let findings = kubernetes_lens::validate_for_target(&set, &target(minor)?);
+            assert!(findings.iter().any(|finding| {
+                finding.code == FindingCode::NativeFieldInvalid && finding.path.as_ref() == Some(&name_path)
+            }));
+        }
     }
-    let set = resources("apiVersion: v1\nkind: Pod\nmetadata: {name: null, generateName: child-}\n")?;
-    assert_eq!(
-        set.documents()[0].identity()?.generate_name.value().map(String::as_str),
-        Some("child-")
-    );
+    let set = resources("apiVersion: v1\nkind: Pod\nmetadata: {name: null, generateName: child-, namespace: ns}\n")?;
+    let identity = set.documents()[0].identity()?;
+    assert_eq!(identity.name, Presence::Null);
+    assert_eq!(identity.generate_name.value().map(String::as_str), Some("child-"));
+    assert!(identity.collision_key().is_none());
+    let prefix_path = FieldPath::parse("/metadata/generateName")?;
+    for minor in [20, 37] {
+        let findings = kubernetes_lens::validate_for_target(&set, &target(minor)?);
+        assert!(findings.iter().any(|finding| {
+            finding.code == FindingCode::NativeContextRequired
+                && finding.path.as_ref() == Some(&prefix_path)
+                && finding.source.is_some()
+        }));
+    }
+    Ok(())
+}
+
+#[test]
+fn review_identity_rejects_malformed_metadata_string_shapes() -> TestResult<()> {
+    for (metadata, path) in [
+        ("{name: 42}", "/metadata/name"),
+        ("{generateName: []}", "/metadata/generateName"),
+        ("{namespace: {}}", "/metadata/namespace"),
+    ] {
+        let errors = parsed(
+            format!("apiVersion: v1\nkind: Pod\nmetadata: {metadata}\n").as_bytes(),
+            DocumentFormat::YamlStream,
+        )?
+        .flatten_resources()
+        .err()
+        .required()?;
+        let path = FieldPath::parse(path)?;
+        assert!(
+            errors
+                .iter()
+                .any(|finding| finding.code == FindingCode::NativeFieldInvalid && finding.path.as_ref() == Some(&path))
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn review_cluster_collision_ignores_namespace_presence() -> TestResult<()> {
     let a = resources("apiVersion: v1\nkind: Namespace\nmetadata: {name: same}\n")?;
     let b = resources("apiVersion: v1\nkind: Namespace\nmetadata: {name: same, namespace: null}\n")?;
     assert_eq!(
@@ -697,7 +769,12 @@ fn review_identity_requires_value_and_cluster_collision_ignores_namespace_presen
     assert!(a.documents()[0].original_identity().namespace.is_absent());
     assert!(matches!(b.documents()[0].original_identity().namespace, Presence::Null));
     let input = parsed(b"apiVersion: v1\nkind: Namespace\nmetadata: {name: same}\n---\napiVersion: v1\nkind: Namespace\nmetadata: {name: same, namespace: null}\n", DocumentFormat::YamlStream)?;
-    assert!(input.flatten_resources().is_err());
+    let findings = input.flatten_resources().err().required()?;
+    assert!(
+        findings
+            .iter()
+            .any(|finding| finding.code == FindingCode::DuplicateIdentity)
+    );
     Ok(())
 }
 #[test]

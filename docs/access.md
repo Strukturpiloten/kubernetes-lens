@@ -133,7 +133,8 @@ resource. This privacy sentinel is separate from the single fixed, pathless proc
 finding. These limits account for conservative native work and payload, not process RSS or every
 allocator operation, and establish no server permission, scaling or enforcement equivalence.
 
-The primary owns naming corrections, source/effective identity, root observation roles, supplying
+Shared naming corrections are delivered under #36 / ADR 0013; the primary owns source/effective
+identity integration, root observation roles, supplying
 provenance, graph completeness and cumulative budgets. Root status is reviewed only for Namespace,
 HPA, PDB and ResourceQuota. Arbitrary status, Namespace lifecycle data and aggregated ClusterRole
 rules are not universally removable observations.

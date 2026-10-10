@@ -222,15 +222,17 @@
     "status": "source_bound_native_conformance_pending",
     "historical_local_run_applicability": "Original source_sha256, local_run and prior_evaluations are immutable historical records. They do not certify this candidate; complete gates and independent review must bind it separately.",
     "source_sha256": {
-      "schemas/capabilities/kubernetes-1.20-1.37.json": "37e926f6e9d40fea1086808656864dc81ae98fc6799edfde7628e0571aac518a",
+      "schemas/capabilities/kubernetes-1.20-1.37.json": "4d16a8ba154a8ce5a7c2e5d74768111c44154528a5600f8c6578fc01f397229c",
       "src/capability.rs": "dd9a69ee48aee45a5638fb38be7988c7c6d02ad0c176f697245ecf8a8a40ed40",
-      "src/generation.rs": "b4e5963e6a926f50ad290cbaf731caefde2878368052f190f9996fdd6d2d1366",
-      "src/graph.rs": "a8f0a202afdd6ba9f10d20bd43f4899de4f04a37063975aea23525184f5cda9f",
-      "src/model.rs": "f263ebfbafd45927081f1c094c705a6e5d5ab6b124a0f09d93b321fde85cbcd9",
+      "src/diagnostic.rs": "5ac5cab660f3bccee70057940dab03a671d676b4c18176d428bb9e0ef5e37f30",
+      "src/generation.rs": "9074d5a5c832fdb67e0d72e96e1d27e2c3379577da9906a79dd07f54f567c133",
+      "src/graph.rs": "cde872fb4ff06a993e17c3f48541a11a21b4be12385611c4567f61b6079d3405",
+      "src/model.rs": "e241166e68679275cfabddca496e08fad5bf708afa7525946217d97fc9a42561",
       "src/processing.rs": "2df13c2ad6f06d71f809b10848c6652da542c3d7f603f882cf475993e85e29e5",
       "src/registry.rs": "5e03c877fbbb689c5122be45a1403f0bf4615e53a2d3ed043d7d8c363fcd2bab",
-      "src/resources/common.rs": "3f29b27b3b8891ef1d8443dc2109a292c5e8ccdefe95d3b318afdd31446d11d6",
+      "src/resources/common.rs": "4181861d0d7813af28ac077e862aae887d5928e6d4c8c1aa6d115fdc6488ccbb",
       "src/resources/common/native_helpers.rs": "ac2b96b49c9dad81ea2164406662370b1e5c87d894f476a7731d3dbf206474ba",
+      "src/resources/common/native_naming.rs": "7dae658af9aedaa84a878455e026f8bfb5a28ae292c4aa5bdf962efee53b0273",
       "src/resources/common/native_time.rs": "44ade53948f3a0e8000fd80059698b33c6da9aa9fd6ab53e51fb5a8160c137fb",
       "src/resources/common/unknown_scopes_tests.rs": "dc832431600ceaf56d66bef14fe8fe5dfc71c073e7834eb710a66ec3cb5d5cab",
       "src/resources/common/workload_specs.rs": "5b302801a6668d45ca79a261be683041af6268c1749cef07f95848291368aa92",
@@ -253,12 +255,21 @@
       "tests/access_modes.rs": "58e263f989d235f1d7da1e095a90f8b67a9dc0df432cab574d5c33d3f9859ad7",
       "tests/exact_json_number.rs": "f9305a6d0f011a6880dc7725aa8b4a0be889d7a7e4430353f8b5438e25aaef01",
       "tests/foundation/core.rs": "cf960c644acdf880101253be223b25d148b55a606efe1541be1bc39ab9190e55",
-      "tests/foundation/graph.rs": "95e65f07444f22548d348d3559ec5964281fbc80b9be10e3ae3225f057461935",
-      "tests/foundation/root-status-role-evidence.json": "d16368878292c191b827b84c37fc85bb6b8ea307b76448d80e4dac83e1b3fea3",
+      "tests/foundation/graph.rs": "d2ce4ff9eca2c9c09e7a905bf61adc754fd75a6c9ddbacae5561ea785c268f80",
+      "tests/foundation/root-status-role-evidence.json": "3c36fb1c3aa849fde33e180d40bd494625256078ce34ddf554c363320d21a1ff",
+      "tests/native_naming.rs": "edb9bd2fea2f94781cd80152531a7d47b29e33efcd412dccc7ca0b1ee9bf91eb",
       "tests/protected_json.rs": "6adb4c257e68aab87568b66de99c56aabbe0c454e1599002078b8ba4f1b3461d",
       "tests/workloads.rs": "45c7b58c70316a4008500b8da388167775738269d5133630670da3f8be82e221"
     },
-    "native_conformance": "pending"
+    "native_conformance": "pending",
+    "issue36": 36,
+    "naming_completion": {
+      "owner_issue": 36,
+      "supersedes_dependency_issue": 12,
+      "scope": "shared finite native naming and exact source identity",
+      "offline_evidence_only": true,
+      "native_conformance": "pending"
+    }
   },
   "prior_evaluations": [
     {

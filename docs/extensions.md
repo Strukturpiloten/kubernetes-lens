@@ -17,3 +17,11 @@ Typed CRDs establish descriptors from their group, kind, scope, served/storage v
 Webhook validation is limited to explicit local scalar checks. Stable-v1 Create checks permit only `None` and `NoneOnDryRun` side effects. Existing stable resources may retain `Some` or `Unknown` from beta creation; unspecified validation intent preserves these values with a `NativeContextRequired` warning. Historical beta APIs retain all four values within their served version range. A service client configuration, including an explicitly selected CRD conversion webhook, may produce a supplied-resource prerequisite when a service name is present; absent namespace remains unknown. A non-null URL creates an external remote prerequisite even when `service` is explicitly null. URLs and CA bundles remain protected output paths. The implementation performs no callback, network lookup, TLS validation, Secret inference, or certificate decoding.
 
 Focused local regressions run with `cargo test --locked --test extensions --test extensions_final_corrections` and `cargo test --locked --lib resources::extensions`. These check the offline contract only; official-fixture acceptance, API-server and controller conformance are tracked separately.
+
+Custom `Checked` results and graph `Bound` records establish a supplied CRD/schema relationship,
+not native naming validity. Undeclared custom GVK names remain explicitly unverified under
+[ADR 0013](decisions/0013-native-naming-and-source-identity.md), including valid-looking names.
+Target validation/generation retains a fixed NativeNamingUnverified warning; ordinary positive
+target graph facts are blocked. Sealed, currently rechecked CRD-version edges and External Operator
+prerequisites retain only their schema/controller-dependency meaning. Explicit preserving output
+still requires existing privacy and opaque policies; schema reports contain no naming warning.

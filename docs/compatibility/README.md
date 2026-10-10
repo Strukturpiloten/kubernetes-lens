@@ -156,3 +156,9 @@ These checks prove specification consistency and immutable source facts only. Th
 gate requires every pending native cell to pass with exact tool/fixture/source/target provenance,
 independent expected outcomes, privacy evidence and applicable runtime prerequisites. Pending,
 unavailable, skipped and failed outcomes cannot count as supported behavior.
+
+The shared native-naming contract (#36) records per-kind/version/intent selection independently
+of schema string shapes. The ledger binds naming rules, immutable source witness provenance and
+125 independent corrected cases. NativeNamingUnverified identifies historical prefix compatibility;
+Create cannot resolve it. Current naming code evidence does not certify API/server/controller
+acceptance, and all existing mandatory native conformance cells remain pending.

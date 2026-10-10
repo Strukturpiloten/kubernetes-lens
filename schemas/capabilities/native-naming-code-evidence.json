@@ -1,0 +1,46 @@
+{
+  "format": "local_native_naming_code_evidence_v1",
+  "issue": 36,
+  "status": "source_bound_independent_review_and_complete_gate_required",
+  "canonical_ledger": {
+    "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
+    "sha256": "4d16a8ba154a8ce5a7c2e5d74768111c44154528a5600f8c6578fc01f397229c"
+  },
+  "source_sha256": {
+    "scripts/fixtures/native_acceptance.py": "ed086715e3f66986b49c1409c22317f6eeee857dc0625e74123f49f6ffbab340",
+    "scripts/test-compatibility-ledger.py": "4ac9dab41a29608baa10ef816b4a2cb2623657baa3cae6970d33b806ac2acb17",
+    "src/diagnostic.rs": "5ac5cab660f3bccee70057940dab03a671d676b4c18176d428bb9e0ef5e37f30",
+    "src/generation.rs": "9074d5a5c832fdb67e0d72e96e1d27e2c3379577da9906a79dd07f54f567c133",
+    "src/graph.rs": "cde872fb4ff06a993e17c3f48541a11a21b4be12385611c4567f61b6079d3405",
+    "src/model.rs": "e241166e68679275cfabddca496e08fad5bf708afa7525946217d97fc9a42561",
+    "src/resources/common.rs": "4181861d0d7813af28ac077e862aae887d5928e6d4c8c1aa6d115fdc6488ccbb",
+    "src/resources/common/native_naming.rs": "7dae658af9aedaa84a878455e026f8bfb5a28ae292c4aa5bdf962efee53b0273",
+    "src/resources/extensions/custom_documents.rs": "5eb05b4ff2e4fdd9c16702328a2bd585723567410b5a3dd578fc673ca05c32bb",
+    "src/resources/networking.rs": "5d27ad062395da844047e336b8cdaf11967b45f71beaba94b1a4978d5cc3b45b",
+    "src/resources/networking/validation.rs": "515055f550108a3438711f8c4168bc0d5b2d91a1635e87f30aef5df2ff9ebaa8",
+    "tests/foundation.rs": "aceda977db2b177677e3ca647d14570b5e1be6f5bfb949460f7cf4c6c33c51ce",
+    "tests/foundation/graph.rs": "d2ce4ff9eca2c9c09e7a905bf61adc754fd75a6c9ddbacae5561ea785c268f80",
+    "tests/native_naming.rs": "edb9bd2fea2f94781cd80152531a7d47b29e33efcd412dccc7ca0b1ee9bf91eb",
+    "tests/networking/native.rs": "bf95079e63845acc90da9c124d6a2759fdb9adbbeaba0c82d101d2dd31782e06",
+    "tests/networking/references.rs": "48e4815ba2686fe7f6296af79fc80fd51cd232e20994381b3f03119ce10a6c4c",
+    "tests/networking/static_contract.rs": "9fa9e5ad4816809f468492799a3268725925db2bc841d974e27dcab749515f19"
+  },
+  "native_conformance": "pending",
+  "supported_kubernetes_versions": [],
+  "independent_case_count": 125,
+  "kind_count": 35,
+  "api_profile_count": 48,
+  "diagnostic_rule_identity": {
+    "historical-prefix-hazard": "native-naming-unverified",
+    "undeclared-gvk-naming": "native-naming-unverified",
+    "operation-dependent-name": "native-context-required",
+    "invalid-selected-spelling": "native-field-invalid",
+    "relaxed-service-branch": "unadmitted-field"
+  },
+  "limitations": [
+    "Independent finite offline predicates and focused cases do not establish API server or controller acceptance.",
+    "Names, prefixes, namespaces and owner names retain exact source spelling without normalization or inferred identity.",
+    "Default diagnostics and receipts contain fixed rule identities rather than protected payloads.",
+    "Historical consumer receipts remain bound to their original snapshots; current guards require separate review and the complete gate."
+  ]
+}

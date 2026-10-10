@@ -90,3 +90,9 @@ exact private keyword/List paths and terminal budget exhaustion. Current source/
 are in `schemas/capabilities/extensions-code-evidence.json`; the complete policy gate rejects
 stale/omitted source bindings and fabricated native claims. Official custom corpus, server
 admission, webhook/controller and native-profile conformance remain pending.
+
+Native naming regressions replay 125 independently frozen, primary-corrected specification cases
+and cover all 35 kinds/48 API profiles across admitted minors and removal boundaries. Tests use
+actual native source, authoring, edits, protected output and supplied graph projection. The naming
+source/contract/code evidence remains distinct from API-server, generated-name and runtime
+acceptance. Historical research hashes are immutable; current source guards bind candidate code.

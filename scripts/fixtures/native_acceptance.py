@@ -24,9 +24,10 @@ MAX_OUTPUT = 256 * 1024
 MAX_ERROR = 4096
 MAX_BINARY = 128 * 1024 * 1024
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
-FINDING_CODES = frozenset("malformed-document duplicate-key limit-exceeded invalid-alias invalid-mapping-key unsupported-merge-key unsupported-scalar invalid-identity duplicate-identity claim-identity-collision ambiguous-reference unresolved-reference selector-no-matches external-prerequisite operator-owned scope-unknown scope-mismatch unadmitted-kind unknown-kind native-field-invalid native-context-required unavailable-api unavailable-field unadmitted-field feature-gate-required invalid-target-profile unsupported-semantic-conversion protected-output-denied opaque-output-denied merge-conflict observed-field-removed collection-field-removed codec-identity-mismatch invalid-registration acquisition-failed unsupported-input-extension reference-cycle".split())
+FINDING_CODES = frozenset("malformed-document duplicate-key limit-exceeded invalid-alias invalid-mapping-key unsupported-merge-key unsupported-scalar invalid-identity duplicate-identity claim-identity-collision ambiguous-reference unresolved-reference selector-no-matches external-prerequisite operator-owned scope-unknown scope-mismatch unadmitted-kind unknown-kind native-field-invalid native-context-required native-naming-unverified unavailable-api unavailable-field unadmitted-field feature-gate-required invalid-target-profile unsupported-semantic-conversion protected-output-denied opaque-output-denied merge-conflict observed-field-removed collection-field-removed codec-identity-mismatch invalid-registration acquisition-failed unsupported-input-extension reference-cycle".split())
 
 ACTIONABLE_FINDINGS = {
+    "native-naming-unverified": "Select reviewed naming evidence for the exact GVK and target, or retain explicit unverified handling. For a historical generated prefix, replace or remove that prefix.",
     "unadmitted-field": "Review the bound original field evidence; selected preservation retains source but does not admit field semantics.",
     "unadmitted-kind": "Supply a delivered native codec or retain explicit source preservation; do not claim typed support.",
     "unknown-kind": "Supply a reviewed extension schema contract; preservation does not establish controller behavior.",
@@ -418,6 +419,22 @@ class ContractTests(unittest.TestCase):
         for findings in ({"private-secret-marker": 1}, {"limit-exceeded": -1}, {"limit-exceeded": True}):
             with self.assertRaises(AcceptanceError):
                 validate_response(dict(response, findings=findings), request)
+
+    def test_naming_warning_receipt_is_fixed_private_and_still_pending(self):
+        request = {"binding": "a" * 64, "target_minor": 20, "assertions": [], "graph_assertions": [], "wrapper_assertions": []}
+        response = {"schema_version": 1, "binding": "a" * 64, "target_minor": 20,
+                    "state": "generation-refused", "api": "pending", "runtime": "pending",
+                    "controller": "not-proven", "field_assertions": 0, "graph_assertions": 0,
+                    "wrapper_assertions": 0, "findings": {"native-naming-unverified": 1}}
+        receipt = with_actions(validate_response(response, request))
+        self.assertEqual(receipt["api"], "pending")
+        self.assertIn("replace or remove", receipt["finding_actions"]["native-naming-unverified"])
+        for patch in ({"findings": {"native-naming-unverified-private-marker": 1}},
+                      {"raw_name": "Private Synthetic Ω"},
+                      {"findings": {"native-naming-unverified": "Private Synthetic Ω"}}):
+            with self.assertRaises(AcceptanceError) as caught:
+                validate_response(dict(response, **patch), request)
+            self.assertEqual(str(caught.exception), "unsafe-probe-receipt")
 
     def test_target_replay_and_incomplete_success(self):
         request = {"binding": "a" * 64, "target_minor": 20, "assertions": [1], "graph_assertions": [], "wrapper_assertions": []}

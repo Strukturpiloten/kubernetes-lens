@@ -239,8 +239,35 @@ fn class_parameter_shape_scope_and_cluster_metadata_remain_explicit() -> TestRes
         FindingCode::NativeFieldInvalid,
         "/spec/parameters/namespace"
     )?);
+    value["spec"]["parameters"]
+        .as_object_mut()
+        .required()?
+        .remove("namespace");
+    valid(&value, 37)?;
     value["metadata"]["namespace"] = json!("ns");
-    assert!(resources(&value).is_err());
+    let supplied = resources(&value)?;
+    assert_eq!(
+        supplied.documents()[0]
+            .identity()?
+            .namespace
+            .value()
+            .map(String::as_str),
+        Some("ns")
+    );
+    assert_eq!(
+        supplied.documents()[0]
+            .original_identity()
+            .namespace
+            .value()
+            .map(String::as_str),
+        Some("ns")
+    );
+    let findings = validate_for_target(&supplied, &target(37)?);
+    assert!(has(&findings, FindingCode::ScopeMismatch, "/metadata/namespace")?);
+    let failure = generate(&supplied, &target(37)?, OutputFormat::Json, &options())
+        .err()
+        .required()?;
+    assert!(has(&failure, FindingCode::ScopeMismatch, "/metadata/namespace")?);
     Ok(())
 }
 

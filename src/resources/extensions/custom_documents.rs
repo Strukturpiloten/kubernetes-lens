@@ -510,7 +510,9 @@ impl CustomDocumentResult {
     pub const fn binding(&self) -> Option<&CustomDocumentBinding> {
         self.binding.as_ref()
     }
-    /// Offline schema-resolution/check outcome; never an API-server admission result.
+    /// Offline schema-resolution/check outcome; never API-server or native naming admission.
+    /// `Checked` and graph `Bound` establish only the supplied CRD/schema relationship;
+    /// naming remains unverified for undeclared custom GVKs.
     #[must_use]
     pub const fn check(&self) -> &CustomDocumentCheck {
         &self.check

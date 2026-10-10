@@ -73,3 +73,10 @@ Positive graph evidence requires the same current supplied set, effective CRD/sc
 and explicit target profile. Stale, cross-set, unsupported or exhausted checks cannot establish a
 positive dependency. Unknown schema/CEL/defaulting/conversion and controller behavior remain explicit
 limitations. See [extension support](extensions.md); API-server and official corpus evidence are pending.
+
+[ADR 0013](decisions/0013-native-naming-and-source-identity.md) separates exact bounded identity
+acquisition from target/intent-selected native naming. Public String/Presence fields and Finding
+struct shape stay unchanged. Exhaustive FindingCode matches add NativeNamingUnverified. Its fixed
+remediation distinguishes historical prefix compatibility from operation context. Invalid or
+unverified naming cannot provide positive target graph evidence; no-profile supplied equality
+is not native validation. Broader private spelling still requires explicit protected artifact output.
