@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repository boundary checks with independent unsafe-candidate mutation tests."""
+"""Repository boundaries and required source-only official fixture preparation/admission tests."""
 from __future__ import annotations
 
 import copy
@@ -140,6 +140,35 @@ class RepositoryPolicyTests(unittest.TestCase):
     def test_fake_published_history_or_duplicate_inventory_fails(self) -> None:
         self.rejected("CHANGELOG.md", "## [Unreleased]", "## [Unreleased]\n\n## [0.1.0]")
         self.rejected("scripts/renovate-tool.json", "@sha256:", "@sha256-invalid:")
+
+REQUIRED_OFFICIAL_FIXTURE_TEST_IDS = {
+    "test_materialize.OfficialReceiptTests.test_official_source_receipt_is_portable_complete_and_has_no_native_success",
+    "test_admission.AdmissionExpectationTests.test_official_plan_remains_pending_with_independent_closure_counts",
+}
+
+
+def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: str | None) -> unittest.TestSuite:
+    """Include the source-only fixtures in every existing policy/gate invocation."""
+    directory = ROOT / "scripts" / "fixtures"
+    for name in ("test_materialize.py", "test_admission.py"):
+        if not (directory / name).is_file():
+            raise RuntimeError("required official fixture test module missing")
+    fixtures = loader.discover(str(directory), pattern="test_*.py", top_level_dir=str(directory))
+
+    def case_ids(suite: unittest.TestSuite):
+        for case in suite:
+            if isinstance(case, unittest.TestSuite):
+                yield from case_ids(case)
+            else:
+                yield case.id()
+
+    identities = list(case_ids(fixtures))
+    if (not REQUIRED_OFFICIAL_FIXTURE_TEST_IDS.issubset(identities)
+            or len(set(identities)) != len(identities)):
+        raise RuntimeError("required official fixture test identities missing or duplicated")
+    tests.addTests(fixtures)
+    return tests
+
 
 if __name__ == "__main__":
     unittest.main()

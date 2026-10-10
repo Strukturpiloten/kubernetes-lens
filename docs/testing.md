@@ -60,3 +60,25 @@ values, supplied key domains, known-invalid selectors with unknown descendants, 
 version boundaries and finite PV Create/source/affinity checks. Processing exhaustion stays
 pathless and sticky. Static witness and code evidence do not establish API-server, controller,
 binding or provisioning conformance; those domains remain pending.
+
+## Official fixture preparation and admission
+
+The [official fixture corpus](fixtures/official-corpus.md) has 97 source-only Python regressions
+for receipt integrity, private offline preparation, companion notices, closure, budgets and
+renderer admission expectations. Run `python3 scripts/test-repository-policy.py` for the existing
+repository policies and both fixture modules, or
+`python3 -m unittest discover -s scripts/fixtures -p 'test_*.py'` for fixture-only feedback.
+
+The policy runner discovers each fixture test once and requires the source-receipt and renderer
+expectation witness IDs from their respective modules. Missing modules, absent witness tests,
+discovery/import errors and assertion failures make policy validation fail. The existing Cargo
+`repository_policy` harness (`cargo ci-policy`, including MSRV) and documentation phase both
+invoke that runner, so the complete gate includes these tests without an optional fixture switch.
+Gate regressions execute the real policy hook with synthetic fixtures and fake build/tool commands;
+they prove independent assertion, missing-module and wrong-test-ID failures stop validation.
+
+These tests neither acquire official sources nor execute Helm/Kustomize, native corpus acceptance,
+API validation or runtime commands. Corpus bytes remain in caller-owned public caches and private
+destinations; metadata and scripts remain excluded from the Cargo package. Actual package-list
+verification and the final complete gate remain required during primary integration. Passing
+preparation/admission tests does not satisfy the pending #14 native acceptance or #2 runtime cells.
