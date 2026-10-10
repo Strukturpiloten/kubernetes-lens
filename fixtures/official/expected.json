@@ -1,0 +1,1249 @@
+{
+  "case_isolation": "Each group is an independent source set. Do not union complete and auth Pooler variants with the same identity or synthesize missing references/backends.",
+  "default_namespaces": {
+    "grafana-operator:source/examples/grafana/credential_secret/resources.yaml": "grafana"
+  },
+  "missing_selected_cr_samples": [],
+  "projects": {
+    "cloudnativepg": {
+      "invariants": [
+        {
+          "apiVersion": "postgresql.cnpg.io/v1",
+          "fields": {
+            "spec.instances": 3,
+            "spec.storage.size": "1Gi"
+          },
+          "kind": "Cluster",
+          "name": "cluster-example"
+        },
+        {
+          "kind": "Cluster",
+          "name": "cluster-example-secret",
+          "references": [
+            {
+              "path": "spec.bootstrap.initdb.secret.name",
+              "target": "Secret/cluster-example-app-user"
+            },
+            {
+              "path": "spec.superuserSecret.name",
+              "target": "Secret/cluster-example-superuser"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "type": "kubernetes.io/basic-auth"
+          },
+          "kind": "Secret",
+          "names": ["cluster-example-app-user", "cluster-example-superuser"],
+          "protected_keys": ["data.username", "data.password"]
+        },
+        {
+          "invariants": [
+            "Deployment serviceAccountName matches supplied ServiceAccount",
+            "ClusterRoleBinding roleRef and subjects resolve",
+            "webhook service references resolve to supplied Service",
+            "CRD versions establish exact CR schema registration"
+          ],
+          "source": "operator release manifest"
+        }
+      ],
+      "kustomize_corner_case": "config/manager/manager.yaml uses controller:latest; keep source evidence and record any explicit runtime image patch",
+      "operator_owned_dependencies": [
+        "Cluster-managed PostgreSQL workloads/PVCs/services/credentials are not supplied native objects unless explicitly included"
+      ]
+    },
+    "forgejo": {
+      "boundary": "Chart v14 removes PostgreSQL/PostgreSQL-HA and Valkey/Valkey-Cluster subcharts; choose SQLite or supplied external DB/cache explicitly",
+      "fixture_values_required": [
+        "explicit public admin password prevents random default",
+        "explicit database architecture",
+        "explicit PVC choice",
+        "disable out-of-scope HTTPRoute/TCPRoute/OpenShift Route/ServiceMonitor options unless classified unknown"
+      ],
+      "invariants": [
+        {
+          "fields": {
+            "spec.ports[http].targetPort": "http"
+          },
+          "identity_suffix": "-http",
+          "kind": "Service",
+          "reference": "matching Deployment selector and named container port"
+        },
+        {
+          "fields": {
+            "spec.ports[ssh].protocol": "TCP"
+          },
+          "identity_suffix": "-ssh",
+          "kind": "Service",
+          "reference": "matching Deployment selector and SSH_LISTEN_PORT-conditioned targetPort"
+        },
+        {
+          "kind": "Deployment",
+          "references": [
+            "ServiceAccount from explicit selected values",
+            "PVC from persistence.claimName",
+            "inline config source Secret",
+            "selected external config Secret/ConfigMap"
+          ]
+        },
+        {
+          "condition": "persistence.enabled && persistence.create",
+          "corner_case": "replicaCount >1 forces ReadWriteMany; otherwise preserve supplied accessModes",
+          "kind": "PersistentVolumeClaim"
+        }
+      ]
+    },
+    "grafana": {
+      "image_evidence_gap": "official fenced sample image is mutable grafana/grafana:latest; documentation revision pin alone is not an application-image pin",
+      "invariants": [
+        {
+          "fields": {
+            "spec.accessModes": ["ReadWriteOnce"],
+            "spec.resources.requests.storage": "1Gi"
+          },
+          "kind": "PersistentVolumeClaim",
+          "name": "grafana-pvc"
+        },
+        {
+          "fields": {
+            "spec.selector.matchLabels.app": "grafana",
+            "spec.template.metadata.labels.app": "grafana",
+            "spec.template.spec.securityContext.fsGroup": 472
+          },
+          "kind": "Deployment",
+          "name": "grafana",
+          "references": [
+            {
+              "claimName": "grafana-pvc",
+              "mountPath": "/var/lib/grafana"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "spec.ports[0].port": 3000,
+            "spec.ports[0].targetPort": "http-grafana",
+            "spec.selector.app": "grafana",
+            "spec.type": "LoadBalancer"
+          },
+          "kind": "Service",
+          "name": "grafana"
+        }
+      ]
+    },
+    "grafana-operator": {
+      "crd_modes": [
+        "immutable bundled CRDs require Helm --include-crds for complete offline output",
+        "mutable CRDs via crds.immutable=false are rendered through templates; upgrade behavior not proven by template output"
+      ],
+      "invariants": [
+        {
+          "apiVersion": "grafana.integreatly.org/v1beta1",
+          "corner_case": "Secret namespace grafana; Grafana example omits namespace. Use explicit default input namespace grafana rather than silently rewriting source",
+          "kind": "Grafana",
+          "references": [
+            {
+              "keys": ["GF_SECURITY_ADMIN_USER", "GF_SECURITY_ADMIN_PASSWORD"],
+              "target": "Secret/credentials"
+            }
+          ],
+          "source": "examples/grafana/credential_secret/resources.yaml"
+        },
+        {
+          "kind": "GrafanaDashboard",
+          "name": "grafanadashboard-from-configmap",
+          "references": [
+            {
+              "key": "json",
+              "path": "spec.configMapRef",
+              "target": "ConfigMap/dashboard-definition"
+            },
+            {
+              "path": "spec.instanceSelector.matchLabels",
+              "target": "Grafana with dashboards=grafana"
+            }
+          ]
+        },
+        {
+          "invariants": [
+            "ClusterRole transformed to Role",
+            "ClusterRoleBinding transformed to RoleBinding",
+            "roleRef.kind transformed to Role",
+            "WATCH_NAMESPACE downward API metadata.namespace"
+          ],
+          "source": "deploy/kustomize/overlays/namespace_scoped"
+        },
+        {
+          "invariant": "image transformer overrides checked-in Deployment v5.16.0 image to v5.25.0",
+          "source": "deploy/kustomize/base"
+        }
+      ],
+      "operator_owned_dependencies": [
+        "Grafana-managed Deployment/PVCs/services/credentials remain operator-owned unless supplied explicitly"
+      ]
+    },
+    "immich": {
+      "invariants": [
+        {
+          "fields": {
+            "spec.accessModes": ["ReadWriteOnce"],
+            "spec.resources.requests.storage": "10Gi"
+          },
+          "kind": "PersistentVolumeClaim",
+          "name": "immich-library-pvc"
+        },
+        {
+          "apiVersion": "postgresql.cnpg.io/v1",
+          "fields": {
+            "spec.instances": 1,
+            "spec.postgresql.shared_preload_libraries": ["vchord.so"],
+            "spec.storage.size": "1Gi"
+          },
+          "kind": "Cluster",
+          "name": "immich-database"
+        },
+        {
+          "kind": "Database",
+          "name": "immich-database",
+          "references": [
+            {
+              "class": "explicit custom-resource reference",
+              "path": "spec.cluster.name",
+              "target": "Cluster/immich-database"
+            }
+          ]
+        },
+        {
+          "references": [
+            {
+              "class": "supplied explicit PVC",
+              "target": "PersistentVolumeClaim/immich-library-pvc"
+            },
+            {
+              "class": "operator-owned external input; do not synthesize",
+              "keys": ["host", "user", "password", "dbname"],
+              "target": "Secret/immich-database-app"
+            }
+          ],
+          "source": "rendered server workload"
+        }
+      ],
+      "runtime_prerequisites": [
+        "PostgreSQL vector/vectorchord prerequisites",
+        "CNPG operator for CRs",
+        "Valkey enabled by local/values.yaml",
+        "provisioned storage"
+      ],
+      "unsupported_behavior": "Operator creating credentials, database objects, pods and PVCs is not implied by static schema acceptance",
+      "values_source": "local/values.yaml"
+    },
+    "nextcloud-aio": {
+      "fixture_values_required": [
+        "replace every TODO with deterministic public values",
+        "avoid @ and : in passwords per documentation",
+        "record NAMESPACE explicitly and avoid substituting Helm release namespace",
+        "select every optional component explicitly"
+      ],
+      "generation_evidence": {
+        "template_annotation": "kompose.version 1.38.0 (a8f5d1cbd)",
+        "upstream_updater": "downloads latest Kompose and snap yq; not invoked and not a reproducible oracle"
+      },
+      "invariants": [
+        {
+          "fields": {
+            "spec.externalTrafficPolicy": "Local",
+            "spec.ipFamilyPolicy": "PreferDualStack",
+            "spec.selector.io.kompose.service": "nextcloud-aio-apache",
+            "spec.type": "LoadBalancer"
+          },
+          "kind": "Service",
+          "name": "nextcloud-aio-apache",
+          "ports": "APACHE_PORT TCP and UDP target ports equal configured APACHE_PORT"
+        },
+        {
+          "kind": "Deployment",
+          "name": "nextcloud-aio-nextcloud",
+          "protected_values": "passwords and keys appear in plain env values; native diagnostics must redact them",
+          "references": [
+            "same-namespace nextcloud/database/redis services expressed by environment values",
+            "supplied PVC claim names"
+          ]
+        },
+        {
+          "condition": "NETWORK_POLICY_ENABLED=yes",
+          "invariants": [
+            "empty podSelector covers namespace",
+            "Ingress and Egress declared",
+            "same-namespace podSelector ingress",
+            "all egress allowed"
+          ],
+          "kind": "NetworkPolicy",
+          "name": "nextcloud-aio-deny-from-other-namespaces"
+        },
+        {
+          "condition": "NETWORK_POLICY_ENABLED=yes",
+          "invariants": [
+            "io.kompose.service In nextcloud-aio-apache",
+            "all ingress allowed to Apache"
+          ],
+          "kind": "NetworkPolicy",
+          "name": "nextcloud-aio-webserver-allow"
+        },
+        {
+          "condition": "HARP_ENABLED=yes",
+          "fields": {
+            "env.HP_K8S_ENABLED": "true"
+          },
+          "kind": "Deployment",
+          "name": "nextcloud-aio-harp",
+          "references": [
+            "externally supplied same-namespace HARP_SERVICE_ACCOUNT_NAME if configured",
+            "PVC nextcloud-aio-harp"
+          ]
+        }
+      ],
+      "runtime_limits": [
+        "No AIO UI",
+        "No automatic updates or update notifications",
+        "No AIO backup/restore",
+        "No community containers",
+        "built-in Apache TLS and LoadBalancer; not intended for Ingress",
+        "HaRP Kubernetes backend documented only for Nextcloud >=34",
+        "HaRP ServiceAccount/Role/RoleBinding and daemon registration supplied externally"
+      ]
+    }
+  },
+  "provenance": "Source-reviewed expectations, independent of KubernetesLens generated output; not executed native assertions.",
+  "public_value_policy": "Only named public fixture markers; credentials remain protected for presentation even when publicly known.",
+  "renderer_admission": {
+    "grafana_operator_host_users": {
+      "archive_id": "grafana-operator:archives/chart-5.25.0.tgz",
+      "cases": [
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "not-blocked-by-this-field",
+            "diagnostic_code": null,
+            "profile_valid": true,
+            "source_preserving_output": "not-required-for-this-field",
+            "typed_admitted": false
+          },
+          "gate_setting": "disabled",
+          "id": "hostUsers-1.32-disabled-false",
+          "kubernetes_minor": "1.32",
+          "source_condition_expectation": "omitted",
+          "target_patch": "1.32.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "not-blocked-by-this-field",
+            "diagnostic_code": null,
+            "profile_valid": true,
+            "source_preserving_output": "not-required-for-this-field",
+            "typed_admitted": false
+          },
+          "gate_setting": "disabled",
+          "id": "hostUsers-1.32-disabled-true",
+          "kubernetes_minor": "1.32",
+          "source_condition_expectation": "omitted",
+          "target_patch": "1.32.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "not-blocked-by-this-field",
+            "diagnostic_code": null,
+            "profile_valid": true,
+            "source_preserving_output": "not-required-for-this-field",
+            "typed_admitted": false
+          },
+          "gate_setting": "documented-default",
+          "id": "hostUsers-1.32-documented-default-false",
+          "kubernetes_minor": "1.32",
+          "source_condition_expectation": "omitted",
+          "target_patch": "1.32.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "not-blocked-by-this-field",
+            "diagnostic_code": null,
+            "profile_valid": true,
+            "source_preserving_output": "not-required-for-this-field",
+            "typed_admitted": false
+          },
+          "gate_setting": "documented-default",
+          "id": "hostUsers-1.32-documented-default-true",
+          "kubernetes_minor": "1.32",
+          "source_condition_expectation": "omitted",
+          "target_patch": "1.32.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "not-blocked-by-this-field",
+            "diagnostic_code": null,
+            "profile_valid": true,
+            "source_preserving_output": "not-required-for-this-field",
+            "typed_admitted": false
+          },
+          "gate_setting": "enabled",
+          "id": "hostUsers-1.32-enabled-false",
+          "kubernetes_minor": "1.32",
+          "source_condition_expectation": "omitted",
+          "target_patch": "1.32.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "not-blocked-by-this-field",
+            "diagnostic_code": null,
+            "profile_valid": true,
+            "source_preserving_output": "not-required-for-this-field",
+            "typed_admitted": false
+          },
+          "gate_setting": "enabled",
+          "id": "hostUsers-1.32-enabled-true",
+          "kubernetes_minor": "1.32",
+          "source_condition_expectation": "omitted",
+          "target_patch": "1.32.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "disabled",
+          "id": "hostUsers-1.33-disabled-false",
+          "kubernetes_minor": "1.33",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.33.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "disabled",
+          "id": "hostUsers-1.33-disabled-true",
+          "kubernetes_minor": "1.33",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.33.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "documented-default",
+          "id": "hostUsers-1.33-documented-default-false",
+          "kubernetes_minor": "1.33",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.33.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "documented-default",
+          "id": "hostUsers-1.33-documented-default-true",
+          "kubernetes_minor": "1.33",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.33.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "enabled",
+          "id": "hostUsers-1.33-enabled-false",
+          "kubernetes_minor": "1.33",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.33.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "enabled",
+          "id": "hostUsers-1.33-enabled-true",
+          "kubernetes_minor": "1.33",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.33.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "disabled",
+          "id": "hostUsers-1.34-disabled-false",
+          "kubernetes_minor": "1.34",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.34.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "disabled",
+          "id": "hostUsers-1.34-disabled-true",
+          "kubernetes_minor": "1.34",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.34.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "documented-default",
+          "id": "hostUsers-1.34-documented-default-false",
+          "kubernetes_minor": "1.34",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.34.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "documented-default",
+          "id": "hostUsers-1.34-documented-default-true",
+          "kubernetes_minor": "1.34",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.34.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "enabled",
+          "id": "hostUsers-1.34-enabled-false",
+          "kubernetes_minor": "1.34",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.34.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "enabled",
+          "id": "hostUsers-1.34-enabled-true",
+          "kubernetes_minor": "1.34",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.34.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "disabled",
+          "id": "hostUsers-1.35-disabled-false",
+          "kubernetes_minor": "1.35",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.35.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "disabled",
+          "id": "hostUsers-1.35-disabled-true",
+          "kubernetes_minor": "1.35",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.35.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "documented-default",
+          "id": "hostUsers-1.35-documented-default-false",
+          "kubernetes_minor": "1.35",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.35.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "documented-default",
+          "id": "hostUsers-1.35-documented-default-true",
+          "kubernetes_minor": "1.35",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.35.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "enabled",
+          "id": "hostUsers-1.35-enabled-false",
+          "kubernetes_minor": "1.35",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.35.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "enabled",
+          "id": "hostUsers-1.35-enabled-true",
+          "kubernetes_minor": "1.35",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.35.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "invalid-target-profile",
+            "profile_valid": false,
+            "source_preserving_output": "denied",
+            "typed_admitted": false
+          },
+          "gate_setting": "disabled",
+          "id": "hostUsers-1.36-disabled-false",
+          "kubernetes_minor": "1.36",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.36.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "invalid-target-profile",
+            "profile_valid": false,
+            "source_preserving_output": "denied",
+            "typed_admitted": false
+          },
+          "gate_setting": "disabled",
+          "id": "hostUsers-1.36-disabled-true",
+          "kubernetes_minor": "1.36",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.36.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "documented-default",
+          "id": "hostUsers-1.36-documented-default-false",
+          "kubernetes_minor": "1.36",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.36.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "documented-default",
+          "id": "hostUsers-1.36-documented-default-true",
+          "kubernetes_minor": "1.36",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.36.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "invalid-target-profile",
+            "profile_valid": false,
+            "source_preserving_output": "denied",
+            "typed_admitted": false
+          },
+          "gate_setting": "enabled",
+          "id": "hostUsers-1.36-enabled-false",
+          "kubernetes_minor": "1.36",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.36.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "invalid-target-profile",
+            "profile_valid": false,
+            "source_preserving_output": "denied",
+            "typed_admitted": false
+          },
+          "gate_setting": "enabled",
+          "id": "hostUsers-1.36-enabled-true",
+          "kubernetes_minor": "1.36",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.36.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "invalid-target-profile",
+            "profile_valid": false,
+            "source_preserving_output": "denied",
+            "typed_admitted": false
+          },
+          "gate_setting": "disabled",
+          "id": "hostUsers-1.37-disabled-false",
+          "kubernetes_minor": "1.37",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.37.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "invalid-target-profile",
+            "profile_valid": false,
+            "source_preserving_output": "denied",
+            "typed_admitted": false
+          },
+          "gate_setting": "disabled",
+          "id": "hostUsers-1.37-disabled-true",
+          "kubernetes_minor": "1.37",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.37.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "documented-default",
+          "id": "hostUsers-1.37-documented-default-false",
+          "kubernetes_minor": "1.37",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.37.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "unadmitted-field",
+            "profile_valid": true,
+            "source_preserving_output": "explicit-preserve-source-with-findings-required",
+            "typed_admitted": false
+          },
+          "gate_setting": "documented-default",
+          "id": "hostUsers-1.37-documented-default-true",
+          "kubernetes_minor": "1.37",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.37.0",
+          "value": true
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "invalid-target-profile",
+            "profile_valid": false,
+            "source_preserving_output": "denied",
+            "typed_admitted": false
+          },
+          "gate_setting": "enabled",
+          "id": "hostUsers-1.37-enabled-false",
+          "kubernetes_minor": "1.37",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.37.0",
+          "value": false
+        },
+        {
+          "evidence_status": "source-reviewed-unexecuted",
+          "expected": {
+            "desired_output": "denied",
+            "diagnostic_code": "invalid-target-profile",
+            "profile_valid": false,
+            "source_preserving_output": "denied",
+            "typed_admitted": false
+          },
+          "gate_setting": "enabled",
+          "id": "hostUsers-1.37-enabled-true",
+          "kubernetes_minor": "1.37",
+          "source_condition_expectation": "emitted",
+          "target_patch": "1.37.0",
+          "value": true
+        }
+      ],
+      "default_desired_output_policy": "deny-unadmitted",
+      "diagnostic": {
+        "actionable_remediation": "Select preserve-source-with-findings explicitly for source-preserving output, or obtain a separately reviewed field admission; do not silently delete hostUsers.",
+        "code": "unadmitted-field",
+        "field_pointer": "/spec/template/spec/hostUsers",
+        "protected_evidence_reference": "private source member/rendered-document evidence; do not put payloads in diagnostics",
+        "resource_identity": {
+          "apiVersion": "apps/v1",
+          "kind": "Deployment",
+          "name": "fixture-grafana-operator",
+          "namespace": "fixture-grafana-operator"
+        },
+        "severity": "error",
+        "source_location": "source member lines 40-42 and actual rendered source location when execution exists",
+        "target_profile": "complete explicit TargetProfile for the selected case"
+      },
+      "field_pointer": "/spec/template/spec/hostUsers",
+      "gate": "UserNamespacesSupport",
+      "gate_documented_defaults": {
+        "1.32": false,
+        "1.33": true,
+        "1.34": true,
+        "1.35": true,
+        "1.36": true,
+        "1.37": true
+      },
+      "pending": [
+        "two actual bounded producer renders per admitted producer/profile and deterministic-byte comparison",
+        "independent native import and structured findings",
+        "default-denied generation and explicit preservation/reparse tests",
+        "matching offline/API harness evidence; no operator/runtime acceptance inferred"
+      ],
+      "preservation_policy": {
+        "id": "preserve-source-with-findings",
+        "privacy": "protected-value output permission remains a separate requirement",
+        "result": "retain source field and unadmitted-field finding; never convert to typed admission or silently drop",
+        "selection": "explicit-caller-selection-required"
+      },
+      "source_condition": ">=1.33-0",
+      "source_lines_one_based_inclusive": [40, 42],
+      "source_member": {
+        "bytes": 5233,
+        "path": "grafana-operator/extracted/chart-5.25.0/grafana-operator/templates/deployment.yaml",
+        "sha256": "35424c3753fe2c0a2d11d20cd93c72c94bd556e085cd6bb492628bc3607e3d18"
+      },
+      "target_profile_basis": "Every finite frozen gate explicitly set to documented-default; each case overrides only UserNamespacesSupport. Documentation defaults are not cluster observations.",
+      "typed_admission": "frozen-unadmitted"
+    },
+    "kustomize_closures": [
+      {
+        "edge_count": 29,
+        "evidence_status": "static-local-closure-renderer-native-api-pending",
+        "files": [
+          "cloudnativepg/source/config/crd/bases/postgresql.cnpg.io_backups.yaml",
+          "cloudnativepg/source/config/crd/bases/postgresql.cnpg.io_clusterimagecatalogs.yaml",
+          "cloudnativepg/source/config/crd/bases/postgresql.cnpg.io_clusters.yaml",
+          "cloudnativepg/source/config/crd/bases/postgresql.cnpg.io_databaseroles.yaml",
+          "cloudnativepg/source/config/crd/bases/postgresql.cnpg.io_databases.yaml",
+          "cloudnativepg/source/config/crd/bases/postgresql.cnpg.io_failoverquorums.yaml",
+          "cloudnativepg/source/config/crd/bases/postgresql.cnpg.io_imagecatalogs.yaml",
+          "cloudnativepg/source/config/crd/bases/postgresql.cnpg.io_poolers.yaml",
+          "cloudnativepg/source/config/crd/bases/postgresql.cnpg.io_publications.yaml",
+          "cloudnativepg/source/config/crd/bases/postgresql.cnpg.io_scheduledbackups.yaml",
+          "cloudnativepg/source/config/crd/bases/postgresql.cnpg.io_subscriptions.yaml",
+          "cloudnativepg/source/config/crd/kustomization.yaml",
+          "cloudnativepg/source/config/crd/kustomizeconfig.yaml",
+          "cloudnativepg/source/config/default/kustomization.yaml",
+          "cloudnativepg/source/config/manager/default-monitoring.yaml",
+          "cloudnativepg/source/config/manager/kustomization.yaml",
+          "cloudnativepg/source/config/manager/manager.yaml",
+          "cloudnativepg/source/config/rbac/database_editor_role.yaml",
+          "cloudnativepg/source/config/rbac/database_viewer_role.yaml",
+          "cloudnativepg/source/config/rbac/kustomization.yaml",
+          "cloudnativepg/source/config/rbac/publication_editor_role.yaml",
+          "cloudnativepg/source/config/rbac/publication_viewer_role.yaml",
+          "cloudnativepg/source/config/rbac/role.yaml",
+          "cloudnativepg/source/config/rbac/role_binding.yaml",
+          "cloudnativepg/source/config/rbac/subscription_editor_role.yaml",
+          "cloudnativepg/source/config/rbac/subscription_viewer_role.yaml",
+          "cloudnativepg/source/config/webhook/kustomization.yaml",
+          "cloudnativepg/source/config/webhook/kustomizeconfig.yaml",
+          "cloudnativepg/source/config/webhook/manifests.yaml",
+          "cloudnativepg/source/config/webhook/service.yaml"
+        ],
+        "id": "cnpg-default-kustomize",
+        "load_restrictions": "default-root-only",
+        "relative_entrypoint": "default",
+        "supplied_root": "cloudnativepg/source/config"
+      },
+      {
+        "edge_count": 10,
+        "evidence_status": "static-local-closure-renderer-native-api-pending",
+        "files": [
+          "grafana-operator/source/deploy/kustomize/base/crds.yaml",
+          "grafana-operator/source/deploy/kustomize/base/deployment.yaml",
+          "grafana-operator/source/deploy/kustomize/base/kustomization.yaml",
+          "grafana-operator/source/deploy/kustomize/base/leader_election_role.yaml",
+          "grafana-operator/source/deploy/kustomize/base/leader_election_role_binding.yaml",
+          "grafana-operator/source/deploy/kustomize/base/namespace.yaml",
+          "grafana-operator/source/deploy/kustomize/base/role.yaml",
+          "grafana-operator/source/deploy/kustomize/base/rolebinding.yaml",
+          "grafana-operator/source/deploy/kustomize/base/service.yaml",
+          "grafana-operator/source/deploy/kustomize/base/serviceaccount.yaml",
+          "grafana-operator/source/deploy/kustomize/overlays/cluster_scoped/kustomization.yaml"
+        ],
+        "id": "grafana-cluster-kustomize",
+        "load_restrictions": "default-root-only",
+        "relative_entrypoint": "overlays/cluster_scoped",
+        "supplied_root": "grafana-operator/source/deploy/kustomize"
+      },
+      {
+        "edge_count": 10,
+        "evidence_status": "static-local-closure-renderer-native-api-pending",
+        "files": [
+          "grafana-operator/source/deploy/kustomize/base/crds.yaml",
+          "grafana-operator/source/deploy/kustomize/base/deployment.yaml",
+          "grafana-operator/source/deploy/kustomize/base/kustomization.yaml",
+          "grafana-operator/source/deploy/kustomize/base/leader_election_role.yaml",
+          "grafana-operator/source/deploy/kustomize/base/leader_election_role_binding.yaml",
+          "grafana-operator/source/deploy/kustomize/base/namespace.yaml",
+          "grafana-operator/source/deploy/kustomize/base/role.yaml",
+          "grafana-operator/source/deploy/kustomize/base/rolebinding.yaml",
+          "grafana-operator/source/deploy/kustomize/base/service.yaml",
+          "grafana-operator/source/deploy/kustomize/base/serviceaccount.yaml",
+          "grafana-operator/source/deploy/kustomize/overlays/namespace_scoped/kustomization.yaml"
+        ],
+        "id": "grafana-namespace-kustomize",
+        "load_restrictions": "default-root-only",
+        "relative_entrypoint": "overlays/namespace_scoped",
+        "supplied_root": "grafana-operator/source/deploy/kustomize"
+      }
+    ],
+    "status": "source-reviewed-renderer-admission-native-pending"
+  },
+  "resolved_source_gaps": [
+    {
+      "kinds": [
+        "postgresql.cnpg.io/v1 Pooler",
+        "postgresql.cnpg.io/v1 Backup",
+        "postgresql.cnpg.io/v1 ScheduledBackup",
+        "grafana.integreatly.org/v1beta1 GrafanaDatasource"
+      ],
+      "source_map": "inventory.json selected_custom_resource_sources",
+      "status": "official-sources-present-native-pending"
+    }
+  ],
+  "schema_version": 1,
+  "selected_custom_resource_fixture_groups": {
+    "cnpg-backup-missing-cluster": {
+      "absence_invariants": [
+        "/spec/method absent; do not materialize a documented default or infer a backend"
+      ],
+      "acceptance_status": "source-reviewed-expectations-native-pending",
+      "assets": ["cloudnativepg:source/docs/src/samples/backup-example.yaml"],
+      "expected_references": [
+        {
+          "classification": "not supplied; explicit unresolved local Cluster evidence",
+          "path": "/spec/cluster/name",
+          "target": "Cluster/pg-backup"
+        }
+      ],
+      "expected_resources": [
+        {
+          "apiVersion": "postgresql.cnpg.io/v1",
+          "kind": "Backup",
+          "name": "pg-backup-example"
+        }
+      ],
+      "operator_owned": [
+        "Backup completion, object-store credentials, backend existence and backup files unproved"
+      ]
+    },
+    "cnpg-pooler-auth-negative": {
+      "acceptance_status": "source-reviewed-expectations-native-pending",
+      "assets": [
+        "cloudnativepg:source/docs/src/samples/pooler-basic-auth.yaml"
+      ],
+      "corner_case": "Do not combine blindly with complete Pooler example: same Pooler identity causes duplicate identity. The authQuery is source-preserved SQL, not a database-execution guarantee.",
+      "default_namespace": "explicit caller-selected fixture namespace",
+      "expected_references": [
+        {
+          "classification": "missing in this supplied single-document case",
+          "path": "/spec/cluster/name",
+          "target": "Cluster/cluster-example"
+        },
+        {
+          "classification": "missing in this supplied single-document case",
+          "path": "/spec/pgbouncer/authQuerySecret/name",
+          "target": "Secret/cluster-example-superuser"
+        }
+      ],
+      "expected_resources": [
+        {
+          "apiVersion": "postgresql.cnpg.io/v1",
+          "fields": {
+            "/spec/instances": 1,
+            "/spec/pgbouncer/poolMode": "session",
+            "/spec/type": "rw"
+          },
+          "kind": "Pooler",
+          "name": "pooler-example-rw"
+        }
+      ]
+    },
+    "cnpg-pooler-complete-example": {
+      "acceptance_status": "source-reviewed-expectations-native-pending",
+      "assets": [
+        "cloudnativepg:source/docs/src/samples/pooler-example-explicit-image.yaml"
+      ],
+      "default_namespace": "explicit caller-selected fixture namespace; source omits namespace",
+      "expected_references": [
+        {
+          "classification": "resolves within supplied complete official sample; typed graph semantics require admitted #13 field/profile",
+          "path": "/spec/cluster/name",
+          "source": "Pooler/pooler-example-rw",
+          "target": "Cluster/cluster-example"
+        }
+      ],
+      "expected_resources": [
+        {
+          "apiVersion": "postgresql.cnpg.io/v1",
+          "fields": {
+            "/spec/imageName": "ghcr.io/cloudnative-pg/postgresql:18.6-system-trixie",
+            "/spec/instances": 1,
+            "/spec/storage/size": "1Gi"
+          },
+          "kind": "Cluster",
+          "name": "cluster-example"
+        },
+        {
+          "apiVersion": "postgresql.cnpg.io/v1",
+          "fields": {
+            "/spec/instances": 1,
+            "/spec/pgbouncer/image": "ghcr.io/cloudnative-pg/pgbouncer:1.25.1",
+            "/spec/pgbouncer/poolMode": "session",
+            "/spec/type": "rw"
+          },
+          "kind": "Pooler",
+          "name": "pooler-example-rw"
+        }
+      ],
+      "operator_owned": [
+        "Pooler-managed workloads/services/credentials are not authored documents in this sample"
+      ]
+    },
+    "cnpg-scheduled-backup-missing-cluster": {
+      "acceptance_status": "source-reviewed-expectations-native-pending",
+      "assets": [
+        "cloudnativepg:source/docs/src/samples/scheduled-backup-example.yaml"
+      ],
+      "corner_cases": [
+        "six schedule fields include seconds; not the ordinary five-field Kubernetes CronJob contract",
+        "backupOwnerReference is CR intent; never fabricate metadata.ownerReferences or generated Backup objects",
+        "/spec/immediate absent; preserve authored absence"
+      ],
+      "expected_references": [
+        {
+          "classification": "not supplied; explicit unresolved local Cluster evidence",
+          "path": "/spec/cluster/name",
+          "target": "Cluster/pg-backup"
+        }
+      ],
+      "expected_resources": [
+        {
+          "apiVersion": "postgresql.cnpg.io/v1",
+          "fields": {
+            "/spec/backupOwnerReference": "self",
+            "/spec/schedule": "0 0 0 * * *"
+          },
+          "kind": "ScheduledBackup",
+          "name": "backup-example"
+        }
+      ],
+      "operator_owned": [
+        "actual schedules, Backup creation and backup/restore behavior unproved"
+      ]
+    },
+    "grafana-datasource-postgresql-protected": {
+      "acceptance_status": "source-reviewed-expectations-native-pending",
+      "assets": [
+        "grafana-operator:source/examples/datasource/datasource_types/postgresql.yaml",
+        "grafana-operator:source/examples/dashboard/configmap/resources.yaml"
+      ],
+      "default_namespace": "grafana for namespace-absent companion source; Datasource itself explicitly declares grafana",
+      "expected_resources": [
+        {
+          "apiVersion": "grafana.integreatly.org/v1beta1",
+          "fields": {
+            "/spec/datasource/jsonData/postgresVersion": 1400,
+            "/spec/datasource/jsonData/sslmode": "disable",
+            "/spec/datasource/type": "postgres",
+            "/spec/datasource/url": "postgresql.namespace.svc:5432",
+            "/spec/instanceSelector/matchLabels/dashboards": "grafana"
+          },
+          "kind": "GrafanaDatasource",
+          "name": "postgresql",
+          "namespace": "grafana"
+        }
+      ],
+      "external_dependencies": [
+        "PostgreSQL endpoint, database credentials and connectivity are not proved by CR/schema success. Host namespace is not the Datasource namespace; no implicit cross-namespace normalization."
+      ],
+      "operator_owned": [
+        "Grafana registration, PostgreSQL availability and datasource behavior unproved"
+      ],
+      "protected_source_paths": ["/spec/datasource/secureJsonData/password"],
+      "protected_value_policy": "Upstream value is a public example but remains credential-shaped. Preserve privately, redact ordinary Debug/diagnostics/JSON/subprocess reporting; no password bytes in inventory expectations."
+    },
+    "grafana-datasource-prometheus": {
+      "acceptance_status": "source-reviewed-expectations-native-pending",
+      "assets": [
+        "grafana-operator:source/examples/datasource/datasource_types/prometheus.yaml",
+        "grafana-operator:source/examples/dashboard/configmap/resources.yaml"
+      ],
+      "default_namespace": "explicit single fixture namespace for both sources",
+      "expected_references": [
+        {
+          "classification": "supplied selector match if admitted #13 contract",
+          "path": "/spec/instanceSelector/matchLabels",
+          "target": "Grafana/grafana with metadata.labels.dashboards=grafana"
+        }
+      ],
+      "expected_resources": [
+        {
+          "apiVersion": "grafana.integreatly.org/v1beta1",
+          "fields": {
+            "/spec/datasource/access": "proxy",
+            "/spec/datasource/isDefault": true,
+            "/spec/datasource/jsonData/timeInterval": "5s",
+            "/spec/datasource/jsonData/tlsSkipVerify": true,
+            "/spec/datasource/name": "prom1",
+            "/spec/datasource/type": "prometheus",
+            "/spec/datasource/url": "http://prometheus-service:9090",
+            "/spec/instanceSelector/matchLabels/dashboards": "grafana"
+          },
+          "kind": "GrafanaDatasource",
+          "name": "prometheus"
+        }
+      ],
+      "external_dependencies": [
+        "Prometheus endpoint is only an authored URL. No Service/backend is supplied; do not discover it or infer a Kubernetes Service reference from a string URL."
+      ],
+      "operator_owned": [
+        "Datasource provisioning/accessibility and Grafana HTTP callbacks unproved"
+      ]
+    }
+  },
+  "source_presence_status": "all-seven-selected-CR-kinds-have-pinned-official-samples-native-pending",
+  "status": "independent-expectation-plan-native-pending"
+}

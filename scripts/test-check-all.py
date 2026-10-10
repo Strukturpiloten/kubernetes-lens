@@ -19,6 +19,10 @@ case "$line" in
   python3\ -c*) printf '1.85.0\n' ;;
   realpath*) /usr/bin/realpath "$@" ;;
   git\ ls-files*) printf 'README.md\000' ;;
+  bash\ scripts/run-checks.sh*)
+    if [ "${GATE_TEST_REAL_POLICY:-}" = 1 ]; then exec /bin/bash "$@"; fi ;;
+  python3\ scripts/test-repository-policy.py*)
+    if [ "${GATE_TEST_REAL_POLICY:-}" = 1 ]; then exec /usr/bin/python3 -B "$@"; fi ;;
 esac
 if [ -n "${GATE_TEST_FAILURE:-}" ]; then
   case "$line" in *"$GATE_TEST_FAILURE"*) exit 17 ;; esac
@@ -108,6 +112,74 @@ class GateTests(unittest.TestCase):
         result = self.run_script("format-lint.sh", "--check", GATE_TEST_FAILURE="actionlint")
         self.assertEqual(result.returncode, 17)
         self.assertNotIn("cargo ci-clippy", self.commands())
+
+    def prepare_real_policy_with_synthetic_fixtures(self) -> Path:
+        # Only the pure policy runner is real; Cargo/build/runtime/tool commands remain fake.
+        paths = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "release-plz.toml", "CHANGELOG.md",
+                 ".codex/config.toml", "scripts/validation-policy.json", ".github/workflows/ci.yml",
+                 ".github/workflows/release.yml", "scripts/renovate-tool.json", "LICENSE",
+                 "scripts/test-repository-policy.py"]
+        paths.extend(f".codex/agents/{role}.toml" for role in
+                     ("implementation-worker", "specification-researcher", "reviewer", "verifier"))
+        for name in paths:
+            destination = self.root / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / name, destination)
+        fixtures = self.root / "scripts" / "fixtures"
+        fixtures.mkdir()
+        (fixtures / "test_materialize.py").write_text(
+            "import unittest\n"
+            "class OfficialReceiptTests(unittest.TestCase):\n"
+            "    def test_official_source_receipt_is_portable_complete_and_has_no_native_success(self):\n"
+            "        self.assertEqual(1, 1)\n")
+        (fixtures / "test_admission.py").write_text(
+            "import unittest\n"
+            "class AdmissionExpectationTests(unittest.TestCase):\n"
+            "    def test_official_plan_remains_pending_with_independent_closure_counts(self):\n"
+            "        self.assertEqual(1, 1)\n")
+        return fixtures
+
+    def test_official_fixture_assertion_failure_stops_the_complete_gate(self) -> None:
+        fixtures = self.prepare_real_policy_with_synthetic_fixtures()
+        result = self.run_script("check-all.sh", "--check", GATE_TEST_REAL_POLICY="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("python3 scripts/test-repository-policy.py", self.commands())
+        self.assertIn("python3 scripts/test-check-all.py", self.commands())
+        admission = fixtures / "test_admission.py"
+        admission.write_text(admission.read_text().replace("self.assertEqual(1, 1)",
+                                                         "self.fail('fixture-gate-assertion-witness')"))
+        result = self.run_script("check-all.sh", "--check", GATE_TEST_REAL_POLICY="1")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("fixture-gate-assertion-witness", result.stderr)
+        self.assertIn("complete validation failed in documentation", result.stderr)
+        self.assertNotIn("python3 scripts/test-check-all.py", self.commands())
+        self.assertNotIn("node scripts/test-renovate.mjs", self.commands())
+
+    def test_missing_either_official_fixture_module_cannot_pass_the_complete_gate(self) -> None:
+        fixtures = self.prepare_real_policy_with_synthetic_fixtures()
+        for name in ("test_materialize.py", "test_admission.py"):
+            path = fixtures / name
+            original = path.read_text()
+            path.unlink()
+            with self.subTest(module=name):
+                result = self.run_script("check-all.sh", "--check", GATE_TEST_REAL_POLICY="1")
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn("required official fixture test module missing", result.stderr)
+                self.assertIn("complete validation failed in documentation", result.stderr)
+                self.assertNotIn("python3 scripts/test-check-all.py", self.commands())
+            path.write_text(original)
+
+    def test_nonempty_unrelated_fixture_suite_cannot_replace_expected_test_ids(self) -> None:
+        fixtures = self.prepare_real_policy_with_synthetic_fixtures()
+        (fixtures / "test_materialize.py").write_text(
+            "import unittest\n"
+            "class UnrelatedTests(unittest.TestCase):\n"
+            "    def test_unrelated_success(self):\n"
+            "        pass\n")
+        result = self.run_script("check-all.sh", "--check", GATE_TEST_REAL_POLICY="1")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("required official fixture test identities missing", result.stderr)
+        self.assertNotIn("python3 scripts/test-check-all.py", self.commands())
 
     def test_shared_phase_failure_propagates(self) -> None:
         for phase, failure, later in (("rust", "cargo ci-check", "cargo ci-clippy"),

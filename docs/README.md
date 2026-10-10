@@ -16,3 +16,8 @@ conformance remain pending.
 
 The access contract records typed resource/field boundaries and source-only admission witnesses.
 Its local code ledger does not substitute for the pending native conformance gate.
+
+The [official fixture corpus](fixtures/official-corpus.md) records immutable official-project
+source metadata, private offline preparation and renderer admission expectations. Its required
+preparation/admission tests run through the repository policy suite; official corpus native,
+renderer, API and runtime acceptance remains pending.

@@ -1,0 +1,145 @@
+{
+  "policy": "Named public markers only; protected fields remain private in ordinary native diagnostics and output. No production credentials. These values have not been rendered or admitted.",
+  "projects": {
+    "forgejo": {
+      "asset_id": "forgejo:archives/chart-17.2.0.tgz",
+      "namespace": "fixture-forgejo",
+      "pending": [
+        "Verify all conditional random/lookup paths under exact admitted renderer",
+        "Verify SQLite requires no bundled database/cache resources",
+        "Check SSH and HTTP service selectors and target ports independently"
+      ],
+      "values": {
+        "gitea": {
+          "admin": {
+            "email": "fixture-admin@forgejo.fixture.invalid",
+            "password": "PUBLIC-FIXTURE-FORGEJO-ADMIN-PASSWORD",
+            "username": "fixture-admin"
+          },
+          "config": {
+            "database": {
+              "DB_TYPE": "sqlite3"
+            }
+          },
+          "metrics": {
+            "enabled": false,
+            "serviceMonitor": {
+              "enabled": false
+            }
+          }
+        },
+        "httpRoute": {
+          "enabled": false
+        },
+        "persistence": {
+          "accessModes": ["ReadWriteOnce"],
+          "claimName": "fixture-forgejo-data",
+          "create": true,
+          "enabled": true,
+          "size": "1Gi"
+        },
+        "replicaCount": 1,
+        "route": {
+          "enabled": false
+        },
+        "serviceAccount": {
+          "create": true,
+          "name": "fixture-forgejo"
+        },
+        "tcpRoute": {
+          "enabled": false
+        }
+      }
+    },
+    "grafana-operator": {
+      "chart_render_plan": {
+        "asset_id": "grafana-operator:archives/chart-5.25.0.tgz",
+        "host_users_policy": "See expected.json renderer_admission; supplied value and source version condition never admit hostUsers.",
+        "namespace": "fixture-grafana-operator",
+        "release": "fixture-grafana-operator",
+        "status": "public-value-plan-unrendered-unadmitted",
+        "target_patch": "1.37.0",
+        "values": {
+          "crds": {
+            "immutable": true
+          },
+          "dashboard": {
+            "enabled": false
+          },
+          "extraObjects": [],
+          "fullnameOverride": "fixture-grafana-operator",
+          "hostUsers": true,
+          "image": {
+            "tag": "v5.25.0"
+          },
+          "namespaceScope": false,
+          "rbac": {
+            "create": true,
+            "useClusterRole": true
+          },
+          "serviceAccount": {
+            "create": true,
+            "name": "fixture-grafana-operator"
+          },
+          "serviceMonitor": {
+            "enabled": false
+          }
+        }
+      },
+      "credential_sample_asset_id": "grafana-operator:source/examples/grafana/credential_secret/resources.yaml",
+      "default_input_namespace": "grafana",
+      "override_policy": "Retain official public sample bytes; explicit input namespace aligns the unnamespaced Grafana with the namespaced Secret."
+    },
+    "immich": {
+      "asset_id": "immich:source/local/values.yaml",
+      "namespace": "fixture-immich",
+      "override_policy": "Use unchanged official public local values only after admission; existingClaim immich-library-pvc and immich-database-app key references are evidence, not proof operator-created dependencies exist.",
+      "pending": [
+        "Backend/storage prerequisites and missing operator-owned Secret findings",
+        "Static CR acceptance does not prove OCI extension images or feature-gate runtime requirements"
+      ]
+    },
+    "nextcloud-aio": {
+      "asset_id": "nextcloud-aio:archives/nextcloud-aio-helm-chart-14.2.0.tgz",
+      "namespace": "fixture-nextcloud",
+      "pending": [
+        "Review every protected optional field as well as TODO values",
+        "Render all selected optional flags explicitly",
+        "Review upstream generated templates and embedded third-party NetworkPolicy attribution",
+        "UI/backup/TLS behavior and runtime prerequisites are not source/render conformance"
+      ],
+      "values": {
+        "CLAMAV_ENABLED": "no",
+        "COLLABORA_ENABLED": "no",
+        "DATABASE_PASSWORD": "PUBLIC-FIXTURE-DATABASE-PASSWORD",
+        "EUROOFFICE_ENABLED": "no",
+        "EUROOFFICE_SECRET": "PUBLIC-FIXTURE-EUROOFFICE-SECRET",
+        "FULLTEXTSEARCH_ENABLED": "no",
+        "FULLTEXTSEARCH_PASSWORD": "PUBLIC-FIXTURE-FULLTEXTSEARCH-PASSWORD",
+        "HARP_ENABLED": "no",
+        "HP_SHARED_KEY": "PUBLIC-FIXTURE-HP-SHARED-KEY",
+        "IMAGINARY_ENABLED": "no",
+        "IMAGINARY_SECRET": "PUBLIC-FIXTURE-IMAGINARY-SECRET",
+        "NAMESPACE": "fixture-nextcloud",
+        "NAMESPACE_DISABLED": "no",
+        "NC_DOMAIN": "nextcloud.fixture.invalid",
+        "NETWORK_POLICY_ENABLED": "no",
+        "NEXTCLOUD_PASSWORD": "PUBLIC-FIXTURE-NEXTCLOUD-PASSWORD",
+        "ONLYOFFICE_ENABLED": "no",
+        "ONLYOFFICE_SECRET": "PUBLIC-FIXTURE-ONLYOFFICE-SECRET",
+        "RECORDING_SECRET": "PUBLIC-FIXTURE-RECORDING-SECRET",
+        "REDIS_PASSWORD": "PUBLIC-FIXTURE-REDIS-PASSWORD",
+        "SIGNALING_SECRET": "PUBLIC-FIXTURE-SIGNALING-SECRET",
+        "TALK_ENABLED": "no",
+        "TALK_INTERNAL_SECRET": "PUBLIC-FIXTURE-TALK-INTERNAL-SECRET",
+        "TALK_RECORDING_ENABLED": "no",
+        "TIMEZONE": "UTC",
+        "TURN_SECRET": "PUBLIC-FIXTURE-TURN-SECRET",
+        "WHITEBOARD_ENABLED": "no",
+        "WHITEBOARD_SECRET": "PUBLIC-FIXTURE-WHITEBOARD-SECRET"
+      }
+    }
+  },
+  "schema_version": 1,
+  "status": "public-value-plan-renderer-admission-pending"
+}
