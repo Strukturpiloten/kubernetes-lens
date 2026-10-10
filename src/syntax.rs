@@ -247,10 +247,27 @@ impl SyntaxDocument {
     }
 }
 
+/// Sealed native occurrence candidate, authorized only against immutable document anchors.
+#[derive(Clone)]
+pub(crate) struct NativeOccurrence(Arc<()>);
+impl NativeOccurrence {
+    pub(crate) fn new_in(processing: &crate::processing::NativeOperationBudget, phase: Phase) -> Result<Self, Finding> {
+        processing.work(1, phase)?;
+        // Conservative retained Arc allocation header; this is not an RSS accounting claim.
+        processing.payload(2 * size_of::<usize>(), phase)?;
+        Ok(Self(Arc::new(())))
+    }
+    pub(crate) fn same(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+pub(crate) type NativeOccurrences = BTreeMap<FieldPath, NativeOccurrence>;
+
 /// Retained unknown nested syntax. It is not typed capability or serializable by default.
 #[derive(Clone, Default)]
 pub struct UnknownFields {
     pub(crate) entries: Vec<(String, OpaqueNode)>,
+    pub(crate) occurrence: Option<NativeOccurrence>,
 }
 impl PartialEq for UnknownFields {
     fn eq(&self, other: &Self) -> bool {
@@ -274,8 +291,42 @@ impl UnknownFields {
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+    #[cfg(test)]
     pub(crate) fn capture(node: &TreeNode, known: &[&str]) -> Self {
+        Self::capture_entries(node, known, None)
+    }
+    pub(crate) fn capture_in(
+        node: &TreeNode,
+        known: &[&str],
+        ctx: &crate::registry::FieldDecodeContext,
+    ) -> Result<Self, Finding> {
+        let occurrence = NativeOccurrence::new_in(&ctx.processing, ctx.phase)?;
+        let mut entries = Vec::new();
+        for (key, value) in node.as_mapping().unwrap_or(&[]) {
+            let comparisons = key
+                .len()
+                .checked_add(1)
+                .and_then(|units| units.checked_mul(known.len().saturating_add(1)))
+                .ok_or_else(|| ctx.processing.fail(ctx.phase))?;
+            ctx.processing.work(comparisons, ctx.phase)?;
+            if known.contains(&key.as_str()) {
+                continue;
+            }
+            ctx.processing.payload_array::<(String, OpaqueNode)>(1, ctx.phase)?;
+            ctx.processing.payload(key.len(), ctx.phase)?;
+            ctx.processing.payload(2 * size_of::<usize>(), ctx.phase)?;
+            ctx.processing.tree_copy(value, ctx.phase)?;
+            entries.push((key.clone(), OpaqueNode(Arc::new(value.clone()))));
+        }
+        Ok(Self {
+            occurrence: Some(occurrence),
+            entries,
+        })
+    }
+    #[cfg(test)]
+    fn capture_entries(node: &TreeNode, known: &[&str], occurrence: Option<NativeOccurrence>) -> Self {
         Self {
+            occurrence,
             entries: node
                 .as_mapping()
                 .unwrap_or(&[])

@@ -21925,7 +21925,13 @@
                   "1.37"
                 ]
               },
-              "native_constraints": [],
+              "native_constraints": [
+                {
+                  "rule": "enum",
+                  "values": ["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany"],
+                  "other_values": "preserve_only"
+                }
+              ],
               "schema_required_profile_ids": []
             },
             {
@@ -23226,7 +23232,13 @@
                   "1.37"
                 ]
               },
-              "native_constraints": [],
+              "native_constraints": [
+                {
+                  "rule": "enum",
+                  "values": ["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany"],
+                  "other_values": "preserve_only"
+                }
+              ],
               "schema_required_profile_ids": []
             },
             {
@@ -74960,7 +74972,13 @@
               "1.37"
             ]
           },
-          "native_constraints": [],
+          "native_constraints": [
+            {
+              "rule": "enum",
+              "values": ["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany"],
+              "other_values": "preserve_only"
+            }
+          ],
           "schema_required_profile_ids": []
         },
         "dataSource": {
@@ -103239,7 +103257,13 @@
               "1.37"
             ]
           },
-          "native_constraints": [],
+          "native_constraints": [
+            {
+              "rule": "enum",
+              "values": ["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany"],
+              "other_values": "preserve_only"
+            }
+          ],
           "schema_required_profile_ids": []
         },
         "capacity": {

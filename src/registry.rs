@@ -73,6 +73,9 @@ impl FieldDecodeContext {
 pub(crate) struct EncodeContext<'a> {
     pub(crate) target: Option<&'a TargetProfile>,
     pub(crate) include_unknown: bool,
+    /// Only complete source-free `ResourceSet` authoring snapshots enable this.
+    pub(crate) authoring_snapshot: bool,
+    pub(crate) occurrences: Option<std::rc::Rc<std::cell::RefCell<crate::syntax::NativeOccurrences>>>,
     pub(crate) budget: EncodingBudget,
     pub(crate) limits: ParseLimits,
 }
@@ -82,6 +85,8 @@ impl<'a> EncodeContext<'a> {
         Self {
             target,
             include_unknown: false,
+            authoring_snapshot: false,
+            occurrences: None,
             budget: EncodingBudget::new(AuthoringLimits::default()),
             limits: ParseLimits::default(),
         }
@@ -94,6 +99,8 @@ impl<'a> EncodeContext<'a> {
         Self {
             target,
             include_unknown: false,
+            authoring_snapshot: false,
+            occurrences: None,
             budget: EncodingBudget::in_operation(
                 AuthoringLimits {
                     parser: limits,
@@ -103,6 +110,58 @@ impl<'a> EncodeContext<'a> {
             ),
             limits,
         }
+    }
+    pub(crate) fn observed(&self) -> Result<EncodeContext<'a>, Finding> {
+        self.budget.processing().work(1, self.budget.phase())?;
+        self.budget.processing().payload(
+            2 * size_of::<usize>() + size_of::<std::cell::RefCell<crate::syntax::NativeOccurrences>>(),
+            self.budget.phase(),
+        )?;
+        Ok(EncodeContext {
+            target: self.target,
+            include_unknown: self.include_unknown,
+            authoring_snapshot: self.authoring_snapshot,
+            budget: self.budget.clone(),
+            limits: self.limits,
+            occurrences: Some(std::rc::Rc::new(std::cell::RefCell::new(BTreeMap::new()))),
+        })
+    }
+    pub(crate) fn take_occurrences(&self) -> crate::syntax::NativeOccurrences {
+        self.occurrences
+            .as_ref()
+            .map_or_else(BTreeMap::new, |observer| std::mem::take(&mut *observer.borrow_mut()))
+    }
+    pub(crate) fn observe(
+        &self,
+        path: &crate::FieldPath,
+        occurrence: Option<&crate::syntax::NativeOccurrence>,
+    ) -> Result<(), Finding> {
+        let (Some(observer), Some(occurrence)) = (&self.occurrences, occurrence) else {
+            return Ok(());
+        };
+        let processing = self.budget.processing();
+        let phase = self.budget.phase();
+        processing.work(1, phase)?;
+        let mut table = observer.borrow_mut();
+        // Precharge a conservative bound for every retained key comparison before
+        // the BTreeMap lookup; path components are retained privately, never source IDs.
+        for key in table.keys() {
+            processing.work(1, phase)?;
+            for segment in key.0.iter().chain(&path.0) {
+                processing.work(segment.len().saturating_add(1), phase)?;
+            }
+        }
+        if table.contains_key(path) {
+            return Err(Finding::error(FindingCode::MergeConflict, phase).at_path(path.clone()));
+        }
+        processing.payload_array::<(crate::FieldPath, crate::syntax::NativeOccurrence)>(1, phase)?;
+        processing.payload_array::<String>(path.0.len(), phase)?;
+        for segment in &path.0 {
+            processing.payload(segment.len(), phase)?;
+            processing.work(segment.len(), phase)?;
+        }
+        table.insert(path.clone(), occurrence.clone());
+        Ok(())
     }
     pub(crate) fn fields(&self, phase: Phase) -> FieldDecodeContext {
         FieldDecodeContext::new(self.limits, self.budget.processing().clone(), phase)
@@ -170,6 +229,8 @@ impl<'a> EncodeContext<'a> {
         EncodeContext {
             target: self.target,
             include_unknown: self.include_unknown,
+            authoring_snapshot: self.authoring_snapshot,
+            occurrences: self.occurrences.clone(),
             budget: self.budget.clone(),
             limits,
         }
@@ -322,6 +383,7 @@ pub(crate) mod codec {
         ctx: &EncodeContext<'_>,
         path: &FieldPath,
     ) -> Result<(), Finding> {
+        ctx.observe(path, unknown.occurrence.as_ref())?;
         if !ctx.include_unknown {
             return Ok(());
         }
@@ -493,7 +555,7 @@ pub(crate) mod codec {
                 uid: read_presence(node, "uid", ctx, path)?,
                 resource_version: read_presence(node, "resourceVersion", ctx, path)?,
                 owner_references: read_presence(node, "ownerReferences", ctx, path)?,
-                unknown: UnknownFields::capture(
+                unknown: UnknownFields::capture_in(
                     node,
                     &[
                         "name",
@@ -506,7 +568,8 @@ pub(crate) mod codec {
                         "resourceVersion",
                         "ownerReferences",
                     ],
-                ),
+                    ctx,
+                )?,
             })
         }
         fn encode(&self, ctx: &EncodeContext<'_>, path: &FieldPath) -> Result<TreeNode, Finding> {
@@ -558,10 +621,11 @@ pub(crate) mod codec {
                 uid: read_presence(node, "uid", ctx, path)?,
                 controller: read_presence(node, "controller", ctx, path)?,
                 block_owner_deletion: read_presence(node, "blockOwnerDeletion", ctx, path)?,
-                unknown: UnknownFields::capture(
+                unknown: UnknownFields::capture_in(
                     node,
                     &["apiVersion", "kind", "name", "uid", "controller", "blockOwnerDeletion"],
-                ),
+                    ctx,
+                )?,
             })
         }
         fn encode(&self, ctx: &EncodeContext<'_>, path: &FieldPath) -> Result<TreeNode, Finding> {
@@ -597,7 +661,7 @@ pub(crate) mod codec {
                 key: required(node, "key", ctx, path)?,
                 operator,
                 values: read_presence(node, "values", ctx, path)?,
-                unknown: UnknownFields::capture(node, &["key", "operator", "values"]),
+                unknown: UnknownFields::capture_in(node, &["key", "operator", "values"], ctx)?,
             })
         }
         fn encode(&self, ctx: &EncodeContext<'_>, path: &FieldPath) -> Result<TreeNode, Finding> {
@@ -625,7 +689,7 @@ pub(crate) mod codec {
             Ok(Self {
                 match_labels: read_presence(node, "matchLabels", ctx, path)?,
                 match_expressions: read_presence(node, "matchExpressions", ctx, path)?,
-                unknown: UnknownFields::capture(node, &["matchLabels", "matchExpressions"]),
+                unknown: UnknownFields::capture_in(node, &["matchLabels", "matchExpressions"], ctx)?,
             })
         }
         fn encode(&self, ctx: &EncodeContext<'_>, path: &FieldPath) -> Result<TreeNode, Finding> {
@@ -847,5 +911,49 @@ impl<'a> ProjectionContext<'a> {
                 Phase::Analysis,
             ))
             .into_vec()
+    }
+}
+
+#[cfg(test)]
+mod scoped_occurrence_tests {
+    use super::*;
+    use crate::{
+        processing::{NativeOperationBudget, NativeProcessingLimits},
+        syntax::NativeOccurrence,
+    };
+    #[test]
+    fn observer_is_fresh_per_encode_shared_only_with_scoped_clones_and_rejects_duplicate_paths() -> Result<(), Finding>
+    {
+        let base = EncodeContext::new(None);
+        let token = NativeOccurrence::new_in(base.budget.processing(), Phase::Generation)?;
+        let path = crate::FieldPath::parse("/spec/items/0")?;
+        let scoped = base.observed()?;
+        scoped.observe(&path, Some(&token))?;
+        let cloned = scoped.for_source(ParseLimits::default());
+        let error = cloned
+            .observe(&path, Some(&token))
+            .err()
+            .ok_or_else(|| Finding::error(FindingCode::NativeFieldInvalid, Phase::Generation))?;
+        assert_eq!(error.code, FindingCode::MergeConflict);
+        assert_eq!(scoped.take_occurrences().len(), 1);
+        assert!(cloned.take_occurrences().is_empty());
+        assert!(base.observed()?.take_occurrences().is_empty());
+        Ok(())
+    }
+    #[test]
+    fn occurrence_token_and_observer_allocation_preflight_shared_payload_ceiling() {
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_payload_bytes: 0,
+            ..NativeProcessingLimits::default()
+        });
+        assert!(NativeOccurrence::new_in(&processing, Phase::Decoding).is_err());
+        assert!(processing.exhausted());
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_payload_bytes: 0,
+            ..NativeProcessingLimits::default()
+        });
+        let ctx = EncodeContext::in_operation(None, ParseLimits::default(), processing.clone());
+        assert!(ctx.observed().is_err());
+        assert!(processing.exhausted());
     }
 }

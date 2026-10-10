@@ -1,5 +1,54 @@
 //! Genuine sealed unit codecs exercise core contracts independently of delivered cohorts.
 use super::*;
+
+#[test]
+fn current_role_evidence_binds_each_exact_effective_source() -> TestResult {
+    let evidence: serde_json::Value = serde_json::from_slice(include_bytes!("root-status-role-evidence.json"))?;
+    let bindings = evidence["current_evaluation_source_sha256"].as_object().required()?;
+    let sources: [(&str, &[u8]); 12] = [
+        ("src/capability.rs", include_bytes!("../../src/capability.rs")),
+        ("src/generation.rs", include_bytes!("../../src/generation.rs")),
+        ("src/model.rs", include_bytes!("../../src/model.rs")),
+        ("src/registry.rs", include_bytes!("../../src/registry.rs")),
+        ("src/syntax.rs", include_bytes!("../../src/syntax.rs")),
+        (
+            "src/resources/common.rs",
+            include_bytes!("../../src/resources/common.rs"),
+        ),
+        (
+            "src/resources/common/native_helpers.rs",
+            include_bytes!("../../src/resources/common/native_helpers.rs"),
+        ),
+        (
+            "src/resources/workloads/roots.rs",
+            include_bytes!("../../src/resources/workloads/roots.rs"),
+        ),
+        (
+            "src/resources/workloads/validation.rs",
+            include_bytes!("../../src/resources/workloads/validation.rs"),
+        ),
+        ("src/value.rs", include_bytes!("../../src/value.rs")),
+        (
+            "src/value/access_modes.rs",
+            include_bytes!("../../src/value/access_modes.rs"),
+        ),
+        ("src/source.rs", include_bytes!("../../src/source.rs")),
+    ];
+    assert_eq!(bindings.len(), sources.len());
+    for (name, bytes) in sources {
+        let mut actual = String::new();
+        for byte in ledger_digest(bytes) {
+            use std::fmt::Write as _;
+            write!(&mut actual, "{byte:02x}")?;
+        }
+        assert_eq!(
+            bindings[name].as_str().required()?,
+            actual,
+            "stale current source binding: {name}"
+        );
+    }
+    Ok(())
+}
 use crate::{
     capability::{FieldAdmission, FieldCapability, KindCapability, KubernetesVersion, MergeStrategy, TargetProfile},
     model::{GroupVersionKind, ResourceScope, ResourceSet},
@@ -895,7 +944,10 @@ fn root_status_expectations_bind_the_immutable_report_ledger_and_authenticated_w
         "539a6f61f1b6116373f743efc3ac1322020680d1e919f9852bd8a085d5102a44"
     );
     for (key, bytes) in [
-        ("ledger_sha256", crate::capability::capability_ledger_bytes()),
+        (
+            "current_evaluation_ledger_sha256",
+            crate::capability::capability_ledger_bytes(),
+        ),
         (
             "witness_sha256",
             include_bytes!("../../schemas/capabilities/kubernetes-schema-witnesses.json").as_slice(),
@@ -909,5 +961,24 @@ fn root_status_expectations_bind_the_immutable_report_ledger_and_authenticated_w
         }
         assert_eq!(actual, expected);
     }
+    // Independently frozen source facts/role schema projections remain unchanged;
+    // current enum evaluation must never rewrite historic observation provenance.
+    let ledger: serde_json::Value = serde_json::from_slice(crate::capability::capability_ledger_bytes())?;
+    let projection = serde_json::json!({
+        "schema_profiles": ledger["schema_profiles"],
+        "schema_definition_inventory": ledger["schema_definition_inventory"],
+        "restriction_audit": ledger["restriction_audit"],
+    });
+    let bytes = serde_json::to_vec(&projection)?;
+    let mut actual = String::new();
+    for byte in ledger_digest(&bytes) {
+        use std::fmt::Write as _;
+        write!(&mut actual, "{byte:02x}")?;
+    }
+    assert_eq!(
+        actual,
+        "c21b5bca4a0765fb22363638cfb165fe86650ea1c264ef0595ee06ea7a249819"
+    );
+    assert_eq!(evidence["unchanged_source_schema_projection_sha256"], actual);
     Ok(())
 }

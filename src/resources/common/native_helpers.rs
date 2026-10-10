@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{
     model::Metadata,
-    value::{IntOrString, LabelSelector, Protected, Quantity},
+    value::{AccessModes, IntOrString, LabelSelector, Protected, Quantity},
 };
 use std::collections::BTreeMap;
 
@@ -528,7 +528,7 @@ super::native_object! {
 super::native_object! {
     /// Selected native `ClaimTemplateStatus` members; unadmitted descendants remain private.
     pub struct ClaimTemplateStatus {
-    "accessModes" => access_modes: Vec<String>,
+    "accessModes" => access_modes: AccessModes,
     "capacity" => capacity: BTreeMap<String, Quantity>,
     "conditions" => conditions: Vec<ClaimTemplateCondition>,
     "phase" => phase: String,

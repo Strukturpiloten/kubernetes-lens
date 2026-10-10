@@ -53,7 +53,30 @@ impl<T: RootProfile> RootHooks for T {
         match self.encode(&ctx.encoding(), &FieldPath::default()) {
             Ok(tree) => {
                 let mut opaque = BTreeSet::new();
-                self.unknown_scopes(&FieldPath::default(), &mut opaque);
+                let mut retain = |path| {
+                    if out.exhausted()
+                        || ctx
+                            .fields
+                            .processing
+                            .payload_array::<FieldPath>(1, Phase::Validation)
+                            .is_err()
+                        || ctx
+                            .fields
+                            .processing
+                            .payload(4 * size_of::<usize>(), Phase::Validation)
+                            .is_err()
+                    {
+                        return false;
+                    }
+                    opaque.insert(path);
+                    true
+                };
+                if !self.visit_unknown_scopes(
+                    &FieldPath::default(),
+                    &mut crate::resources::common::UnknownScopeVisitor::new(&ctx.fields, &mut retain),
+                ) {
+                    return;
+                }
                 match native_bindings::<T>() {
                     Ok(bindings) => validate(&tree, T::KIND, T::API, ctx, &opaque, &bindings, out),
                     Err(finding) => out.push(finding),
@@ -702,15 +725,11 @@ fn validate_bound_node(
             }
         }
         if last == "accessModes" {
-            let mut seen = BTreeSet::new();
             for (i, item) in list.iter().enumerate() {
                 if out.exhausted() {
                     return;
                 }
-                if item.as_str().is_none_or(|s| {
-                    !["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany", "ReadWriteOncePod"].contains(&s)
-                        || !seen.insert(s)
-                }) {
+                if item.as_str().is_none() {
                     invalid(&path.child(i.to_string()), out);
                 }
             }

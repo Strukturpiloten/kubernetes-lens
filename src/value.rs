@@ -2,10 +2,12 @@
 use crate::diagnostic::{Finding, FindingCode, Phase};
 use crate::source::ExplicitSourceAccess;
 use std::{collections::BTreeMap, fmt};
+mod access_modes;
 mod exact_json_number;
 mod native_bytes;
 mod native_quantity;
 pub(crate) mod protected_json;
+pub use access_modes::{AccessModeCompleteness, AccessModes, EstablishedVolumeAccessMode};
 pub use exact_json_number::ExactJsonNumber;
 pub use native_bytes::NativeBytes;
 pub use native_quantity::{NativeQuantityDomain, SuppliedQuantityOrder};

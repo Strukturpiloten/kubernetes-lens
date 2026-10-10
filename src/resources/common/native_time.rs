@@ -112,5 +112,6 @@ fn valid_time(value: &str) -> bool {
 }
 
 impl super::UnknownScopes for NativeTime {
+    #[cfg(test)]
     fn unknown_scopes(&self, _: &FieldPath, _: &mut std::collections::BTreeSet<FieldPath>) {}
 }

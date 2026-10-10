@@ -42,3 +42,10 @@ reparsing. These intentional unpublished integration changes do not establish na
 opaque `JsonNodeId` and `ProtectedJsonValue`. Their exact mathematical/structured comparisons and
 bounded private-value factories remain separate from server precision and schema evaluation.
 Private snapshot failures now omit traversal paths while retaining their code and phase.
+
+[ADR 0007](decisions/0007-finite-volume-access-modes.md) intentionally changes
+PersistentVolumeClaimSpec.access_modes and ClaimTemplateStatus.access_modes from
+Presence<Vec<String>> to Presence<AccessModes>. Construct selected modes with the finite
+EstablishedVolumeAccessMode enum. Decoded selected() inspection returns completeness and
+original indexes together; unsupported strings require ExplicitSourceAccess. Copied partial
+holders cannot authorize source-free authoring or destination preservation.

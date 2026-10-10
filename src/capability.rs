@@ -2374,6 +2374,17 @@ fn source_field(
                 .is_some_and(|ids| ids.iter().any(|id| id.as_str() == Some(session.profile.as_str())))
         })
     });
+    let form = selected.or_else(|| forms.and_then(|forms| forms.first()));
+    source_enum(
+        node,
+        fact,
+        form.and_then(|form| form.get("schema_shape")),
+        path,
+        session,
+    );
+    if !session.tick() {
+        return;
+    }
     if selected.is_none() {
         session.finding(FindingCode::UnavailableField, path);
     }
@@ -2413,12 +2424,99 @@ fn source_field(
             }
         }
     }
-    let form = selected.or_else(|| forms.and_then(|forms| forms.first()));
     if let Some(shape) = form.and_then(|form| form.get("schema_shape")) {
         source_shape(node, shape, path, session, depth + 1);
     }
     // Root pointers are not prefix admission; only finite helper member facts are traversed.
 }
+/// Finite selection is separate from native shape validity and gate/version availability.
+fn source_enum(
+    node: &crate::syntax::TreeNode,
+    fact: &serde_json::Value,
+    shape: Option<&serde_json::Value>,
+    path: &crate::diagnostic::FieldPath,
+    session: &mut SourceFieldSession<'_>,
+) {
+    let Some(constraints) = fact["native_constraints"].as_array() else {
+        return;
+    };
+    let mut has_enum = false;
+    for constraint in constraints {
+        if !session.tick() {
+            return;
+        }
+        has_enum |= constraint["rule"].as_str() == Some("enum");
+    }
+    if !has_enum || matches!(node.value, crate::syntax::TreeValue::Null) {
+        return;
+    }
+    let declared_type = shape.and_then(|shape| shape["type"].as_str());
+    if declared_type == Some("array") && node.as_sequence().is_none()
+        || declared_type == Some("string") && node.as_str().is_none()
+    {
+        session.finding(FindingCode::NativeFieldInvalid, path);
+        return;
+    }
+    if let Some(items) = node.as_sequence() {
+        for (index, item) in items.iter().enumerate() {
+            if !session.tick() {
+                return;
+            }
+            if item.as_str().is_none() {
+                session.finding(FindingCode::NativeFieldInvalid, &path.child(index.to_string()));
+            } else if enum_unselected(item, constraints, session) {
+                session.finding(FindingCode::UnadmittedField, &path.child(index.to_string()));
+            }
+        }
+    } else if enum_unselected(node, constraints, session) {
+        session.finding(FindingCode::UnadmittedField, path);
+    }
+}
+fn enum_unselected(
+    node: &crate::syntax::TreeNode,
+    constraints: &[serde_json::Value],
+    session: &mut SourceFieldSession<'_>,
+) -> bool {
+    let Some(value) = node.as_str() else {
+        return false;
+    };
+    for constraint in constraints {
+        if !session.tick() {
+            return false;
+        }
+        if constraint["rule"].as_str() != Some("enum") {
+            continue;
+        }
+        let Some(values) = constraint["values"].as_array() else {
+            continue;
+        };
+        let mut selected = false;
+        for candidate in values {
+            if !session.tick() {
+                return false;
+            }
+            let Some(candidate) = candidate.as_str() else {
+                continue;
+            };
+            if let Err(finding) = session
+                .processing
+                .work(value.len().saturating_add(candidate.len()), session.phase)
+            {
+                session.out.push(finding);
+                return false;
+            }
+            if candidate == value {
+                selected = true;
+                break;
+            }
+        }
+        if !selected {
+            return true;
+        }
+    }
+    false
+}
+
 fn source_shape(
     node: &crate::syntax::TreeNode,
     shape: &serde_json::Value,
@@ -2481,4 +2579,91 @@ pub(crate) fn builtin_scope(gvk: &GroupVersionKind) -> Option<ResourceScope> {
             group == gvk.group.as_deref() && entry.kind.as_str() == gvk.kind
         })
         .map(|entry| entry.scope)
+}
+
+#[cfg(test)]
+mod finite_enum_tests {
+    use super::*;
+    use crate::{
+        diagnostic::FieldPath,
+        processing::{NativeOperationBudget, NativeProcessingLimits, ProcessingReport},
+        syntax::{TreeNode, TreeValue},
+    };
+    fn findings(node: &TreeNode, limits: NativeProcessingLimits) -> Result<Vec<Finding>, Finding> {
+        let target = TargetProfile::documented_defaults(KubernetesVersion::new(1, 37)?);
+        let ledger = serde_json::json!({});
+        // Repeated records must never manufacture duplicate rejection findings.
+        let fact = serde_json::json!({"native_constraints":[
+            {"rule":"enum","values":["ReadWriteOnce","ReadOnlyMany","ReadWriteMany"],"other_values":"preserve_only"},
+            {"rule":"enum","values":["ReadWriteOnce","ReadOnlyMany","ReadWriteMany"],"other_values":"preserve_only"}
+        ]});
+        let processing = NativeOperationBudget::new(limits);
+        let mut out = ProcessingReport::new(processing.clone(), Phase::Validation);
+        source_enum(
+            node,
+            &fact,
+            None,
+            &FieldPath::parse("/modes")?,
+            &mut SourceFieldSession {
+                ledger: &ledger,
+                target: &target,
+                processing: &processing,
+                phase: Phase::Validation,
+                out: &mut out,
+                profile: "k8s-1.37-0".into(),
+            },
+        );
+        Ok(out.into_vec())
+    }
+    #[test]
+    fn enums_keep_scalar_array_and_malformed_shape_evidence_distinct() -> Result<(), Finding> {
+        let scalar = findings(&TreeNode::string("private"), NativeProcessingLimits::default())?;
+        assert_eq!(scalar.len(), 1);
+        assert_eq!(scalar[0].code, FindingCode::UnadmittedField);
+        assert_eq!(scalar[0].path, Some(FieldPath::parse("/modes")?));
+        let array = findings(
+            &TreeNode::new(TreeValue::Sequence(vec![
+                TreeNode::string("ReadWriteMany"),
+                TreeNode::string("private"),
+                TreeNode::string("ReadWriteOncePod"),
+            ])),
+            NativeProcessingLimits::default(),
+        )?;
+        assert_eq!(array.len(), 2);
+        assert_eq!(array[0].path, Some(FieldPath::parse("/modes/1")?));
+        assert_eq!(array[1].path, Some(FieldPath::parse("/modes/2")?));
+        assert!(findings(&TreeNode::new(TreeValue::Null), NativeProcessingLimits::default())?.is_empty());
+        Ok(())
+    }
+    #[test]
+    fn enum_work_and_report_exhaustion_is_sticky_and_never_admits() -> Result<(), Finding> {
+        let node = TreeNode::new(TreeValue::Sequence(vec![
+            TreeNode::string("private"),
+            TreeNode::string("private"),
+        ]));
+        for units in [0, 1] {
+            let report = findings(
+                &node,
+                NativeProcessingLimits {
+                    max_processing_units: units,
+                    ..NativeProcessingLimits::default()
+                },
+            )?;
+            assert_eq!(report.len(), 1);
+            assert_eq!(report[0].code, FindingCode::LimitExceeded);
+            assert!(report[0].path.is_none());
+        }
+        for entries in [0, 1] {
+            let report = findings(
+                &node,
+                NativeProcessingLimits {
+                    max_report_entries: entries,
+                    ..NativeProcessingLimits::default()
+                },
+            )?;
+            assert_eq!(report.len(), entries + 1);
+            assert_eq!(report.last().map(|f| f.code), Some(FindingCode::LimitExceeded));
+        }
+        Ok(())
+    }
 }

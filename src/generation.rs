@@ -546,6 +546,7 @@ pub fn generate(
         if options.intent == OutputIntent::AuthoredIntent {
             strip_observation_paths(&mut tree, Some(doc.id), &projection.observations, &mut findings);
         }
+        preserve_access_mode_findings(doc, &tree, &projection.occurrences, options, &processing, &mut findings);
         if options.opaque_fields == OpaqueFieldPolicy::Block
             && (doc.resource.is_none() || has_unknown_fields(&tree, doc.capability.as_ref().map_or(&[], |c| c.fields)))
         {
@@ -602,6 +603,224 @@ pub fn generate(
         findings: findings.into_vec(),
     })
 }
+/// Preservation changes the outcome severity, never finite admission or retained source evidence.
+fn preserve_access_mode_findings(
+    document: &crate::model::ResourceDocument,
+    tree: &TreeNode,
+    occurrences: &crate::syntax::NativeOccurrences,
+    options: &GenerationOptions,
+    processing: &NativeOperationBudget,
+    findings: &mut ProcessingReport,
+) {
+    if options.opaque_fields != OpaqueFieldPolicy::PreserveWithFinding
+        || options.protected_output != ProtectedOutput::Include
+    {
+        return;
+    }
+    for finding in findings.entries_mut() {
+        if processing.work(1, Phase::Generation).is_err() {
+            return;
+        }
+        if finding.code != FindingCode::UnadmittedField || finding.resource != Some(document.id) {
+            continue;
+        }
+        let Some(path) = &finding.path else {
+            continue;
+        };
+        let Some((_, parents)) = path.0.split_last() else {
+            continue;
+        };
+        if parents.last().is_none_or(|segment| segment != "accessModes") {
+            continue;
+        }
+        if processing
+            .payload_array::<String>(parents.len(), Phase::Generation)
+            .is_err()
+            || parents
+                .iter()
+                .any(|segment| processing.payload(segment.len(), Phase::Generation).is_err())
+        {
+            return;
+        }
+        let collection = FieldPath(parents.to_vec());
+        let Some(value) = tree.get_path(path).and_then(TreeNode::as_str) else {
+            continue;
+        };
+        if crate::value::EstablishedVolumeAccessMode::selected(value).is_some() {
+            continue;
+        }
+        match supplied_access_mode_occurrence(document, tree, occurrences, &collection, processing) {
+            Ok(true) => finding.severity = Severity::Warning,
+            Ok(false) => {}
+            Err(_) => return,
+        }
+    }
+}
+fn supplied_access_mode_occurrence(
+    document: &crate::model::ResourceDocument,
+    tree: &TreeNode,
+    occurrences: &crate::syntax::NativeOccurrences,
+    path: &FieldPath,
+    processing: &NativeOperationBudget,
+) -> Result<bool, Finding> {
+    processing.work(1, Phase::Generation)?;
+    if !matches!(document.evidence.origin, crate::source::EvidenceOrigin::Supplied(_)) {
+        return Ok(false);
+    }
+    for edit in &document.edits {
+        processing.work(1, Phase::Generation)?;
+        let edited = match edit {
+            FieldEdit::Set { path, .. } | FieldEdit::Remove { path } => path,
+        };
+        if path.0.starts_with(&edited.0) || edited.0.starts_with(&path.0) {
+            return Ok(false);
+        }
+    }
+    let (Some(before), Some(after)) = (document.original.get_path(path), tree.get_path(path)) else {
+        return Ok(false);
+    };
+    if before.as_sequence().is_none() || after.as_sequence().is_none() {
+        return Ok(false);
+    }
+    let context = BudgetedMergeContext {
+        native: MergeContext {
+            gvk: Some(&document.original_identity.gvk),
+            target: None,
+        },
+        processing,
+        phase: Phase::Generation,
+    };
+    if !merge_semantic_eq(before, after, context)? {
+        return Ok(false);
+    }
+    // Mutable holders contribute only candidates. Immutable per-document/path
+    // anchors plus the actual original/effective complete sequence authorize them.
+    let mut native_bound = false;
+    for original_path in document.original_occurrences.keys() {
+        processing.work(1, Phase::Generation)?;
+        for segment in original_path.0.iter().chain(&path.0) {
+            processing.work(segment.len().saturating_add(1), Phase::Generation)?;
+        }
+        if original_path == path {
+            native_bound = true;
+            break;
+        }
+    }
+    if native_bound {
+        if !sealed_occurrence_matches(&document.original_occurrences, occurrences, path, processing)? {
+            return Ok(false);
+        }
+        for ancestor in document.original_occurrences.keys() {
+            processing.work(1, Phase::Generation)?;
+            for segment in ancestor.0.iter().chain(&path.0) {
+                processing.work(segment.len().saturating_add(1), Phase::Generation)?;
+            }
+            if ancestor != path
+                && path.0.starts_with(&ancestor.0)
+                && !sealed_occurrence_matches(&document.original_occurrences, occurrences, ancestor, processing)?
+            {
+                return Ok(false);
+            }
+        }
+    }
+    supplied_access_mode_path_occurrence(&document.original, tree, path, native_bound, context)
+}
+
+fn supplied_access_mode_path_occurrence(
+    original: &TreeNode,
+    tree: &TreeNode,
+    path: &FieldPath,
+    native_bound: bool,
+    context: BudgetedMergeContext<'_>,
+) -> Result<bool, Finding> {
+    // Bind nested occurrences from immutable source/destination trees. No mutable
+    // native holder name, cached origin, or blanket ancestor-value equality is authority.
+    let processing = context.processing;
+    let mut before = original;
+    let mut after = tree;
+    for segment in &path.0 {
+        processing.work(1, Phase::Generation)?;
+        if let Some(original_items) = before.as_sequence() {
+            let Some(effective_items) = after.as_sequence() else {
+                return Ok(false);
+            };
+            processing.work(segment.len(), Phase::Generation)?;
+            let Ok(index) = segment.parse::<usize>() else {
+                return Ok(false);
+            };
+            let (Some(original), Some(effective)) = (original_items.get(index), effective_items.get(index)) else {
+                return Ok(false);
+            };
+            let Some(position) = original.start else {
+                return Ok(false);
+            };
+            if !native_bound && effective.start != Some(position) {
+                return Ok(false);
+            }
+            for items in [Some(original_items), (!native_bound).then_some(effective_items)]
+                .into_iter()
+                .flatten()
+            {
+                let mut matches = 0;
+                for item in items {
+                    processing.work(1, Phase::Generation)?;
+                    if item.start == Some(position) {
+                        matches += 1;
+                    }
+                }
+                if matches != 1 {
+                    return Ok(false);
+                }
+            }
+            before = original;
+            after = effective;
+        } else {
+            let (Some(original), Some(effective)) = (context.get(before, segment)?, context.get(after, segment)?)
+            else {
+                return Ok(false);
+            };
+            before = original;
+            after = effective;
+        }
+    }
+    Ok(true)
+}
+
+fn sealed_occurrence_matches(
+    originals: &crate::syntax::NativeOccurrences,
+    candidates: &crate::syntax::NativeOccurrences,
+    path: &FieldPath,
+    processing: &NativeOperationBudget,
+) -> Result<bool, Finding> {
+    for table in [originals, candidates] {
+        for key in table.keys() {
+            processing.work(1, Phase::Generation)?;
+            for segment in key.0.iter().chain(&path.0) {
+                processing.work(segment.len().saturating_add(1), Phase::Generation)?;
+            }
+        }
+    }
+    let (Some(original), Some(candidate)) = (originals.get(path), candidates.get(path)) else {
+        return Ok(false);
+    };
+    if !original.same(candidate) {
+        return Ok(false);
+    }
+    for table in [originals, candidates] {
+        let mut matches = 0;
+        for token in table.values() {
+            processing.work(1, Phase::Generation)?;
+            if original.same(token) {
+                matches += 1;
+            }
+        }
+        if matches != 1 {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 fn output_roots(
     resources: &ResourceSet,
     collections: CollectionOutput,
@@ -1928,5 +2147,64 @@ mod merge_processing_tests {
         // belongs to the merge, so this probe cannot fail while encoding that value.
         assert!(known.get("retainedOpaque").is_none());
         (0..copies).all(|_| processing.tree_copy(&document.original, Phase::Generation).is_ok())
+    }
+}
+
+#[cfg(test)]
+mod access_mode_occurrence_tests {
+    use super::*;
+    use crate::source::{DocumentFormat, InputOrigin, ParseLimits, SourceId, SourceInput};
+    #[test]
+    fn ambiguous_or_positionless_ancestor_occurrences_cannot_authorize_preservation() -> Result<(), String> {
+        // A synthetic preservation-only root isolates occurrence proof from duplicate
+        // native names and other owning-resource validation rules.
+        let bytes = br#"{"apiVersion":"v1","kind":"PersistentVolume","metadata":{"name":"sample"},"spec":{"templates":[{"accessModes":["private"]},{"accessModes":["private"]}]}}"#;
+        let resources = crate::parse_source(
+            SourceInput {
+                id: SourceId(12),
+                format: DocumentFormat::Json,
+                origin: InputOrigin::CallerSupplied,
+                source_version: None,
+                bytes,
+            },
+            &ParseLimits::default(),
+        )
+        .map_err(|_| "parse occurrence fixture")?
+        .flatten_resources()
+        .map_err(|_| "flatten occurrence fixture")?;
+        let document = resources.documents().first().ok_or("missing occurrence root")?;
+        let path = FieldPath::parse("/spec/templates/0/accessModes").map_err(|_| "path")?;
+        let proof = |tree: &TreeNode| {
+            supplied_access_mode_occurrence(
+                document,
+                tree,
+                &crate::syntax::NativeOccurrences::new(),
+                &path,
+                &NativeOperationBudget::new(NativeProcessingLimits::default()),
+            )
+            .map_err(|_| "occurrence budget".to_owned())
+        };
+        assert!(proof(&document.original)?);
+        for ambiguous in [true, false] {
+            let mut tree = document.original.clone();
+            let TreeValue::Mapping(root) = &mut tree.value else {
+                return Err("root map".into());
+            };
+            let spec = root.iter_mut().find(|(key, _)| key == "spec").ok_or("spec")?;
+            let TreeValue::Mapping(spec) = &mut spec.1.value else {
+                return Err("spec map".into());
+            };
+            let templates = spec.iter_mut().find(|(key, _)| key == "templates").ok_or("templates")?;
+            let TreeValue::Sequence(items) = &mut templates.1.value else {
+                return Err("templates array".into());
+            };
+            if ambiguous {
+                items[1].start = items[0].start;
+            } else {
+                items[0].start = None;
+            }
+            assert!(!proof(&tree)?);
+        }
+        Ok(())
     }
 }
