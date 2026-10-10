@@ -8,7 +8,7 @@ readme = "README.md"
 repository = "https://github.com/Strukturpiloten/kubernetes-lens"
 license = "MPL-2.0"
 publish = false
-include = ["/src/**", "/Cargo.toml", "/Cargo.lock", "/LICENSE", "/README.md", "/CHANGELOG.md", "/schemas/capabilities/**", "/docs/compatibility/licenses/**", "/tests/foundation.rs", "/tests/foundation/**", "/fixtures/foundation/**"]
+include = ["/src/**", "/Cargo.toml", "/Cargo.lock", "/LICENSE", "/README.md", "/CHANGELOG.md", "/schemas/capabilities/**", "/docs/compatibility/licenses/**", "/tests/foundation.rs", "/tests/foundation/**", "/tests/native_processing.rs", "/fixtures/foundation/**"]
 
 [workspace]
 resolver = "3"
@@ -32,6 +32,7 @@ unimplemented = "warn"
 unwrap_used = "warn"
 
 [dependencies]
+base64 = { version = "=0.22.1", default-features = false }
 jiff-tzdb = { version = "=0.1.9", default-features = false }
 serde = "=1.0.229"
 serde_json = { version = "=1.0.151", features = ["raw_value"] }

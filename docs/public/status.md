@@ -4,6 +4,9 @@ KubernetesLens is an unpublished offline native-format foundation. It parses bou
 retains private source evidence and Lists, computes identities and supplied-only references,
 supports explicit edits and target checks, and generates deterministic private native artifacts.
 Explicit bounded regular-file/directory acquisition is available on Linux.
+Shared native operations have cumulative charged payload/work and report limits; protected binary
+values and exact supplied-quantity ordering are available. These ceilings do not measure every
+allocation or resident memory, and arithmetic does not claim server rounding/provisioning behavior.
 
 Eight workload kinds have typed codecs, native validation and generation, including both admitted
 CronJob APIs. Shared helpers, bounded authoring, supplied facts and exact observation roles are

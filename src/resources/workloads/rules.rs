@@ -1693,6 +1693,9 @@ pub(super) fn validate(tree: &TreeNode, kind: &str, api: &str, minor: u8, out: &
     }
 }
 fn visit(node: &TreeNode, remaining: &[String], path: &FieldPath, values: &[&str], out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
     let Some((first, rest)) = remaining.split_first() else {
         if node.as_str().is_some_and(|value| !values.contains(&value)) {
             out.push(Finding::error(FindingCode::NativeFieldInvalid, Phase::Validation).at_path(path.clone()));
@@ -1702,10 +1705,16 @@ fn visit(node: &TreeNode, remaining: &[String], path: &FieldPath, values: &[&str
     if first == "*" {
         if let Some(list) = node.as_sequence() {
             for (i, n) in list.iter().enumerate() {
+                if out.exhausted() {
+                    return;
+                }
                 visit(n, rest, &path.child(i.to_string()), values, out);
             }
         } else if let Some(map) = node.as_mapping() {
             for (key, n) in map {
+                if out.exhausted() {
+                    return;
+                }
                 visit(n, rest, &path.child(key.clone()), values, out);
             }
         }
@@ -6134,6 +6143,9 @@ const REQUIRED_8: &[(&str, u32)] = &[
     ("/spec/schedule", 31),
 ];
 fn validate_required(tree: &TreeNode, kind: &str, api: &str, minor: u8, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
     let rules = match (kind, api) {
         ("Pod", "v1") => REQUIRED_0,
         ("Deployment", "apps/v1") => REQUIRED_1,
@@ -6147,6 +6159,9 @@ fn validate_required(tree: &TreeNode, kind: &str, api: &str, minor: u8, out: &mu
         _ => return,
     };
     for (pointer, mask) in rules {
+        if out.exhausted() {
+            return;
+        }
         if mask & (1_u32 << u32::from(minor - 20)) == 0 {
             continue;
         }
@@ -6156,6 +6171,9 @@ fn validate_required(tree: &TreeNode, kind: &str, api: &str, minor: u8, out: &mu
     }
 }
 fn required_visit(node: &TreeNode, remaining: &[String], path: &FieldPath, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
     let Some((first, rest)) = remaining.split_first() else {
         return;
     };
@@ -6172,10 +6190,16 @@ fn required_visit(node: &TreeNode, remaining: &[String], path: &FieldPath, out: 
     } else if first == "*" {
         if let Some(list) = node.as_sequence() {
             for (i, n) in list.iter().enumerate() {
+                if out.exhausted() {
+                    return;
+                }
                 required_visit(n, rest, &path.child(i.to_string()), out);
             }
         } else if let Some(map) = node.as_mapping() {
             for (key, n) in map {
+                if out.exhausted() {
+                    return;
+                }
                 required_visit(n, rest, &path.child(key.clone()), out);
             }
         }

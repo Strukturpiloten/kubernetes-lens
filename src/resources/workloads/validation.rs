@@ -39,24 +39,18 @@ profile!(
 );
 
 impl<T: RootProfile> RootHooks for T {
-    fn references(&self, out: &mut dyn ReferenceSink) {
-        if let (Ok(tree), Ok(bindings)) = (
-            self.encode(&EncodeContext::new(None), &FieldPath::default()),
-            native_bindings::<T>(),
-        ) {
+    fn references(&self, ctx: &EncodeContext<'_>, out: &mut dyn ReferenceSink) {
+        if let (Ok(tree), Ok(bindings)) = (self.encode(ctx, &FieldPath::default()), native_bindings::<T>()) {
             collect_references(&tree, T::KIND, &bindings, out);
         }
     }
-    fn protected_paths(&self, out: &mut Vec<FieldPath>) {
-        if let (Ok(tree), Ok(bindings)) = (
-            self.encode(&EncodeContext::new(None), &FieldPath::default()),
-            native_bindings::<T>(),
-        ) {
+    fn protected_paths(&self, ctx: &EncodeContext<'_>, out: &mut Vec<FieldPath>) {
+        if let (Ok(tree), Ok(bindings)) = (self.encode(ctx, &FieldPath::default()), native_bindings::<T>()) {
             protected_paths(&tree, &bindings, out);
         }
     }
     fn validate_native(&self, ctx: &ValidationContext<'_>, out: &mut dyn FindingSink) {
-        match self.encode(&EncodeContext::new(Some(ctx.target)), &FieldPath::default()) {
+        match self.encode(&ctx.encoding(), &FieldPath::default()) {
             Ok(tree) => {
                 let mut opaque = BTreeSet::new();
                 self.unknown_scopes(&FieldPath::default(), &mut opaque);
@@ -87,43 +81,53 @@ fn visit_native(
     path: &FieldPath,
     pattern: &FieldPath,
     bindings: &NativeBindings,
-    visitor: &mut impl FnMut(&TreeNode, &FieldPath, &MergeStrategy),
-) {
+    visitor: &mut impl FnMut(&TreeNode, &FieldPath, &MergeStrategy) -> bool,
+) -> bool {
     let Some(binding) = bindings.get(pattern) else {
-        return;
+        return true;
     };
-    visitor(node, path, binding);
+    if !visitor(node, path, binding) {
+        return false;
+    }
     match binding {
         MergeStrategy::Object => {
             if let Some(members) = node.as_mapping() {
                 for (key, child) in members {
-                    visit_native(
+                    if !visit_native(
                         child,
                         &path.child(key.clone()),
                         &pattern.child(key.clone()),
                         bindings,
                         visitor,
-                    );
+                    ) {
+                        return false;
+                    }
                 }
             }
         }
         MergeStrategy::AtomicList | MergeStrategy::MapList { .. } => {
             if let Some(items) = node.as_sequence() {
                 for (index, child) in items.iter().enumerate() {
-                    visit_native(
+                    if !visit_native(
                         child,
                         &path.child(index.to_string()),
                         &pattern.child("*"),
                         bindings,
                         visitor,
-                    );
+                    ) {
+                        return false;
+                    }
                 }
             }
         }
         _ => (),
     }
+    true
 }
 fn invalid(path: &FieldPath, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
     out.push(Finding::error(FindingCode::NativeFieldInvalid, Phase::Validation).at_path(path.clone()));
 }
 fn text<'a>(node: &'a TreeNode, key: &str) -> Option<&'a str> {
@@ -153,12 +157,18 @@ fn one_of(
     opaque: &BTreeSet<FieldPath>,
     out: &mut dyn FindingSink,
 ) {
+    if out.exhausted() {
+        return;
+    }
     let count = keys.iter().filter(|key| present(node, key)).count();
     if count > 1 || required && count == 0 && !opaque.contains(path) {
         invalid(path, out);
     }
 }
 fn enumeration(node: &TreeNode, key: &str, values: &[&str], path: &FieldPath, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
     if let Some(value) = text(node, key) {
         if !values.contains(&value) {
             invalid(&path.child(key), out);
@@ -166,16 +176,25 @@ fn enumeration(node: &TreeNode, key: &str, values: &[&str], path: &FieldPath, ou
     }
 }
 fn range(node: &TreeNode, key: &str, low: i64, high: i64, path: &FieldPath, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
     if number(node, key).is_some_and(|n| n < low || n > high) {
         invalid(&path.child(key), out);
     }
 }
 fn required(node: &TreeNode, key: &str, path: &FieldPath, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
     if !present(node, key) {
         invalid(&path.child(key), out);
     }
 }
 fn nonempty(node: &TreeNode, key: &str, path: &FieldPath, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
     if text(node, key).is_some_and(str::is_empty) {
         invalid(&path.child(key), out);
     }
@@ -195,9 +214,19 @@ fn port_name(value: &str) -> bool {
         && value.bytes().any(|byte| byte.is_ascii_lowercase())
         && !value.contains("--")
 }
-fn percentage(node: &TreeNode, key: &str, maximum: Option<u64>, path: &FieldPath, out: &mut dyn FindingSink) {
+fn percentage(
+    node: &TreeNode,
+    key: &str,
+    maximum: Option<u64>,
+    fields: &crate::registry::FieldDecodeContext,
+    path: &FieldPath,
+    out: &mut dyn FindingSink,
+) {
+    if out.exhausted() {
+        return;
+    }
     if let Some(n) = node.get(key) {
-        match IntOrString::decode(n, &path.child(key))
+        match IntOrString::decode(n, fields, &path.child(key))
             .and_then(|v| crate::registry::codec::nonnegative_integer_or_percentage(&v, maximum, &path.child(key)))
         {
             Ok(()) => (),
@@ -209,6 +238,9 @@ fn zero(node: &TreeNode, key: &str) -> bool {
     number(node, key) == Some(0) || text(node, key) == Some("0%")
 }
 fn port(node: &TreeNode, key: &str, path: &FieldPath, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
     if let Some(value) = node.get(key) {
         let valid = integer(value).is_some_and(|p| (1..=65535).contains(&p)) || value.as_str().is_some_and(port_name);
         if !valid {
@@ -226,6 +258,9 @@ fn validate(
     bindings: &NativeBindings,
     out: &mut dyn FindingSink,
 ) {
+    if out.exhausted() {
+        return;
+    }
     let target = ctx.target;
     let root = FieldPath::default();
     required(tree, "spec", &root, out);
@@ -265,25 +300,44 @@ fn validate(
                     validate_job(job, &path.child("jobTemplate").child("spec"), target, opaque, out);
                 }
             }
-            _ => validate_controller(spec, kind, &path, target, opaque, out),
+            _ => validate_controller(spec, &ctx.fields, kind, &path, target, opaque, out),
         }
     }
     gates::validate(tree, kind, api, target, out);
     rules::validate(tree, kind, api, target.kubernetes.minor(), out);
     visit_native(tree, &root, &root, bindings, &mut |node, path, binding| {
-        validate_bound_node(node, path, binding, target, opaque, out);
+        if out.exhausted() {
+            return false;
+        }
+        validate_bound_node(node, path, binding, &ctx.fields, target, opaque, out);
+        !out.exhausted()
     });
 }
-fn rollout(node: &TreeNode, path: &FieldPath, max_surge: Option<u64>, out: &mut dyn FindingSink) {
-    percentage(node, "maxSurge", max_surge, path, out);
-    percentage(node, "maxUnavailable", Some(100), path, out);
+fn rollout(
+    node: &TreeNode,
+    fields: &crate::registry::FieldDecodeContext,
+    path: &FieldPath,
+    max_surge: Option<u64>,
+    out: &mut dyn FindingSink,
+) {
+    if out.exhausted() {
+        return;
+    }
+    percentage(node, "maxSurge", max_surge, fields, path, out);
+    percentage(node, "maxUnavailable", Some(100), fields, path, out);
     if zero(node, "maxSurge") && zero(node, "maxUnavailable") {
         invalid(path, out);
     }
 }
 fn unique_metadata_names(list: &[TreeNode], path: &FieldPath, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
     let mut seen = BTreeSet::new();
     for (i, item) in list.iter().enumerate() {
+        if out.exhausted() {
+            return;
+        }
         let p = path.child(i.to_string()).child("metadata").child("name");
         match item.get("metadata").and_then(|m| text(m, "name")) {
             Some(n) if dns_label(n) && seen.insert(n) => (),
@@ -294,10 +348,14 @@ fn unique_metadata_names(list: &[TreeNode], path: &FieldPath, out: &mut dyn Find
 fn validate_selector_match(
     selector: &TreeNode,
     labels: Option<&TreeNode>,
+    fields: &crate::registry::FieldDecodeContext,
     kind: &str,
     path: &FieldPath,
     out: &mut dyn FindingSink,
 ) {
+    if out.exhausted() {
+        return;
+    }
     let map = labels.and_then(TreeNode::as_mapping).map(|entries| {
         entries
             .iter()
@@ -318,7 +376,7 @@ fn validate_selector_match(
             }
         }
     } else {
-        match LabelSelector::decode(selector, path) {
+        match LabelSelector::decode(selector, fields, path) {
             Ok(selected) => {
                 let has_terms = selected.match_labels.value().is_some_and(|m| !m.is_empty())
                     || selected.match_expressions.value().is_some_and(|v| !v.is_empty());
@@ -350,6 +408,9 @@ fn validate_template(
     opaque: &BTreeSet<FieldPath>,
     out: &mut dyn FindingSink,
 ) {
+    if out.exhausted() {
+        return;
+    }
     required(template, "spec", path, out);
     if !job {
         if let Some(spec) = template.get("spec") {
@@ -368,6 +429,9 @@ fn validate_pod(
     opaque: &BTreeSet<FieldPath>,
     out: &mut dyn FindingSink,
 ) {
+    if out.exhausted() {
+        return;
+    }
     required(spec, "containers", path, out);
     if job {
         required(spec, "restartPolicy", path, out);
@@ -401,6 +465,9 @@ fn validate_pod(
     }
     let mut volume_names = BTreeSet::new();
     for (i, volume) in items(spec, "volumes").iter().enumerate() {
+        if out.exhausted() {
+            return;
+        }
         let p = path.child("volumes").child(i.to_string());
         match text(volume, "name") {
             Some(n) if dns_label(n) && volume_names.insert(n) => (),
@@ -423,6 +490,9 @@ fn validate_job(
     opaque: &BTreeSet<FieldPath>,
     out: &mut dyn FindingSink,
 ) {
+    if out.exhausted() {
+        return;
+    }
     required(spec, "template", path, out);
     for key in [
         "parallelism",
@@ -469,6 +539,9 @@ fn validate_job(
             invalid(&path.child("podFailurePolicy").child("rules"), out);
         }
         for (i, rule) in rules.iter().enumerate() {
+            if out.exhausted() {
+                return;
+            }
             let p = path.child("podFailurePolicy").child("rules").child(i.to_string());
             one_of(rule, &["onExitCodes", "onPodConditions"], true, &p, opaque, out);
             enumeration(rule, "action", &["FailJob", "FailIndex", "Ignore", "Count"], &p, out);
@@ -484,6 +557,9 @@ fn validate_job(
                     invalid(&ep.child("values"), out);
                 }
                 for (j, value) in values.iter().enumerate() {
+                    if out.exhausted() {
+                        return;
+                    }
                     if integer(value).is_none_or(|v| {
                         !(0..=255).contains(&v) || text(exit, "operator") == Some("In") && v == 0 || !seen.insert(v)
                     }) {
@@ -492,6 +568,12 @@ fn validate_job(
                 }
             }
         }
+    }
+    validate_job_success_policy(spec, path, indexed, out);
+}
+fn validate_job_success_policy(spec: &TreeNode, path: &FieldPath, indexed: bool, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
     }
     if let Some(policy) = spec.get("successPolicy") {
         if !indexed {
@@ -502,6 +584,9 @@ fn validate_job(
             invalid(&path.child("successPolicy").child("rules"), out);
         }
         for (i, rule) in rules.iter().enumerate() {
+            if out.exhausted() {
+                return;
+            }
             let p = path.child("successPolicy").child("rules").child(i.to_string());
             if !present(rule, "succeededCount") && !present(rule, "succeededIndexes") {
                 invalid(&p, out);
@@ -547,20 +632,34 @@ fn validate_bound_node(
     node: &TreeNode,
     path: &FieldPath,
     binding: &MergeStrategy,
+    fields: &crate::registry::FieldDecodeContext,
     target: &TargetProfile,
     opaque: &BTreeSet<FieldPath>,
     out: &mut dyn FindingSink,
 ) {
+    if out.exhausted() {
+        return;
+    }
     let last = path.0.last().map_or("", String::as_str);
     if let Some(map) = node.as_mapping() {
         if matches!(binding, MergeStrategy::Map) {
             if matches!(last, "limits" | "requests" | "overhead") {
                 for (key, value) in map {
+                    if out.exhausted() {
+                        return;
+                    }
+                    if out.exhausted() {
+                        return;
+                    }
                     if value
                         .as_str()
-                        .is_some_and(|value| Quantity::parse(value).is_ok_and(|q| q.exact().is_negative()))
+                        .is_some_and(|value| Quantity::parse_in(value, fields).is_ok_and(|q| q.exact().is_negative()))
                     {
                         invalid(&path.child(key.clone()), out);
+                    }
+                    if fields.processing.exhausted() {
+                        out.push(fields.processing.fail(Phase::Validation));
+                        return;
                     }
                 }
             }
@@ -592,6 +691,9 @@ fn validate_bound_node(
         if last == "ports" {
             let mut names = BTreeSet::new();
             for (i, port) in list.iter().enumerate() {
+                if out.exhausted() {
+                    return;
+                }
                 if let Some(name) = text(port, "name") {
                     if !name.is_empty() && (!port_name(name) || !names.insert(name)) {
                         invalid(&path.child(i.to_string()).child("name"), out);
@@ -602,6 +704,9 @@ fn validate_bound_node(
         if last == "accessModes" {
             let mut seen = BTreeSet::new();
             for (i, item) in list.iter().enumerate() {
+                if out.exhausted() {
+                    return;
+                }
                 if item.as_str().is_none_or(|s| {
                     !["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany", "ReadWriteOncePod"].contains(&s)
                         || !seen.insert(s)
@@ -616,7 +721,7 @@ fn protected_paths(tree: &TreeNode, bindings: &NativeBindings, out: &mut Vec<Fie
     let root = FieldPath::default();
     visit_native(tree, &root, &root, bindings, &mut |node, path, binding| {
         if !matches!(binding, MergeStrategy::Object) {
-            return;
+            return true;
         }
         if let Some(map) = node.as_mapping() {
             let container = path
@@ -639,6 +744,7 @@ fn protected_paths(tree: &TreeNode, bindings: &NativeBindings, out: &mut Vec<Fie
                 }
             }
         }
+        true
     });
 }
 fn optional(node: &TreeNode) -> Presence<bool> {
@@ -686,8 +792,11 @@ fn reference(
 fn collect_references(tree: &TreeNode, root_kind: &str, bindings: &NativeBindings, out: &mut dyn ReferenceSink) {
     let root = FieldPath::default();
     visit_native(tree, &root, &root, bindings, &mut |node, path, binding| {
+        if out.exhausted() {
+            return false;
+        }
         if !matches!(binding, MergeStrategy::Object) {
-            return;
+            return true;
         }
         if let Some(map) = node.as_mapping() {
             let last = path.0.last().map_or("", String::as_str);
@@ -732,29 +841,37 @@ fn collect_references(tree: &TreeNode, root_kind: &str, bindings: &NativeBinding
                 }
             }
         }
+        true
     });
 }
 
 fn validate_controller(
     spec: &TreeNode,
+    fields: &crate::registry::FieldDecodeContext,
     kind: &str,
     path: &FieldPath,
     target: &TargetProfile,
     opaque: &BTreeSet<FieldPath>,
     out: &mut dyn FindingSink,
 ) {
+    if out.exhausted() {
+        return;
+    }
     if kind != "ReplicationController" {
         required(spec, "template", path, out);
         required(spec, "selector", path, out);
     }
     for key in ["replicas", "minReadySeconds", "revisionHistoryLimit"] {
+        if out.exhausted() {
+            return;
+        }
         range(spec, key, 0, i64::MAX, path, out);
     }
     if let Some(template) = spec.get("template") {
         validate_template(template, &path.child("template"), false, target, opaque, out);
         if let Some(selector) = spec.get("selector") {
             let labels = template.get("metadata").and_then(|m| m.get("labels"));
-            validate_selector_match(selector, labels, kind, &path.child("selector"), out);
+            validate_selector_match(selector, labels, fields, kind, &path.child("selector"), out);
         }
     }
     if kind == "Deployment" {
@@ -773,7 +890,7 @@ fn validate_controller(
                 invalid(&p.child("rollingUpdate"), out);
             }
             if let Some(roll) = strategy.get("rollingUpdate") {
-                rollout(roll, &p.child("rollingUpdate"), None, out);
+                rollout(roll, fields, &p.child("rollingUpdate"), None, out);
             }
         }
     }
@@ -786,7 +903,7 @@ fn validate_controller(
             }
             if let Some(roll) = strategy.get("rollingUpdate") {
                 if kind == "DaemonSet" {
-                    rollout(roll, &p.child("rollingUpdate"), Some(100), out);
+                    rollout(roll, fields, &p.child("rollingUpdate"), Some(100), out);
                 } else {
                     range(roll, "partition", 0, i64::MAX, &p.child("rollingUpdate"), out);
                 }
@@ -799,6 +916,9 @@ fn validate_controller(
         enumeration(spec, "podManagementPolicy", &["OrderedReady", "Parallel"], path, out);
         if let Some(policy) = spec.get("persistentVolumeClaimRetentionPolicy") {
             for key in ["whenDeleted", "whenScaled"] {
+                if out.exhausted() {
+                    return;
+                }
                 enumeration(
                     policy,
                     key,
@@ -827,9 +947,18 @@ fn validate_containers(
     opaque: &BTreeSet<FieldPath>,
     out: &mut dyn FindingSink,
 ) {
+    if out.exhausted() {
+        return;
+    }
     let mut names = BTreeSet::new();
     for field in ["containers", "initContainers"] {
+        if out.exhausted() {
+            return;
+        }
         for (i, container) in items(spec, field).iter().enumerate() {
+            if out.exhausted() {
+                return;
+            }
             let p = path.child(field).child(i.to_string());
             match text(container, "name") {
                 Some(n) if dns_label(n) && names.insert(n) => (),
@@ -865,6 +994,9 @@ fn validate_containers(
             }
             let mut mounts = BTreeSet::new();
             for (j, mount) in items(container, "volumeMounts").iter().enumerate() {
+                if out.exhausted() {
+                    return;
+                }
                 let mp = p.child("volumeMounts").child(j.to_string());
                 if text(mount, "name").is_none_or(|n| !volume_names.contains(n)) {
                     invalid(&mp.child("name"), out);
@@ -875,6 +1007,9 @@ fn validate_containers(
                 }
             }
             for (j, device) in items(container, "volumeDevices").iter().enumerate() {
+                if out.exhausted() {
+                    return;
+                }
                 let dp = p.child("volumeDevices").child(j.to_string());
                 if text(device, "name").is_none_or(|n| !volume_names.contains(n)) {
                     invalid(&dp.child("name"), out);
@@ -884,6 +1019,9 @@ fn validate_containers(
                 }
             }
             for key in ["livenessProbe", "readinessProbe", "startupProbe"] {
+                if out.exhausted() {
+                    return;
+                }
                 if let Some(probe) = container.get(key) {
                     let pp = p.child(key);
                     one_of(probe, &["exec", "httpGet", "tcpSocket"], true, &pp, opaque, out);
@@ -901,19 +1039,29 @@ fn validate_containers(
                     }
                 }
             }
-            if let Some(lifecycle) = container.get("lifecycle") {
-                for key in ["postStart", "preStop"] {
-                    if let Some(handler) = lifecycle.get(key) {
-                        one_of(
-                            handler,
-                            &["exec", "httpGet", "tcpSocket"],
-                            true,
-                            &p.child("lifecycle").child(key),
-                            opaque,
-                            out,
-                        );
-                    }
-                }
+            validate_lifecycle(container, &p, opaque, out);
+        }
+    }
+}
+
+fn validate_lifecycle(container: &TreeNode, path: &FieldPath, opaque: &BTreeSet<FieldPath>, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
+    if let Some(lifecycle) = container.get("lifecycle") {
+        for key in ["postStart", "preStop"] {
+            if out.exhausted() {
+                return;
+            }
+            if let Some(handler) = lifecycle.get(key) {
+                one_of(
+                    handler,
+                    &["exec", "httpGet", "tcpSocket"],
+                    true,
+                    &path.child("lifecycle").child(key),
+                    opaque,
+                    out,
+                );
             }
         }
     }
@@ -926,6 +1074,9 @@ fn validate_native_expressions(
     opaque: &BTreeSet<FieldPath>,
     out: &mut dyn FindingSink,
 ) {
+    if out.exhausted() {
+        return;
+    }
     if matches!(last, "httpGet" | "tcpSocket") {
         required(node, "port", path, out);
     }
@@ -1006,6 +1157,9 @@ fn validate_environment_name(
     target: &TargetProfile,
     out: &mut dyn FindingSink,
 ) {
+    if out.exhausted() {
+        return;
+    }
     let Some(name) = text(node, key).filter(|name| !name.is_empty()) else {
         return;
     };
@@ -1035,6 +1189,9 @@ fn validate_native_items(
     opaque: &BTreeSet<FieldPath>,
     out: &mut dyn FindingSink,
 ) {
+    if out.exhausted() {
+        return;
+    }
     if path.0.iter().rev().nth(1).is_some_and(|p| p == "env") {
         required(node, "name", path, out);
         nonempty(node, "name", path, out);
@@ -1228,6 +1385,9 @@ fn collect_object_references(
 }
 
 fn validate_native_scalars(node: &TreeNode, path: &FieldPath, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
     for key in [
         "runAsUser",
         "runAsGroup",
@@ -1240,9 +1400,15 @@ fn validate_native_scalars(node: &TreeNode, path: &FieldPath, out: &mut dyn Find
         range(node, key, 0, i64::MAX, path, out);
     }
     for key in ["defaultMode", "mode"] {
+        if out.exhausted() {
+            return;
+        }
         range(node, key, 0, 0o777, path, out);
     }
     for key in ["containerPort", "hostPort"] {
+        if out.exhausted() {
+            return;
+        }
         range(node, key, i64::from(key != "hostPort"), 65535, path, out);
     }
     if present(node, "port") {

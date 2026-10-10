@@ -23,7 +23,7 @@ impl NativeResource for TestPod {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
-    fn collect_references(&self, out: &mut dyn ReferenceSink) {
+    fn collect_references(&self, _: &EncodeContext<'_>, out: &mut dyn ReferenceSink) {
         if let Some(name) = self
             .tree
             .get("metadata")
@@ -44,7 +44,7 @@ impl NativeResource for TestPod {
             }
         }
     }
-    fn collect_protected_paths(&self, out: &mut Vec<FieldPath>) {
+    fn collect_protected_paths(&self, _: &EncodeContext<'_>, out: &mut Vec<FieldPath>) {
         out.push(FieldPath(vec!["spec".into(), "protectedValue".into()]));
     }
     fn validate(&self, ctx: &ValidationContext<'_>, out: &mut dyn FindingSink) {

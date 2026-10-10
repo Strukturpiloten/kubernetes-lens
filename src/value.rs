@@ -2,6 +2,10 @@
 use crate::diagnostic::{Finding, FindingCode, Phase};
 use crate::source::ExplicitSourceAccess;
 use std::{collections::BTreeMap, fmt};
+mod native_bytes;
+mod native_quantity;
+pub use native_bytes::NativeBytes;
+pub use native_quantity::{NativeQuantityDomain, SuppliedQuantityOrder};
 
 /// Explicit authored presence; omission and explicit null remain different.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
@@ -181,6 +185,17 @@ impl Quantity {
     /// # Errors
     /// Rejects invalid grammar, excessive scalar size, and exponent arithmetic overflow.
     pub fn parse(lexeme: &str) -> Result<Self, Finding> {
+        let limits = crate::source::ParseLimits::default();
+        Self::parse_in(
+            lexeme,
+            &crate::registry::FieldDecodeContext::new(
+                limits,
+                crate::processing::NativeOperationBudget::new(limits.processing),
+                Phase::Validation,
+            ),
+        )
+    }
+    fn parse_unbudgeted(lexeme: &str) -> Result<Self, Finding> {
         if lexeme.is_empty() || lexeme.len() > 512 || !lexeme.is_ascii() {
             return Err(invalid_value());
         }

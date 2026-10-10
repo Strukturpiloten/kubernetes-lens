@@ -99,3 +99,14 @@ updates, requires Dashboard approval and disables automerge after generic rules.
 extraction and effective-policy regressions cover this owner and a rule-order mutation that would
 incorrectly enable automerge. Updating the bundle requires review of its data witness and native
 expectations; it does not expand the frozen Kubernetes/resource goal automatically.
+
+The protected binary primitive uses exact `base64 0.22.1` with default features disabled. Its
+approved registry archive checksum is
+`72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6`, recorded in Cargo.lock.
+Registry/archive metadata records Rust 1.48 MSRV, MIT OR Apache-2.0 licensing and no normal
+transitive dependencies. The archive is a dependency, not an oracle or copied implementation.
+Cargo is its only operational pin owner. The final effective Renovate rule groups it as Native
+binary codecs, requires Dependency Dashboard approval and disables automerge. Extraction,
+replacement, missing-owner and rule-order regressions accompany this pin. Backend updates require
+review of bounded slice APIs, padding/tail-bit behavior and privacy; no native conformance claim
+follows from using the backend.

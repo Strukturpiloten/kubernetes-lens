@@ -44,7 +44,11 @@ macro_rules! root {
             }
         }
         impl FieldCodec for $name {
-            fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
+            fn decode(
+                node: &TreeNode,
+                ctx: &crate::registry::FieldDecodeContext,
+                path: &FieldPath,
+            ) -> Result<Self, Finding> {
                 crate::registry::codec::object(node, path)?;
                 if node.get("apiVersion").and_then(TreeNode::as_str) != Some($api)
                     || node.get("kind").and_then(TreeNode::as_str) != Some($kind)
@@ -52,8 +56,8 @@ macro_rules! root {
                     return Err(Finding::error(FindingCode::NativeFieldInvalid, Phase::Decoding).at_path(path.clone()));
                 }
                 Ok(Self {
-                    metadata: crate::registry::codec::read_presence(node, "metadata", path)?,
-                    spec: crate::registry::codec::read_presence(node, "spec", path)?,
+                    metadata: crate::registry::codec::read_presence(node, "metadata", ctx, path)?,
+                    spec: crate::registry::codec::read_presence(node, "spec", ctx, path)?,
                     unknown: UnknownFields::capture(node, &["apiVersion", "kind", "metadata", "spec"]),
                 })
             }
@@ -83,11 +87,11 @@ macro_rules! root {
             fn as_any_mut(&mut self) -> &mut dyn Any {
                 self
             }
-            fn collect_references(&self, out: &mut dyn ReferenceSink) {
-                self.references(out);
+            fn collect_references(&self, ctx: &EncodeContext<'_>, out: &mut dyn ReferenceSink) {
+                self.references(ctx, out);
             }
-            fn collect_protected_paths(&self, out: &mut Vec<FieldPath>) {
-                self.protected_paths(out);
+            fn collect_protected_paths(&self, ctx: &EncodeContext<'_>, out: &mut Vec<FieldPath>) {
+                self.protected_paths(ctx, out);
             }
             fn collect_native_facts(
                 &self,
@@ -127,8 +131,8 @@ root!(CronJobV1, "batch/v1", "CronJob", CronJobV1Spec, 21, 37);
 root!(CronJobV1Beta1, "batch/v1beta1", "CronJob", CronJobV1Beta1Spec, 20, 24);
 
 pub(super) trait RootHooks {
-    fn references(&self, out: &mut dyn ReferenceSink);
-    fn protected_paths(&self, out: &mut Vec<FieldPath>);
+    fn references(&self, ctx: &EncodeContext<'_>, out: &mut dyn ReferenceSink);
+    fn protected_paths(&self, ctx: &EncodeContext<'_>, out: &mut Vec<FieldPath>);
     fn validate_native(&self, ctx: &ValidationContext<'_>, out: &mut dyn FindingSink);
 }
 
@@ -146,7 +150,7 @@ pub(crate) fn register(registry: &mut RegistryBuilder) -> Result<(), Finding> {
                 {
                     return Err(vec![Finding::error(FindingCode::InvalidRegistration, Phase::Decoding)]);
                 }
-                $name::decode(node, &FieldPath::default())
+                $name::decode(node, &ctx.fields, &FieldPath::default())
                     .map(|v| Box::new(v) as Box<dyn NativeResource>)
                     .map_err(|e| vec![e])
             }

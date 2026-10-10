@@ -322,6 +322,7 @@ pub struct ResourceDocument {
     pub(crate) decode: Option<registry::DecodeFn>,
     pub(crate) capability: Option<KindCapability>,
     pub(crate) edits: Vec<FieldEdit>,
+    pub(crate) edit_processing_limits: crate::processing::NativeProcessingLimits,
 }
 impl fmt::Debug for ResourceDocument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -400,12 +401,14 @@ impl ResourceDocument {
         if value.trees.len() != 1 {
             return Err(invalid());
         }
+        self.edit_processing_limits = self.edit_processing_limits.lowered_by(value.limits.processing);
         let Some(value) = value.trees.into_iter().next() else {
             return Err(invalid());
         };
         self.edits.push(FieldEdit::Set { path, value });
         Ok(())
     }
+    #[cfg(test)]
     pub(crate) fn project(
         &self,
         target: Option<&crate::capability::TargetProfile>,
@@ -417,11 +420,33 @@ impl ResourceDocument {
         target: Option<&crate::capability::TargetProfile>,
         ctx: Option<&registry::EncodeContext<'_>>,
     ) -> Result<EffectiveProjection, Vec<Finding>> {
+        let standalone;
+        let ctx = if let Some(ctx) = ctx {
+            ctx
+        } else {
+            standalone = registry::EncodeContext::in_operation(
+                target,
+                *self.evidence.limits(),
+                crate::processing::NativeOperationBudget::new(
+                    self.evidence
+                        .limits()
+                        .processing
+                        .lowered_by(self.edit_processing_limits),
+                ),
+            );
+            &standalone
+        };
+        let ctx = ctx.for_source(*self.evidence.limits());
         let tree = self
-            .current_tree_in(target, ctx)
+            .current_tree_in(target, Some(&ctx))
             .map_err(|finding| vec![finding.for_resource(self.id)])?;
-        let identity =
-            identity(&tree, self.original_identity.scope).map_err(|finding| vec![finding.for_resource(self.id)])?;
+        let identity = identity_in(
+            &tree,
+            self.original_identity.scope,
+            ctx.budget.processing(),
+            ctx.budget.phase(),
+        )
+        .map_err(|finding| vec![finding.for_resource(self.id)])?;
         let (resource, findings) = match self
             .decode
             .map(|decode| {
@@ -431,6 +456,7 @@ impl ResourceDocument {
                     &DecodeContext {
                         gvk: &identity.gvk,
                         scope: identity.scope,
+                        fields: ctx.fields(Phase::Decoding),
                     },
                 )
             })
@@ -519,37 +545,58 @@ impl ResourceDocument {
     pub(crate) fn current_tree(&self, target: Option<&crate::capability::TargetProfile>) -> Result<TreeNode, Finding> {
         self.current_tree_in(target, None)
     }
-    fn current_tree_in(
+    pub(crate) fn current_tree_in(
         &self,
         target: Option<&crate::capability::TargetProfile>,
         ctx: Option<&registry::EncodeContext<'_>>,
     ) -> Result<TreeNode, Finding> {
+        let standalone;
+        let ctx = if let Some(ctx) = ctx {
+            ctx
+        } else {
+            standalone = registry::EncodeContext::in_operation(
+                target,
+                *self.evidence.limits(),
+                crate::processing::NativeOperationBudget::new(
+                    self.evidence
+                        .limits()
+                        .processing
+                        .lowered_by(self.edit_processing_limits),
+                ),
+            );
+            &standalone
+        };
+        let processing = ctx.budget.processing();
+        let phase = ctx.budget.phase();
+        let merge_context = crate::generation::BudgetedMergeContext {
+            native: crate::generation::MergeContext {
+                gvk: Some(&self.original_identity.gvk),
+                target,
+            },
+            processing,
+            phase,
+        };
         let mut tree = if let (Some(resource), Some(original_known)) = (&self.resource, &self.original_known) {
-            let known = match ctx {
-                Some(ctx) => registry::encode_in(resource.as_ref(), ctx)?,
-                None => registry::encode(resource.as_ref(), target)?,
-            };
-            let encoded_identity = identity(&known, self.original_identity.scope)?;
+            let known = registry::encode_in(resource.as_ref(), ctx)?;
+            let encoded_identity = identity_in(&known, self.original_identity.scope, processing, phase)?;
             if encoded_identity.gvk != self.original_identity.gvk {
                 return Err(Finding::error(FindingCode::CodecIdentityMismatch, Phase::Generation));
             }
-            crate::generation::merge_native_delta(
+            crate::generation::merge_native_delta_in(
                 &self.original,
                 original_known,
                 &known,
                 &FieldPath::default(),
                 self.capability.as_ref().map_or(&[], |c| c.fields),
                 &self.edits,
-                crate::generation::MergeContext {
-                    gvk: Some(&self.original_identity.gvk),
-                    target,
-                },
+                merge_context,
             )?
         } else {
+            processing.tree_copy(&self.original, phase)?;
             self.original.clone()
         };
         for edit in &self.edits {
-            crate::generation::apply_edit(&mut tree, edit)?;
+            crate::generation::apply_edit_in(&mut tree, edit, processing, phase)?;
         }
         if self.original_identity.gvk.group.as_deref() == Some("apiextensions.k8s.io")
             && self.original_identity.gvk.kind == "CustomResourceDefinition"
@@ -565,7 +612,7 @@ impl ResourceDocument {
                 let before = self.original.get_path(&path);
                 let after = tree.get_path(&path);
                 if match (before, after) {
-                    (Some(before), Some(after)) => !before.semantic_eq(after),
+                    (Some(before), Some(after)) => !crate::generation::merge_semantic_eq(before, after, merge_context)?,
                     (None, None) => false,
                     _ => true,
                 } {
@@ -575,7 +622,7 @@ impl ResourceDocument {
                 }
             }
         }
-        let current = identity(&tree, self.original_identity.scope)?;
+        let current = identity_in(&tree, self.original_identity.scope, processing, phase)?;
         if current.gvk != self.original_identity.gvk {
             return Err(Finding::error(
                 FindingCode::UnsupportedSemanticConversion,
@@ -591,6 +638,7 @@ pub struct ResourceSet {
     pub(crate) lists: Vec<ListDocument>,
     pub(crate) sources: Vec<Arc<SourceEvidence>>,
     pub(crate) findings: Vec<Finding>,
+    pub(crate) processing: crate::processing::NativeOperationBudget,
 }
 impl fmt::Debug for ResourceSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -599,6 +647,7 @@ impl fmt::Debug for ResourceSet {
             .field("list_count", &self.lists.len())
             .field("sources", &self.sources)
             .field("findings", &self.findings)
+            .field("processing", &self.processing.limits())
             .finish()
     }
 }
@@ -620,18 +669,21 @@ impl ResourceSet {
         limits: &crate::source::AuthoringLimits,
         registry: &RegistryBuilder,
     ) -> Result<Self, Vec<Finding>> {
-        let target_findings = target.findings();
+        let processing = crate::processing::NativeOperationBudget::new(limits.parser.processing);
+        let mut target_findings = target.findings();
+        processing.finish_report(&mut target_findings, Phase::Generation);
         if crate::diagnostic::has_errors(&target_findings) {
             return Err(target_findings);
         }
         if !limits.valid() || values.len() > limits.max_resources || values.len() > limits.parser.max_documents {
             return Err(vec![Finding::error(FindingCode::LimitExceeded, Phase::Generation)]);
         }
-        let budget = crate::syntax::EncodingBudget::new(*limits);
+        let budget = crate::syntax::EncodingBudget::in_operation(*limits, processing.clone());
         let ctx = registry::EncodeContext {
             target: Some(target),
             include_unknown: true,
             budget: budget.clone(),
+            limits: limits.parser,
         };
         // Check collection length before reserving its storage.
         let mut inputs = Vec::with_capacity(values.len());
@@ -647,7 +699,7 @@ impl ResourceSet {
                 u64::try_from(index)
                     .map_err(|_| vec![Finding::error(FindingCode::LimitExceeded, Phase::Generation)])?,
             );
-            let mut parsed = crate::parse_source(
+            let mut parsed = crate::parser::parse_source_in(
                 crate::source::SourceInput {
                     id,
                     format: crate::source::DocumentFormat::Json,
@@ -656,26 +708,32 @@ impl ResourceSet {
                     bytes: &bytes,
                 },
                 &limits.parser,
+                &processing,
             )
             .map_err(|findings| findings.into_iter().map(positionless).collect::<Vec<_>>())?;
-            parsed.evidence = Arc::new(SourceEvidence::native_authored(id, bytes));
+            parsed.evidence = Arc::new(SourceEvidence::native_authored_with_limits(id, bytes, limits.parser));
             for tree in &mut parsed.trees {
                 clear_positions(tree);
             }
             inputs.push(parsed);
         }
-        let mut set = Self::with_registry(inputs, registry)
+        let mut set = Self::with_registry_in(inputs, registry, processing.clone())
             .map_err(|findings| findings.into_iter().map(positionless).collect::<Vec<_>>())?;
-        let findings = crate::generation::validate_for_target(&set, target)
-            .into_iter()
-            .map(|finding| {
-                let mut finding = positionless(finding);
-                if finding.code == FindingCode::UnadmittedField {
-                    finding.severity = crate::diagnostic::Severity::Warning;
-                }
-                finding
-            })
-            .collect::<Vec<_>>();
+        let findings = crate::generation::validate_in(
+            &set,
+            target,
+            crate::generation::NativeValidationIntent::Unspecified,
+            processing,
+        )
+        .into_iter()
+        .map(|finding| {
+            let mut finding = positionless(finding);
+            if finding.code == FindingCode::UnadmittedField {
+                finding.severity = crate::diagnostic::Severity::Warning;
+            }
+            finding
+        })
+        .collect::<Vec<_>>();
         if crate::diagnostic::has_errors(&findings) {
             return Err(findings);
         }
@@ -689,32 +747,67 @@ impl ResourceSet {
         Self::with_registry(inputs, &crate::resources::registry()?)
     }
     pub(crate) fn with_registry(inputs: Vec<ParsedInput>, registry: &RegistryBuilder) -> Result<Self, Vec<Finding>> {
+        let limits = inputs
+            .iter()
+            .fold(crate::processing::NativeProcessingLimits::default(), |limits, input| {
+                limits.lowered_by(input.limits.processing)
+            });
+        Self::with_registry_in(inputs, registry, crate::processing::NativeOperationBudget::new(limits))
+    }
+    pub(crate) fn with_registry_in(
+        inputs: Vec<ParsedInput>,
+        registry: &RegistryBuilder,
+        processing: crate::processing::NativeOperationBudget,
+    ) -> Result<Self, Vec<Finding>> {
         let mut set = Self {
             documents: Vec::new(),
             lists: Vec::new(),
             sources: Vec::new(),
             findings: Vec::new(),
+            processing,
         };
         let mut ids = BTreeSet::new();
         for input in inputs {
+            if let Err(finding) = set
+                .processing
+                .work(1, Phase::Decoding)
+                .and_then(|()| set.processing.payload_array::<SourceId>(1, Phase::Decoding))
+            {
+                return Err(set.construction_failure(finding));
+            }
             if !ids.insert(input.evidence.id) {
-                return Err(vec![Finding::error(FindingCode::DuplicateIdentity, Phase::Decoding)]);
+                return Err(set.construction_failure(Finding::error(FindingCode::DuplicateIdentity, Phase::Decoding)));
             }
             for (document, tree) in input.documents.iter().zip(input.trees) {
                 let source = SourceRef {
                     source: input.evidence.id,
                     document_index: document.document_index,
                 };
-                set.add_node(tree, source, None, input.evidence.clone(), document.clone(), registry)
-                    .map_err(|e| vec![e])?;
+                if let Err(finding) =
+                    set.add_node(tree, source, None, input.evidence.clone(), document.clone(), registry)
+                {
+                    return Err(set.construction_failure(finding));
+                }
+            }
+            if let Err(finding) = set.processing.payload_array::<Arc<SourceEvidence>>(1, Phase::Decoding) {
+                return Err(set.construction_failure(finding));
             }
             set.sources.push(input.evidence);
         }
-        set.resolve_crd_scopes().map_err(|e| vec![e])?;
-        let findings = set.identity_findings_in(true);
+        if let Err(finding) = set.resolve_crd_scopes() {
+            return Err(set.construction_failure(finding));
+        }
+        let mut report = crate::processing::ProcessingReport::from_report(
+            std::mem::take(&mut set.findings),
+            set.processing.clone(),
+            Phase::Decoding,
+        );
+        set.identity_findings_into(true, None, &mut report);
+        let findings = report.into_vec();
         if crate::diagnostic::has_errors(&findings) {
             return Err(findings);
         }
+        set.findings = findings;
         Ok(set)
     }
     /// Ordered retained native documents.
@@ -742,16 +835,56 @@ impl ResourceSet {
     pub fn sources(&self) -> &[Arc<SourceEvidence>] {
         &self.sources
     }
+    pub(crate) fn operation(
+        &self,
+        lower: Option<crate::processing::NativeProcessingLimits>,
+    ) -> crate::processing::NativeOperationBudget {
+        let limits = self.sources.iter().fold(self.processing.limits(), |limits, source| {
+            limits.lowered_by(source.limits().processing)
+        });
+        let limits = self.documents.iter().fold(limits, |limits, document| {
+            limits.lowered_by(document.edit_processing_limits)
+        });
+        crate::processing::NativeOperationBudget::new(lower.map_or(limits, |lower| limits.lowered_by(lower)))
+    }
+    pub(crate) fn encoding<'a>(
+        &self,
+        target: Option<&'a crate::capability::TargetProfile>,
+        processing: crate::processing::NativeOperationBudget,
+    ) -> registry::EncodeContext<'a> {
+        let mut limits = crate::source::ParseLimits::default();
+        limits.processing = self.processing.limits().lowered_by(processing.limits());
+        // Native shape limits remain independently source-relative at each decode.
+        registry::EncodeContext::in_operation(target, limits, processing)
+    }
     /// Recheck effective identities after edits; served versions are excluded from collisions.
     #[must_use]
     pub fn identity_findings(&self) -> Vec<Finding> {
-        self.identity_findings_in(false)
+        let context = self.encoding(None, self.operation(None));
+        let mut report = crate::processing::ProcessingReport::new(context.budget.processing().clone(), Phase::Analysis);
+        self.identity_findings_into(false, Some(&context), &mut report);
+        report.into_vec()
     }
-    fn identity_findings_in(&self, original: bool) -> Vec<Finding> {
+    pub(crate) fn identity_findings_into(
+        &self,
+        original: bool,
+        context: Option<&registry::EncodeContext<'_>>,
+        out: &mut crate::processing::ProcessingReport,
+    ) {
+        let processing = out.processing().clone();
         let mut seen = BTreeMap::new();
-        let mut out = Vec::new();
         let mut list_ids = BTreeSet::new();
         for list in &self.lists {
+            if out.failed() {
+                break;
+            }
+            if let Err(finding) = processing
+                .work(1, Phase::Analysis)
+                .and_then(|()| processing.payload_array::<ListId>(1, Phase::Analysis))
+            {
+                out.push(finding);
+                break;
+            }
             if !list_ids.insert(list.id) {
                 let mut finding =
                     Finding::error(FindingCode::InvalidIdentity, Phase::Analysis).for_wrapper(WrapperSubject {
@@ -764,15 +897,32 @@ impl ResourceSet {
         }
         let mut ids = BTreeSet::new();
         for document in &self.documents {
+            if out.failed() {
+                break;
+            }
+            if let Err(finding) = processing
+                .work(1, Phase::Analysis)
+                .and_then(|()| processing.payload_array::<ResourceId>(1, Phase::Analysis))
+            {
+                out.push(finding);
+                break;
+            }
             if !ids.insert(document.id) {
                 out.push(Finding::error(FindingCode::InvalidIdentity, Phase::Analysis).for_resource(document.id));
             }
             match if original {
-                Ok(document.original_identity.clone())
+                charge_identity_copy(&document.original_identity, &processing, Phase::Analysis)
+                    .map(|()| document.original_identity.clone())
             } else {
-                document.identity()
+                document
+                    .current_tree_in(None, context)
+                    .and_then(|tree| identity(&tree, document.original_identity.scope))
             } {
                 Ok(identity) => {
+                    if let Err(finding) = charge_identity_copy(&identity, &processing, Phase::Analysis) {
+                        out.push(finding.for_resource(document.id));
+                        break;
+                    }
                     if let Some(key) = identity.collision_key() {
                         if let Some(previous) = seen.insert(key, document.id) {
                             out.push(
@@ -788,7 +938,15 @@ impl ResourceSet {
                 Err(finding) => out.push(finding.for_resource(document.id)),
             }
         }
-        out
+    }
+    fn construction_failure(&mut self, finding: Finding) -> Vec<Finding> {
+        let mut report = crate::processing::ProcessingReport::from_report(
+            std::mem::take(&mut self.findings),
+            self.processing.clone(),
+            Phase::Decoding,
+        );
+        report.push(finding);
+        report.into_vec()
     }
     fn add_node(
         &mut self,
@@ -799,6 +957,8 @@ impl ResourceSet {
         syntax: Arc<SyntaxDocument>,
         registry: &RegistryBuilder,
     ) -> Result<Vec<ResourceId>, Finding> {
+        self.processing.work(1, Phase::Decoding)?;
+        charge_gvk(&tree, &self.processing, Phase::Decoding)?;
         let gvk = tree_gvk(&tree)?;
         let typed_list = registry.lists.get(&gvk);
         if gvk.group.is_none() && gvk.version == "v1" && gvk.kind == "List" || typed_list.is_some() {
@@ -808,37 +968,52 @@ impl ResourceSet {
             return Err(invalid());
         }
         let scope = crate::capability::builtin_scope(&gvk).unwrap_or(ResourceScope::Unknown);
+        charge_identity(&tree, &self.processing, Phase::Decoding)?;
         let original_identity = identity(&tree, scope)?;
         let id = ResourceId(u64::try_from(self.documents.len()).map_err(|_| invalid())?);
         let (resource, original_known, capability) = if let Some(entry) = registry.entries.get(&gvk) {
             if entry.gvk != gvk || entry.scope != scope {
                 return Err(Finding::error(FindingCode::InvalidRegistration, Phase::Decoding));
             }
-            let resource =
-                (entry.decode)(&tree, &evidence, &DecodeContext { gvk: &gvk, scope }).map_err(|findings| {
-                    findings
-                        .into_iter()
-                        .next()
-                        .unwrap_or_else(|| Finding::error(FindingCode::NativeFieldInvalid, Phase::Decoding))
-                        .for_resource(id)
-                })?;
-            let known = registry::encode(resource.as_ref(), None)?;
+            let resource = (entry.decode)(
+                &tree,
+                &evidence,
+                &DecodeContext {
+                    gvk: &gvk,
+                    scope,
+                    fields: registry::FieldDecodeContext::new(
+                        *evidence.limits(),
+                        self.processing.clone(),
+                        Phase::Decoding,
+                    ),
+                },
+            )
+            .map_err(|findings| {
+                findings
+                    .into_iter()
+                    .next()
+                    .unwrap_or_else(|| Finding::error(FindingCode::NativeFieldInvalid, Phase::Decoding))
+                    .for_resource(id)
+            })?;
+            let ctx = registry::EncodeContext::in_operation(None, *evidence.limits(), self.processing.clone());
+            let known = registry::encode_in(resource.as_ref(), &ctx)?;
+            charge_identity(&known, &self.processing, Phase::Decoding)?;
             if identity(&known, scope)? != original_identity {
                 return Err(Finding::error(FindingCode::CodecIdentityMismatch, Phase::Decoding));
             }
             (Some(resource), Some(known), Some(entry.capability.clone()))
         } else {
-            self.findings.push(
-                Finding::warning(
-                    if crate::capability::builtin_scope(&gvk).is_some() {
-                        FindingCode::UnadmittedKind
-                    } else {
-                        FindingCode::UnknownKind
-                    },
-                    Phase::Decoding,
-                )
-                .for_resource(id),
-            );
+            let finding = Finding::warning(
+                if crate::capability::builtin_scope(&gvk).is_some() {
+                    FindingCode::UnadmittedKind
+                } else {
+                    FindingCode::UnknownKind
+                },
+                Phase::Decoding,
+            )
+            .for_resource(id);
+            self.processing.report(&finding, Phase::Decoding)?;
+            self.findings.push(finding);
             (None, None, None)
         };
         crate::source::check_observation_budget(&tree, &gvk)?;
@@ -849,6 +1024,8 @@ impl ResourceSet {
         crate::source::retain_reviewed_observations(&tree, &gvk, evidence.source_version, &mut observations);
         let mut fields = FieldEvidenceMap::default();
         collect_evidence(&tree, &FieldPath::default(), &evidence, &observations, &mut fields);
+        self.processing.payload_array::<ResourceDocument>(1, Phase::Decoding)?;
+        self.processing.payload_array::<ResourceId>(1, Phase::Decoding)?;
         self.documents.push(ResourceDocument {
             id,
             source,
@@ -863,6 +1040,7 @@ impl ResourceSet {
             decode: registry.entries.get(&gvk).map(|entry| entry.decode),
             capability,
             edits: Vec::new(),
+            edit_processing_limits: crate::processing::NativeProcessingLimits::default(),
         });
         Ok(vec![id])
     }
@@ -882,6 +1060,8 @@ impl ResourceSet {
             let Some(items) = tree.get("items").and_then(TreeNode::as_sequence) else {
                 return Err(invalid());
             };
+            self.processing.tree_copy(tree, Phase::Decoding)?;
+            self.processing.payload_array::<ListDocument>(1, Phase::Decoding)?;
             self.lists.push(ListDocument {
                 id,
                 source,
@@ -892,6 +1072,14 @@ impl ResourceSet {
             });
             let mut resource_ids = Vec::new();
             for (index, item) in items.iter().enumerate() {
+                self.processing.work(1, Phase::Decoding)?;
+                self.processing.tree_copy(item, Phase::Decoding)?;
+                self.processing.payload_array::<(ListId, usize)>(
+                    collection
+                        .map_or(Some(1), |path| path.items.len().checked_add(1))
+                        .ok_or_else(|| self.processing.fail(Phase::Decoding))?,
+                    Phase::Decoding,
+                )?;
                 if typed_list.is_some_and(|expected| tree_gvk(item).is_ok_and(|actual| &actual != expected)) {
                     let mut finding = invalid().at_path(FieldPath(vec!["items".into(), index.to_string()]));
                     finding.source = item.start;
@@ -899,8 +1087,8 @@ impl ResourceSet {
                 }
                 let mut path = collection.cloned().unwrap_or(CollectionPath { items: Vec::new() });
                 path.items.push((id, index));
-                resource_ids.extend(
-                    self.add_node(
+                let added = self
+                    .add_node(
                         item.clone(),
                         source,
                         Some(path),
@@ -909,6 +1097,9 @@ impl ResourceSet {
                         registry,
                     )
                     .map_err(|mut finding| {
+                        if finding.code == FindingCode::LimitExceeded {
+                            return finding;
+                        }
                         if finding.wrapper.is_none() {
                             if finding.path.is_none() {
                                 finding.path = Some(FieldPath(vec!["items".into(), index.to_string()]));
@@ -918,15 +1109,22 @@ impl ResourceSet {
                             }
                         }
                         finding
-                    })?,
-                );
+                    })?;
+                self.processing
+                    .payload_array::<ResourceId>(added.len(), Phase::Decoding)?;
+                resource_ids.extend(added);
             }
+            self.processing
+                .payload_array::<ResourceId>(resource_ids.len(), Phase::Decoding)?;
             self.lists[usize::try_from(id.0).map_err(|_| invalid())?]
                 .item_ids
                 .clone_from(&resource_ids);
             Ok(resource_ids)
         })();
         result.map_err(|mut finding: Finding| {
+            if finding.code == FindingCode::LimitExceeded {
+                return finding;
+            }
             if finding.wrapper.is_none() {
                 finding = finding.for_wrapper(WrapperSubject { source, list: id });
                 if finding.source.is_none() {
@@ -942,6 +1140,7 @@ impl ResourceSet {
     pub(crate) fn crd_scopes(&self) -> Result<BTreeMap<(String, String, String), bool>, Finding> {
         let mut crds = BTreeMap::new();
         for doc in &self.documents {
+            self.processing.work(1, Phase::Decoding)?;
             if doc.original_identity.gvk.group.as_deref() != Some("apiextensions.k8s.io")
                 || doc.original_identity.gvk.kind != "CustomResourceDefinition"
             {
@@ -968,16 +1167,22 @@ impl ResourceSet {
             let mut versions = Vec::new();
             if let Some(items) = spec.get("versions").and_then(TreeNode::as_sequence) {
                 for item in items {
+                    self.processing.work(1, Phase::Decoding)?;
                     if item.get("served").is_some_and(|n| n.value == TreeValue::Bool(true)) {
                         if let Some(version) = item.get("name").and_then(TreeNode::as_str) {
+                            self.processing.payload(version.len(), Phase::Decoding)?;
                             versions.push(version.to_owned());
                         }
                     }
                 }
             } else if let Some(version) = spec.get("version").and_then(TreeNode::as_str) {
+                self.processing.payload(version.len(), Phase::Decoding)?;
                 versions.push(version.to_owned());
             }
             for version in versions {
+                self.processing.work(1, Phase::Decoding)?;
+                self.processing
+                    .payload_sizes([group.len(), kind.len()], Phase::Decoding)?;
                 if crds
                     .insert((group.to_owned(), kind.to_owned(), version), namespaced)
                     .is_some()
@@ -991,10 +1196,19 @@ impl ResourceSet {
     fn resolve_crd_scopes(&mut self) -> Result<(), Finding> {
         let crds = self.crd_scopes()?;
         for doc in &mut self.documents {
+            self.processing.work(1, Phase::Decoding)?;
             if doc.original_identity.scope != ResourceScope::Unknown {
                 continue;
             }
             let gvk = &doc.original_identity.gvk;
+            self.processing.payload_sizes(
+                [
+                    gvk.group.as_ref().map_or(0, String::len),
+                    gvk.kind.len(),
+                    gvk.version.len(),
+                ],
+                Phase::Decoding,
+            )?;
             if let Some(namespaced) = gvk
                 .group
                 .as_ref()
@@ -1003,6 +1217,7 @@ impl ResourceSet {
                 let scope = ResourceScope::CrdResolved {
                     namespaced: *namespaced,
                 };
+                charge_identity(&doc.original, &self.processing, Phase::Decoding)?;
                 doc.original_identity = identity(&doc.original, scope)?;
             }
         }
@@ -1046,6 +1261,50 @@ fn clear_positions(node: &mut TreeNode) {
 fn invalid() -> Finding {
     Finding::error(FindingCode::InvalidIdentity, Phase::Decoding)
 }
+fn charge_gvk(
+    tree: &TreeNode,
+    processing: &crate::processing::NativeOperationBudget,
+    phase: Phase,
+) -> Result<(), Finding> {
+    processing.payload_sizes(
+        ["apiVersion", "kind"].map(|key| tree.get(key).and_then(TreeNode::as_str).map_or(0, str::len)),
+        phase,
+    )
+}
+pub(crate) fn charge_identity(
+    tree: &TreeNode,
+    processing: &crate::processing::NativeOperationBudget,
+    phase: Phase,
+) -> Result<(), Finding> {
+    charge_gvk(tree, processing, phase)?;
+    let metadata = tree.get("metadata");
+    processing.payload_sizes(
+        ["name", "namespace", "generateName"].map(|key| {
+            metadata
+                .and_then(|node| node.get(key))
+                .and_then(TreeNode::as_str)
+                .map_or(0, str::len)
+        }),
+        phase,
+    )
+}
+fn charge_identity_copy(
+    identity: &ResourceIdentity,
+    processing: &crate::processing::NativeOperationBudget,
+    phase: Phase,
+) -> Result<(), Finding> {
+    processing.payload_sizes(
+        [
+            identity.gvk.group.as_ref().map_or(0, String::len),
+            identity.gvk.version.len(),
+            identity.gvk.kind.len(),
+            identity.name.value().map_or(0, String::len),
+            identity.namespace.value().map_or(0, String::len),
+            identity.generate_name.value().map_or(0, String::len),
+        ],
+        phase,
+    )
+}
 pub(crate) fn tree_gvk(tree: &TreeNode) -> Result<GroupVersionKind, Finding> {
     let api = tree.get("apiVersion").and_then(TreeNode::as_str).ok_or_else(invalid)?;
     let kind = tree.get("kind").and_then(TreeNode::as_str).ok_or_else(invalid)?;
@@ -1058,6 +1317,16 @@ pub(crate) fn string_field(tree: Option<&TreeNode>) -> Result<Presence<String>, 
         Some(n) => n.as_str().map(|v| Presence::Value(v.to_owned())).ok_or_else(invalid),
     }
 }
+pub(crate) fn identity_in(
+    tree: &TreeNode,
+    scope: ResourceScope,
+    processing: &crate::processing::NativeOperationBudget,
+    phase: Phase,
+) -> Result<ResourceIdentity, Finding> {
+    charge_identity(tree, processing, phase)?;
+    identity(tree, scope)
+}
+
 pub(crate) fn identity(tree: &TreeNode, scope: ResourceScope) -> Result<ResourceIdentity, Finding> {
     let gvk = tree_gvk(tree)?;
     let metadata = tree.get("metadata");

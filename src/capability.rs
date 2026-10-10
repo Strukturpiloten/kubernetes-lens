@@ -2112,63 +2112,193 @@ pub fn capability_ledger_bytes() -> &'static [u8] {
     include_bytes!("../schemas/capabilities/kubernetes-1.20-1.37.json")
 }
 
+/// Traverse source-ledger evidence directly into the caller's shared, charged sink.
 pub(crate) fn source_field_findings(
     tree: &crate::syntax::TreeNode,
     gvk: &GroupVersionKind,
     target: &TargetProfile,
-) -> Vec<Finding> {
+    processing: &crate::processing::NativeOperationBudget,
+    phase: Phase,
+    out: &mut dyn crate::registry::FindingSink,
+) {
     use std::sync::OnceLock;
     static LEDGER: OnceLock<Option<serde_json::Value>> = OnceLock::new();
+    if processing.exhausted() || out.exhausted() {
+        return;
+    }
+    if let Err(finding) = processing.work(1, phase) {
+        out.push(finding);
+        return;
+    }
     let Some(ledger) = LEDGER
         .get_or_init(|| serde_json::from_slice(capability_ledger_bytes()).ok())
         .as_ref()
     else {
-        return vec![invalid_profile()];
+        out.push(invalid_profile());
+        return;
     };
-    let mut out = Vec::new();
+    let mut session = SourceFieldSession {
+        ledger,
+        target,
+        processing,
+        phase,
+        out,
+        profile: format!("k8s-1.{}-0", target.kubernetes.minor()),
+    };
     let Some(resource) = ledger["resources"]
         .as_array()
         .and_then(|rows| rows.iter().find(|row| row["kind"].as_str() == Some(gvk.kind.as_str())))
     else {
-        return out;
+        return;
     };
     let api = gvk.api_version();
     let Some(profile) = resource["proposed_admitted_api_profiles"].as_array().and_then(|rows| {
         rows.iter()
             .find(|row| row["api_version"].as_str() == Some(api.as_str()))
     }) else {
-        return out;
+        return;
     };
     if let Some(fields) = profile["typed_field_pointers"].as_array() {
         for field in fields {
+            if !session.tick() {
+                return;
+            }
             let Some(pointer) = field["pointer"].as_str() else {
                 continue;
             };
             let Ok(path) = crate::diagnostic::FieldPath::parse(pointer) else {
                 continue;
             };
-            if let Some(node) = tree.get_path(&path) {
-                source_field(node, field, (None, &path), ledger, target, &mut out, 0);
+            if let Some(node) = source_node(tree, &path.0, &mut session) {
+                source_field(node, field, (None, &path), &mut session, 0);
             }
         }
     }
-    out.extend(contextual_findings(tree, gvk, target, ledger));
-    out
+    contextual_findings(tree, gvk, &mut session);
 }
-fn contextual_findings(
-    tree: &crate::syntax::TreeNode,
-    gvk: &GroupVersionKind,
-    target: &TargetProfile,
-    ledger: &serde_json::Value,
-) -> Vec<Finding> {
-    let mut out = Vec::new();
+
+struct SourceFieldSession<'a> {
+    ledger: &'a serde_json::Value,
+    target: &'a TargetProfile,
+    processing: &'a crate::processing::NativeOperationBudget,
+    phase: Phase,
+    out: &'a mut dyn crate::registry::FindingSink,
+    profile: String,
+}
+impl SourceFieldSession<'_> {
+    fn tick(&mut self) -> bool {
+        if self.processing.exhausted() || self.out.exhausted() {
+            return false;
+        }
+        match self.processing.work(1, self.phase) {
+            Ok(()) => true,
+            Err(finding) => {
+                self.out.push(finding);
+                false
+            }
+        }
+    }
+    fn depth(&mut self, depth: usize) -> bool {
+        if !self.tick() {
+            return false;
+        }
+        if depth > 128 {
+            self.out.push(self.processing.fail(self.phase));
+            return false;
+        }
+        true
+    }
+    fn finding(&mut self, code: FindingCode, path: &crate::diagnostic::FieldPath) {
+        if self.tick() {
+            self.out.push(Finding::error(code, self.phase).at_path(path.clone()));
+        }
+    }
+}
+
+// Exact source pointers allow sequence indices; contextual patterns use the existing
+// field_nodes semantics (wildcards plus mapping-key lookup), without collecting nodes.
+fn source_node<'a>(
+    mut node: &'a crate::syntax::TreeNode,
+    segments: &[String],
+    session: &mut SourceFieldSession<'_>,
+) -> Option<&'a crate::syntax::TreeNode> {
+    for segment in segments {
+        if !session.tick() {
+            return None;
+        }
+        node = if let Some(entries) = node.as_mapping() {
+            let mut found = None;
+            for (key, value) in entries {
+                if !session.tick() {
+                    return None;
+                }
+                if key == segment {
+                    found = Some(value);
+                    break;
+                }
+            }
+            found?
+        } else {
+            node.as_sequence()?.get(segment.parse::<usize>().ok()?)?
+        };
+    }
+    Some(node)
+}
+fn contextual_present(
+    node: &crate::syntax::TreeNode,
+    segments: &[String],
+    session: &mut SourceFieldSession<'_>,
+) -> bool {
+    if !session.tick() {
+        return false;
+    }
+    let Some((segment, rest)) = segments.split_first() else {
+        return true;
+    };
+    if segment == "*" {
+        if let Some(items) = node.as_sequence() {
+            for item in items {
+                if !session.tick() {
+                    return false;
+                }
+                if contextual_present(item, rest, session) {
+                    return true;
+                }
+            }
+        } else if let Some(entries) = node.as_mapping() {
+            for (_, value) in entries {
+                if !session.tick() {
+                    return false;
+                }
+                if contextual_present(value, rest, session) {
+                    return true;
+                }
+            }
+        }
+    } else if let Some(entries) = node.as_mapping() {
+        for (name, value) in entries {
+            if !session.tick() {
+                return false;
+            }
+            if name == segment {
+                return contextual_present(value, rest, session);
+            }
+        }
+    }
+    false
+}
+fn contextual_findings(tree: &crate::syntax::TreeNode, gvk: &GroupVersionKind, session: &mut SourceFieldSession<'_>) {
+    let ledger = session.ledger;
     let Some(contexts) = ledger["contextual_typed_members"].as_array() else {
-        return out;
+        return;
     };
     let Some(prefix) = ledger["template_context_bindings"]["PodSpec"][&gvk.kind].as_str() else {
-        return out;
+        return;
     };
     for context in contexts {
+        if !session.tick() {
+            return;
+        }
         let Some(suffix) = context["pointer_pattern"]
             .as_str()
             .and_then(|p| p.strip_prefix("/spec"))
@@ -2176,7 +2306,10 @@ fn contextual_findings(
             continue;
         };
         let pattern = format!("{prefix}{suffix}");
-        if !crate::generation::field_nodes(tree, &pattern).is_empty() {
+        let Ok(path) = crate::diagnostic::FieldPath::parse(&pattern) else {
+            continue;
+        };
+        if contextual_present(tree, &path.0, session) {
             let available = context["schema_presence_ranges"].as_array().is_some_and(|ranges| {
                 ranges.iter().any(|range| {
                     let minor = |name| {
@@ -2187,7 +2320,7 @@ fn contextual_findings(
                     };
                     minor("from")
                         .zip(minor("through"))
-                        .is_some_and(|(first, last)| (first..=last).contains(&target.kubernetes.minor()))
+                        .is_some_and(|(first, last)| (first..=last).contains(&session.target.kubernetes.minor()))
                 })
             });
             let code = if !available {
@@ -2195,77 +2328,86 @@ fn contextual_findings(
             } else if FeatureGateId::ALL
                 .iter()
                 .find(|id| Some(id.as_str()) == context["gate"].as_str())
-                .is_some_and(|id| target.feature_gates.resolve(*id, target.kubernetes) != Ok(FeatureGateState::Enabled))
+                .is_some_and(|id| {
+                    session.target.feature_gates.resolve(*id, session.target.kubernetes)
+                        != Ok(FeatureGateState::Enabled)
+                })
             {
                 Some(FindingCode::FeatureGateRequired)
             } else {
                 None
             };
             if let Some(code) = code {
-                let mut finding = Finding::error(code, Phase::Validation);
-                finding.path = crate::diagnostic::FieldPath::parse(&pattern).ok();
-                out.push(finding);
+                session.finding(code, &path);
             }
         }
+        if !session.tick() {
+            return;
+        }
         let regular = pattern.replace("/initContainers/", "/containers/");
-        if regular != pattern && !crate::generation::field_nodes(tree, &regular).is_empty() {
-            let mut finding = Finding::error(FindingCode::NativeFieldInvalid, Phase::Validation);
-            finding.path = crate::diagnostic::FieldPath::parse(&regular).ok();
-            out.push(finding);
+        if regular != pattern {
+            if let Ok(path) = crate::diagnostic::FieldPath::parse(&regular) {
+                if contextual_present(tree, &path.0, session) {
+                    session.finding(FindingCode::NativeFieldInvalid, &path);
+                }
+            }
         }
     }
-    out
 }
 fn source_field(
     node: &crate::syntax::TreeNode,
     fact: &serde_json::Value,
     location: (Option<(&str, &str)>, &crate::diagnostic::FieldPath),
-    ledger: &serde_json::Value,
-    target: &TargetProfile,
-    out: &mut Vec<Finding>,
+    session: &mut SourceFieldSession<'_>,
     depth: usize,
 ) {
-    let (owner, path) = location;
-    if depth > 128 {
-        out.push(Finding::error(FindingCode::LimitExceeded, Phase::Validation).at_path(path.clone()));
+    let ledger = session.ledger;
+    if !session.depth(depth) {
         return;
     }
-    let profile = format!("k8s-1.{}-0", target.kubernetes.minor());
+    let (owner, path) = location;
     let forms = fact["schema_forms"].as_array();
     let selected = forms.and_then(|forms| {
         forms.iter().find(|form| {
             form["source_schema_ids"]
                 .as_array()
-                .is_some_and(|ids| ids.iter().any(|id| id.as_str() == Some(profile.as_str())))
+                .is_some_and(|ids| ids.iter().any(|id| id.as_str() == Some(session.profile.as_str())))
         })
     });
     if selected.is_none() {
-        out.push(Finding::error(FindingCode::UnavailableField, Phase::Validation).at_path(path.clone()));
+        session.finding(FindingCode::UnavailableField, path);
+    }
+    if !session.tick() {
+        return;
     }
     if let Some((definition, member)) = owner {
         if let Some(bindings) = ledger["feature_gate_bindings"].as_array() {
-            for binding in bindings.iter().filter(|binding| {
-                binding["definition"].as_str() == Some(definition) && binding["member"].as_str() == Some(member)
-            }) {
+            for binding in bindings {
+                if !session.tick() {
+                    return;
+                }
+                if binding["definition"].as_str() != Some(definition) || binding["member"].as_str() != Some(member) {
+                    continue;
+                }
                 if let Some(gate) = FeatureGateId::ALL
                     .iter()
                     .find(|gate| Some(gate.as_str()) == binding["gate"].as_str())
                 {
                     let (stages, removed) = gate_stages(*gate);
                     let stage = stages.iter().find(|stage| {
-                        stage.first <= target.kubernetes.minor() && target.kubernetes.minor() <= stage.last
+                        stage.first <= session.target.kubernetes.minor()
+                            && session.target.kubernetes.minor() <= stage.last
                     });
                     let stable = stage.is_some_and(|stage| stage.stable)
                         || removed
                             && stages
                                 .last()
-                                .is_some_and(|s| s.stable && target.kubernetes.minor() > s.last);
-                    if target.feature_gates.resolve(*gate, target.kubernetes) != Ok(FeatureGateState::Enabled)
+                                .is_some_and(|s| s.stable && session.target.kubernetes.minor() > s.last);
+                    if session.target.feature_gates.resolve(*gate, session.target.kubernetes)
+                        != Ok(FeatureGateState::Enabled)
                         || binding["selection"].as_str() == Some("stable_only") && !stable
                     {
-                        out.push(
-                            Finding::error(FindingCode::FeatureGateRequired, Phase::Validation).at_path(path.clone()),
-                        );
+                        session.finding(FindingCode::FeatureGateRequired, path);
                     }
                 }
             }
@@ -2273,7 +2415,7 @@ fn source_field(
     }
     let form = selected.or_else(|| forms.and_then(|forms| forms.first()));
     if let Some(shape) = form.and_then(|form| form.get("schema_shape")) {
-        source_shape(node, shape, path, ledger, target, out, depth + 1);
+        source_shape(node, shape, path, session, depth + 1);
     }
     // Root pointers are not prefix admission; only finite helper member facts are traversed.
 }
@@ -2281,13 +2423,11 @@ fn source_shape(
     node: &crate::syntax::TreeNode,
     shape: &serde_json::Value,
     path: &crate::diagnostic::FieldPath,
-    ledger: &serde_json::Value,
-    target: &TargetProfile,
-    out: &mut Vec<Finding>,
+    session: &mut SourceFieldSession<'_>,
     depth: usize,
 ) {
-    if depth > 128 {
-        out.push(Finding::error(FindingCode::LimitExceeded, Phase::Validation).at_path(path.clone()));
+    let ledger = session.ledger;
+    if !session.depth(depth) {
         return;
     }
     if let Some(reference) = shape["$ref"]
@@ -2299,14 +2439,15 @@ fn source_shape(
             node.as_mapping(),
         ) {
             for (name, value) in entries {
+                if !session.tick() {
+                    return;
+                }
                 if let Some(fact) = members.get(name) {
                     source_field(
                         value,
                         fact,
                         (Some((reference, name)), &path.child(name)),
-                        ledger,
-                        target,
-                        out,
+                        session,
                         depth + 1,
                     );
                 }
@@ -2314,22 +2455,20 @@ fn source_shape(
         }
     } else if let (Some(items), Some(shape)) = (node.as_sequence(), shape.get("items")) {
         for (index, item) in items.iter().enumerate() {
-            source_shape(
-                item,
-                shape,
-                &path.child(index.to_string()),
-                ledger,
-                target,
-                out,
-                depth + 1,
-            );
+            if !session.tick() {
+                return;
+            }
+            source_shape(item, shape, &path.child(index.to_string()), session, depth + 1);
         }
     } else if let (Some(entries), Some(shape)) = (
         node.as_mapping(),
         shape.get("additionalProperties").filter(|shape| shape.is_object()),
     ) {
         for (key, value) in entries {
-            source_shape(value, shape, &path.child(key), ledger, target, out, depth + 1);
+            if !session.tick() {
+                return;
+            }
+            source_shape(value, shape, &path.child(key), session, depth + 1);
         }
     }
 }

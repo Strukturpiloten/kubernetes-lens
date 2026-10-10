@@ -32,8 +32,8 @@ impl fmt::Debug for NativeTime {
     }
 }
 impl FieldCodec for NativeTime {
-    fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
-        let value = String::decode(node, path)?;
+    fn decode(node: &TreeNode, ctx: &crate::registry::FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+        let value = String::decode(node, ctx, path)?;
         Self::parse(&value)
             .map_err(|_| Finding::error(FindingCode::NativeFieldInvalid, Phase::Decoding).at_path(path.clone()))
     }
