@@ -190,6 +190,15 @@ impl NativeResource for Fixture {
         }
         emit_key_facts(ctx, out);
         if ctx.gvk.kind == "Service" {
+            let ports_path = path("/spec/ports");
+            ctx.emit_fact(
+                NativeFact::ServicePorts {
+                    state: service_port_declarations(ctx.tree, &ports_path, &ctx.fields),
+                    path: ports_path,
+                },
+                out,
+            );
+
             let path = path("/spec/clusterIP");
             let state = match ctx.tree.get_path(&path).and_then(TreeNode::as_str) {
                 Some("None") => FactState::Known(true),
@@ -371,6 +380,29 @@ fn fields() -> &'static [FieldCapability] {
         "/stringData/*",
         "/spec",
         "/spec/clusterIP",
+        "/spec/ports",
+        "/spec/ports/*",
+        "/spec/ports/*/name",
+        "/spec/ports/*/port",
+        "/spec/ports/*/protocol",
+        "/spec/podSelector",
+        "/spec/podSelector/matchLabels",
+        "/spec/podSelector/matchLabels/*",
+        "/spec/ingress",
+        "/spec/ingress/*",
+        "/spec/ingress/*/from",
+        "/spec/ingress/*/from/*",
+        "/spec/ingress/*/from/*/namespaceSelector",
+        "/spec/ingress/*/from/*/namespaceSelector/matchLabels",
+        "/spec/ingress/*/from/*/namespaceSelector/matchLabels/*",
+        "/spec/ingress/*/from/*/podSelector",
+        "/spec/ingress/*/from/*/podSelector/matchLabels",
+        "/spec/ingress/*/from/*/podSelector/matchLabels/*",
+        "/spec/defaultBackend",
+        "/spec/defaultBackend/resource",
+        "/spec/defaultBackend/resource/apiGroup",
+        "/spec/defaultBackend/resource/kind",
+        "/spec/defaultBackend/resource/name",
         "/spec/template",
         "/spec/template/metadata",
         "/spec/template/metadata/name",
@@ -432,9 +464,12 @@ fn set(text: &str, origin: InputOrigin) -> TestResult<ResourceSet> {
         ("v1", "Secret"),
         ("v1", "Service"),
         ("v1", "PersistentVolumeClaim"),
+        ("v1", "Namespace"),
+        ("networking.k8s.io/v1", "NetworkPolicy"),
+        ("networking.k8s.io/v1", "Ingress"),
     ] {
         let gvk = GroupVersionKind::new(api, kind).required()?;
-        let scope = ResourceScope::Namespaced;
+        let scope = crate::capability::builtin_scope(&gvk).unwrap_or(ResourceScope::CrdResolved { namespaced: true });
         registry
             .register(ResourceRegistration {
                 gvk: gvk.clone(),
@@ -1022,5 +1057,236 @@ fn root_status_expectations_bind_the_immutable_report_ledger_and_authenticated_w
         }
         assert_eq!(actual, transition[key].as_str().required()?);
     }
+    Ok(())
+}
+
+#[test]
+fn networking_peer_conjunction_uses_admitted_namespaces_and_retains_partial_candidates() -> TestResult {
+    let document = serde_json::json!({"apiVersion":"v1","kind":"List","items":[
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"name":"policy","namespace":"b"},"spec":{"podSelector":{},"ingress":[{"from":[{"namespaceSelector":{"matchLabels":{"team":"a"}},"podSelector":{"matchLabels":{"app":"web"}}}]}]}},
+        {"apiVersion":"v1","kind":"Namespace","metadata":{"name":"a","labels":{"team":"a"}}},
+        {"apiVersion":"v1","kind":"Namespace","metadata":{"name":"b","labels":{"team":"b"}}},
+        {"apiVersion":"v1","kind":"Pod","metadata":{"name":"intersection","namespace":"a","labels":{"app":"web"}}},
+        {"apiVersion":"v1","kind":"Pod","metadata":{"name":"wrong-namespace","namespace":"b","labels":{"app":"web"}}},
+        {"apiVersion":"v1","kind":"Pod","metadata":{"name":"excluded","namespace":"missing","labels":{"app":"other"}}},
+        {"apiVersion":"v1","kind":"Pod","metadata":{"name":"unknown","namespace":"missing","labels":{"app":"web"}}}
+    ]});
+    let mut resources = set(&serde_json::to_string(&document)?, InputOrigin::Authored)?;
+    let peer = Reference {
+        from: ResourceId(0),
+        path: path("/spec/ingress/0/from/0"),
+        relation: RelationshipKind::Selector,
+        target: ReferenceTarget::NetworkPolicyPeer {
+            namespace_selector: Presence::Value(LabelSelector::from_match_labels(BTreeMap::from([(
+                "team".to_owned(),
+                "a".to_owned(),
+            )]))),
+            pod_selector: Presence::Value(LabelSelector::from_match_labels(BTreeMap::from([(
+                "app".to_owned(),
+                "web".to_owned(),
+            )]))),
+        },
+        scope: ReferenceScope::SameNamespace,
+    };
+    let target = TargetProfile::documented_defaults(KubernetesVersion::MAX);
+    let graph = resolve_supplied_references_for_target(
+        &resources,
+        std::slice::from_ref(&peer),
+        &ReferenceContext::default(),
+        &target,
+    );
+    assert!(
+        matches!(&graph.edges[0].resolution,Resolution::PartiallyResolvedSubjects{matched,unavailable} if matched==&[GraphSubject::Object{resource:ResourceId(3)}] && unavailable.len()==1 && unavailable[0].resource==ResourceId(6))
+    );
+    assert!(
+        graph.edges[0]
+            .evidence
+            .iter()
+            .any(|field| field.resource == ResourceId(1) && field.path == path("/metadata/labels"))
+    );
+    let malformed = crate::parse_source(
+        SourceInput {
+            id: SourceId(99),
+            format: DocumentFormat::Json,
+            origin: InputOrigin::Authored,
+            source_version: None,
+            bytes: b"\"unknown-labels\"",
+        },
+        &ParseLimits::default(),
+    )
+    .required()?;
+    resources.documents_mut()[4].set_field_from_source(path("/metadata/labels"), malformed)?;
+    let graph = resolve_supplied_references_for_target(
+        &resources,
+        std::slice::from_ref(&peer),
+        &ReferenceContext::default(),
+        &target,
+    );
+    assert!(
+        matches!(&graph.edges[0].resolution,Resolution::PartiallyResolvedSubjects{matched,unavailable} if matched==&[GraphSubject::Object{resource:ResourceId(3)}] && unavailable.len()==1 && unavailable[0].resource==ResourceId(6))
+    );
+    let mut duplicates = document.clone();
+    duplicates["items"]
+        .as_array_mut()
+        .required()?
+        .push(document["items"][1].clone());
+    duplicates["items"][7]["metadata"]["name"] = serde_json::json!("distinct");
+    let mut resources = set(&serde_json::to_string(&duplicates)?, InputOrigin::Authored)?;
+    let fixture = resources.documents_mut()[7].resource_mut::<Fixture>().required()?;
+    let metadata = fixture.tree.get_path(&path("/metadata")).required()?.clone();
+    let mut metadata = metadata;
+    if let TreeValue::Mapping(entries) = &mut metadata.value {
+        for (key, value) in entries {
+            if key == "name" {
+                value.value = TreeValue::String("a".to_owned());
+            }
+        }
+    }
+    if let TreeValue::Mapping(entries) = &mut fixture.tree.value {
+        for (key, value) in entries {
+            if key == "metadata" {
+                *value = metadata.clone();
+            }
+        }
+    }
+    let graph = resolve_supplied_references_for_target(&resources, &[peer], &ReferenceContext::default(), &target);
+    assert!(
+        matches!(&graph.edges[0].resolution,Resolution::PartiallyResolvedSubjects{unavailable,..} if unavailable.iter().any(|gap|gap.reason==FactUnavailable::Unknown(FactGap::AmbiguousSuppliedEvidence)))
+    );
+    for supplier in [ResourceId(1), ResourceId(7)] {
+        assert!(
+            graph.edges[0]
+                .evidence
+                .iter()
+                .any(|field| field.resource == supplier && field.path == path("/metadata/name"))
+        );
+    }
+    Ok(())
+}
+#[test]
+fn versionless_native_refs_use_group_kind_scope_name_and_never_prefer_served_versions() -> TestResult {
+    let mut document = serde_json::json!({"apiVersion":"v1","kind":"List","items":[
+        {"apiVersion":"networking.k8s.io/v1","kind":"Ingress","metadata":{"name":"source","namespace":"ns"},"spec":{"defaultBackend":{"resource":{"apiGroup":"example.org","kind":"Backend","name":"backend"}}}},
+        {"apiVersion":"example.org/v2","kind":"Backend","metadata":{"name":"backend","namespace":"ns"}},
+        {"apiVersion":"other.org/v1","kind":"Backend","metadata":{"name":"backend","namespace":"ns"}},
+        {"apiVersion":"example.org/v1","kind":"Other","metadata":{"name":"backend","namespace":"ns"}}
+    ]});
+    document["items"].as_array_mut().required()?.push(serde_json::json!({
+        "apiVersion":"apiextensions.k8s.io/v1","kind":"CustomResourceDefinition",
+        "metadata":{"name":"backends.example.org"},
+        "spec":{"group":"example.org","names":{"kind":"Backend","plural":"backends"},
+            "scope":"Namespaced","versions":[{"name":"v1","served":true},{"name":"v2","served":true}]}
+    }));
+    let reference = Reference {
+        from: ResourceId(0),
+        path: path("/spec/defaultBackend/resource"),
+        relation: RelationshipKind::Dependency,
+        target: ReferenceTarget::GroupKindName {
+            group: Presence::Value("example.org".to_owned()),
+            kind: "Backend".to_owned(),
+            name: "backend".to_owned(),
+        },
+        scope: ReferenceScope::SameNamespace,
+    };
+    let target = TargetProfile::documented_defaults(KubernetesVersion::MAX);
+    let resources = set(&serde_json::to_string(&document)?, InputOrigin::Authored)?;
+    let graph = resolve_supplied_references_for_target(
+        &resources,
+        std::slice::from_ref(&reference),
+        &ReferenceContext::default(),
+        &target,
+    );
+    assert_eq!(
+        graph.edges[0].resolution,
+        Resolution::ResolvedSubjects(vec![GraphSubject::Object {
+            resource: ResourceId(1)
+        }])
+    );
+    document["items"].as_array_mut().required()?.push(serde_json::json!({"apiVersion":"example.org/v1","kind":"Backend","metadata":{"name":"initially-unique","namespace":"ns"}}));
+    let mut resources = set(&serde_json::to_string(&document)?, InputOrigin::Authored)?;
+    let patch = crate::parse_source(
+        SourceInput {
+            id: SourceId(83),
+            format: DocumentFormat::Json,
+            origin: InputOrigin::Authored,
+            source_version: None,
+            bytes: b"\"backend\"",
+        },
+        &ParseLimits::default(),
+    )
+    .required()?;
+    resources.documents_mut()[5].set_field_from_source(path("/metadata/name"), patch)?;
+    let graph = resolve_supplied_references_for_target(&resources, &[reference], &ReferenceContext::default(), &target);
+    assert_eq!(
+        graph.edges[0].resolution,
+        Resolution::Ambiguous(vec![ResourceId(1), ResourceId(5)])
+    );
+    Ok(())
+}
+
+#[test]
+fn policy_separate_entries_select_a_union_and_keep_templates_distinct() -> TestResult {
+    let document = serde_json::json!({"apiVersion":"v1","kind":"List","items":[
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"name":"policy","namespace":"b"},"spec":{"podSelector":{},"ingress":[{"from":[{"namespaceSelector":{"matchLabels":{"team":"a"}}},{"podSelector":{"matchLabels":{"app":"web"}}}]}]}},
+        {"apiVersion":"v1","kind":"Namespace","metadata":{"name":"a","labels":{"team":"a"}}},
+        {"apiVersion":"v1","kind":"Namespace","metadata":{"name":"b","labels":{"team":"b"}}},
+        {"apiVersion":"v1","kind":"Pod","metadata":{"name":"by-namespace","namespace":"a","labels":{"app":"other"}}},
+        {"apiVersion":"v1","kind":"Pod","metadata":{"name":"by-pod","namespace":"b","labels":{"app":"web"}}},
+        {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"template","namespace":"b"},"spec":{"template":{"metadata":{"labels":{"app":"web"}}}}}
+    ]});
+    let resources = set(&serde_json::to_string(&document)?, InputOrigin::Authored)?;
+    let references = [
+        Reference {
+            from: ResourceId(0),
+            path: path("/spec/ingress/0/from/0"),
+            relation: RelationshipKind::Selector,
+            target: ReferenceTarget::NetworkPolicyPeer {
+                namespace_selector: Presence::Value(LabelSelector::from_match_labels(BTreeMap::from([(
+                    "team".to_owned(),
+                    "a".to_owned(),
+                )]))),
+                pod_selector: Presence::Absent,
+            },
+            scope: ReferenceScope::SameNamespace,
+        },
+        Reference {
+            from: ResourceId(0),
+            path: path("/spec/ingress/0/from/1"),
+            relation: RelationshipKind::Selector,
+            target: ReferenceTarget::NetworkPolicyPeer {
+                namespace_selector: Presence::Absent,
+                pod_selector: Presence::Value(LabelSelector::from_match_labels(BTreeMap::from([(
+                    "app".to_owned(),
+                    "web".to_owned(),
+                )]))),
+            },
+            scope: ReferenceScope::SameNamespace,
+        },
+    ];
+    let graph = resolve_supplied_references_for_target(
+        &resources,
+        &references,
+        &ReferenceContext::default(),
+        &TargetProfile::documented_defaults(KubernetesVersion::MAX),
+    );
+    assert_eq!(
+        graph.edges[0].resolution,
+        Resolution::ResolvedSubjects(vec![GraphSubject::Object {
+            resource: ResourceId(3)
+        }])
+    );
+    assert_eq!(
+        graph.edges[1].resolution,
+        Resolution::ResolvedSubjects(vec![
+            GraphSubject::Object {
+                resource: ResourceId(4)
+            },
+            GraphSubject::Template {
+                resource: ResourceId(5),
+                path: path("/spec/template"),
+                template_kind: TemplateKind::Pod
+            }
+        ])
+    );
     Ok(())
 }

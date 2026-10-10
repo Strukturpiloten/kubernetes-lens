@@ -1368,9 +1368,15 @@ pub(crate) fn identity(tree: &TreeNode, scope: ResourceScope) -> Result<Resource
     let generate_name = field("generateName")?;
     if name.value().is_some_and(|n| !crate::value::dns_subdomain(n))
         || namespace.value().is_some_and(|n| !crate::value::dns_label(n))
-        || generate_name
-            .value()
-            .is_some_and(|n| n.is_empty() || n.len() > 253 || !crate::value::dns_subdomain(n.trim_end_matches('-')))
+        || generate_name.value().is_some_and(|n| {
+            n.is_empty()
+                || n.len() > 253
+                || if gvk.group.is_none() && gvk.version == "v1" && gvk.kind == "Service" {
+                    !crate::resources::networking::service_generate_name_identity_envelope(n)
+                } else {
+                    !crate::value::dns_subdomain(n.trim_end_matches('-'))
+                }
+        })
     {
         return Err(invalid());
     }

@@ -2139,6 +2139,7 @@ pub(crate) fn source_field_findings(
     };
     let mut session = SourceFieldSession {
         ledger,
+        gvk,
         target,
         processing,
         phase,
@@ -2179,6 +2180,7 @@ pub(crate) fn source_field_findings(
 
 struct SourceFieldSession<'a> {
     ledger: &'a serde_json::Value,
+    gvk: &'a GroupVersionKind,
     target: &'a TargetProfile,
     processing: &'a crate::processing::NativeOperationBudget,
     phase: Phase,
@@ -2418,6 +2420,11 @@ fn source_enum(
     let Some(constraints) = fact["native_constraints"].as_array() else {
         return;
     };
+    // Native scalar defaulting admits a few reviewed networking spellings beyond
+    // historical finite schema enums. Shape/version/gate checks still run.
+    if crate::resources::networking::source_default_enum(session.gvk, node, path) {
+        return;
+    }
     let mut has_enum = false;
     for constraint in constraints {
         if !session.tick() {
@@ -2677,6 +2684,7 @@ mod finite_enum_tests {
             &FieldPath::parse("/modes")?,
             &mut SourceFieldSession {
                 ledger: &ledger,
+                gvk: &GroupVersionKind::new("v1", "PersistentVolumeClaim")?,
                 target: &target,
                 processing: &processing,
                 phase: Phase::Validation,

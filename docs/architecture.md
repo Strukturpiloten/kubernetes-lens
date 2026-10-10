@@ -23,12 +23,18 @@ The value layer owns exact JSON numbers and protected immutable arenas, defined 
 primitives and inherited operation contexts. Value construction creates no resource provenance
 and establishes neither schema evaluation nor server behavior.
 
-The workload cohort registers nine API roots for eight kinds; shared native helpers live in
-`resources::common`. Typed workload validation, facts, observations and generation use the
-same sealed registry and bounded core projection. Eighteen access/policy API roots add finite
-validation and supplied-only relationships through the same hooks. The other cohorts and custom documents
+The workload cohort registers nine API roots for eight kinds, networking ten roots for six kinds,
+and access/policy eighteen roots for thirteen kinds. Shared native helpers live in
+`resources::common`. All cohorts use the same sealed registry and cumulative processing session
+for validation, facts, observations and generation. Networking adds exact Service front-port
+subjects, named target-port supplier evidence, versionless GroupKind references and same-entry
+NetworkPolicy selector conjunctions. These are supplied-only relationships, with no controller,
+routing or policy-enforcement assertion. The other cohorts and custom documents
 remain preservation-only with structured findings. The frozen compatibility ledger and all
 named native conformance cells remain pending; focused code tests are separate evidence. See
 [ADR 0003](decisions/0003-offline-native-foundation.md) and the
 [foundation integration contract](foundation-api.md), supplemented by
-[ADR 0004](decisions/0004-native-authoring-facts-observations.md) and [workload limits](workloads.md).
+[ADR 0004](decisions/0004-native-authoring-facts-observations.md),
+[ADR 0005](decisions/0005-native-networking-relations.md),
+[ADR 0006](decisions/0006-shared-native-processing.md), [workload limits](workloads.md) and
+[networking limits](networking.md).
