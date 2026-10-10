@@ -11,7 +11,7 @@ pending native evidence for the agreed version/kind slice.
 
 The [foundation API](foundation-api.md) records delivered offline behavior, private evidence and
 sealed cohort integration. [Workload](workloads.md), [access and policy](access.md), and
-[networking](networking.md) pages describe the delivered native cohorts. Runtime and renderer
+[networking](networking.md), and [configuration/storage](storage.md) pages describe the delivered native cohorts. Runtime and renderer
 conformance remain pending.
 
 The access contract records typed resource/field boundaries and source-only admission witnesses.

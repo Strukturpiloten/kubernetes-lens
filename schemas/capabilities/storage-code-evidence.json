@@ -1,0 +1,173 @@
+{
+  "format": 1,
+  "status": "typed-native-static-code-present-native-profiles-pending",
+  "issue": 11,
+  "canonical_ledger": {
+    "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
+    "sha256": "5a9a11aedd2a4b4dec2587923dc0357fb7ea40209302f8dab3bc007e845388f6"
+  },
+  "roots": [
+    {
+      "kind": "ConfigMap",
+      "api_version": "v1",
+      "selected_field_catalogue_pointer": "/resources/14/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/configuration_storage.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "Secret",
+      "api_version": "v1",
+      "selected_field_catalogue_pointer": "/resources/15/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/configuration_storage.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "PersistentVolumeClaim",
+      "api_version": "v1",
+      "selected_field_catalogue_pointer": "/resources/16/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/configuration_storage.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "PersistentVolume",
+      "api_version": "v1",
+      "selected_field_catalogue_pointer": "/resources/17/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/configuration_storage.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "StorageClass",
+      "api_version": "storage.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/18/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/configuration_storage.rs",
+      "native_case_status": "pending"
+    }
+  ],
+  "field_selection_rule": "Catalogue pointers define selected inventory; finite typed codecs/validators admit only local behavior, preserving context and opaque outcomes.",
+  "source_sha256": {
+    "src/capability.rs": "15a973ef0ef34325165e1a1258c886ddb5ca01618a5c6d1a0e32a22e91f2d69d",
+    "src/generation.rs": "6905882e1672641c1007d00d1f29e3a7fb6c181d1a56baebe4e9828f4f329527",
+    "src/graph.rs": "d4f5bc2c8b9a2ce0dafd90663795b1eb3fa54f7f2a224580e1312de92f9ce3c8",
+    "src/model.rs": "4e66307f90d065836c86837de3db7c94cd484784ff2cb35d9b1a182a40233636",
+    "src/registry.rs": "71bf00721a16773a22aeddc78dd6f0a1d1f39df994aa09bbad2d1a6bcff47b25",
+    "src/resources/common.rs": "3f29b27b3b8891ef1d8443dc2109a292c5e8ccdefe95d3b318afdd31446d11d6",
+    "src/resources/common/native_helpers.rs": "ac2b96b49c9dad81ea2164406662370b1e5c87d894f476a7731d3dbf206474ba",
+    "src/resources/configuration_storage.rs": "139a4cef8dd27f2952a5b3a40b3e2fbecff72cce5b9a2c8c9444d268b9d37a6d",
+    "src/resources/configuration_storage/capabilities.rs": "459049718ec11782e585c855a5ed82919a6ccf10a5ed18950a5e57ab0ca06285",
+    "src/resources/configuration_storage/facts.rs": "9689cd35b8ffa08017359690462718053a6f6390effb5507e6cd04ceb51d825e",
+    "src/resources/configuration_storage/roots.rs": "40d65d1b9281504eaf54e9cb76901f2e207d3dfdd6e3a071ebd467c2c1bd5a21",
+    "src/resources/configuration_storage/validation.rs": "21636fd45354e52bd70a80363848a798ffc87659de343efebb244443679e05b2",
+    "src/resources/configuration_storage/validation/static_checks.rs": "f482cd868d0240097ad32baf1afff721c5bfcaa56db1fc9acd4d71ad39641f48",
+    "src/resources/configuration_storage/validation/static_checks/pv.rs": "7658d24256a9a3c244d034cd9c123bf254c1f866a1dfaa02d75aefa97ee2ee2d",
+    "src/resources/configuration_storage/validation/static_checks/pv/affinity.rs": "ea854741fd5bdbc16cae74e7dcb55be964e1465b13caed330cbac89b640930ad",
+    "src/resources/configuration_storage/validation/static_checks/pv/sources.rs": "2633ce5c9368a0bcb6cc3a34d1d384572c8e3d9ae0797ba020c61f2d18a6af20",
+    "src/resources/configuration_storage/validation/static_checks/pv/sources/identifiers.rs": "1c70c8e2c89fdacbff3c95ed069bd40d066ae6423b17c5a149ff4f8e93c88a34",
+    "src/resources/configuration_storage/validation/static_checks/tests.rs": "03f08fb535647c5cc8facdd00fb6fc5a81a28658705c18bf5cd3d17521cf0f3e",
+    "src/resources/mod.rs": "deb430974ca47d73009f51790b817c1fb93195238d9fd641d28e30db4aa08405",
+    "src/value.rs": "a8517e40b01c39bc373e4530c63abd699e7f0d7cbe3edf3f01b21efc014d69db",
+    "tests/access_modes.rs": "58e263f989d235f1d7da1e095a90f8b67a9dc0df432cab574d5c33d3f9859ad7",
+    "tests/configuration_storage.rs": "2ecf0efacd3e1839c5ad558290b4f75edee98a60593a2ac382e63c00f697a0bb",
+    "tests/configuration_storage/corrections.rs": "67a9865bb397d704de34b60fcf383e3a630cc7db49689fdbb338e9c53cc696d0",
+    "tests/configuration_storage/pv_contract.rs": "d1f0a3da666d608387844b76a01027114ab4871e0c8c0ca9c87586404ccd211f",
+    "tests/configuration_storage/static_contract.rs": "0d5534373a83e5e4e070191bd7d2a402e3b542266aaf7a37b4c3f87a9adac451"
+  },
+  "independent_storage_tests": [
+    "five_native_roots_decode_as_their_exact_served_kinds",
+    "secret_data_is_private_and_generation_requires_explicit_output_authorization",
+    "source_minor_boundaries_and_unserved_storage_class_api_remain_explicit",
+    "persistent_volume_node_affinity_uses_native_required_shape_when_supplied_and_authored",
+    "persistent_volume_secret_references_keep_admitted_namespace_evidence",
+    "persistent_volume_storageos_reference_requires_supported_identity_fields",
+    "portworx_source_is_preserved_as_unadmitted_and_cannot_supply_reference_semantics",
+    "csi_controller_expand_secret_reference_requires_stable_gate_availability",
+    "typed_pv_pvc_access_modes_author_only_finite_values_and_keep_order",
+    "typed_pv_pvc_partial_modes_preserve_only_supplied_destination_and_never_author",
+    "corrections::pvc_unknown_selector_evidence_cannot_mask_known_label_or_cardinality_errors",
+    "corrections::configmap_text_requires_explicit_access_and_output_permission_in_both_source_paths",
+    "corrections::immutable_configuration_fields_respect_stable_only_and_removed_control_boundaries",
+    "corrections::configmap_env_and_mount_keys_use_separate_domains_and_exact_supplied_evidence",
+    "corrections::malformed_configmap_key_suppliers_never_certify_membership",
+    "corrections::invalid_body_and_absent_configmap_maps_have_no_positive_membership",
+    "corrections::secret_env_and_mount_keys_resolve_exact_overlay_evidence_and_refuse_incomplete_suppliers",
+    "corrections::pvc_empty_optional_bindings_preserve_intent_without_invalid_reference_edges",
+    "pv_contract::every_selected_pv_source_has_static_create_validation_and_fresh_fixed_points",
+    "pv_contract::pv_requires_spec_exact_positive_storage_capacity_and_nonempty_selected_modes",
+    "pv_contract::source_unions_count_portworx_and_stricter_flex_product_boundaries",
+    "pv_contract::source_paths_ranges_unions_and_reserved_option_names_use_native_static_domains",
+    "pv_contract::iscsi_uses_finite_identifier_chap_and_name_composition_rules",
+    "pv_contract::local_affinity_preserves_empty_terms_and_native_option_uncertainty",
+    "pv_contract::csi_driver_secret_names_and_expansion_keep_version_and_option_boundaries",
+    "pv_contract::pv_processing_refuses_budget_exhaustion_without_payload_echo",
+    "pv_contract::preservation_and_uncertain_source_domains_remain_explicit",
+    "pv_contract::repeated_iscsi_prefixes_consume_the_shared_work_budget_before_rescanning",
+    "static_contract::configmap_key_intersection_length_and_case_are_native_checks",
+    "static_contract::configmap_body_counts_utf8_and_decoded_binary_only_at_one_mib",
+    "static_contract::secret_effective_overlay_size_counts_each_key_once_and_retains_both_maps",
+    "static_contract::secret_basic_tls_ssh_and_service_account_required_members_match_effective_data",
+    "static_contract::secret_docker_private_json_shape_and_override_have_value_free_findings",
+    "static_contract::pvc_create_requires_selected_modes_and_positive_storage_without_pod_resource_rules",
+    "static_contract::pvc_class_selector_and_data_source_create_checks_have_exact_context_and_version_boundary",
+    "static_contract::storage_class_provisioner_and_parameter_boundaries_preserve_native_spelling",
+    "static_contract::storage_topology_semantics_ignore_term_and_value_order_without_label_value_restrictions",
+    "static_contract::static_checks_apply_to_source_free_authoring_reparse_and_generation_fixed_points",
+    "static_contract::static_checks_share_zero_and_tight_processing_limits_without_private_echo",
+    "static_contract::invalid_static_fields_refuse_authoring_or_explicit_create_generation",
+    "static_contract::pvc_absent_null_and_unknown_neighbors_do_not_hide_known_create_errors"
+  ],
+  "native_source_witnesses": {
+    "path": "tests/configuration_storage/native-source-witnesses.json",
+    "sha256": "df412d6005902309c4c3faba25173e18c2cc9ae572d0cb1fe23698040ce45b93"
+  },
+  "reviewed_correction_groups": [
+    "finite PV Create/source/affinity checks with context gaps",
+    "known-invalid PVC selectors are not masked by unknown descendants",
+    "independent ConfigMap text and binary key facts with exact supplied paths",
+    "ConfigMap text protection and default redaction",
+    "immutable stable-only field boundary at1.21"
+  ],
+  "conformance": {
+    "api_server": "pending",
+    "runtime": "pending",
+    "controller_driver": "pending",
+    "official_corpus": "pending",
+    "native_kind_profiles": "pending"
+  },
+  "limitations": [
+    "Offline validation and static witnesses do not establish API-server/driver/controller conformance.",
+    "PV/PVC operation-specific checks require explicit Create intent; immutable updates and stored baselines remain unresolved.",
+    "Portworx and ReadWriteOncePod are retained outside selected typed support.",
+    "FlexVolume exactly-one-source product rule is deliberately stronger than observed native union-counting exception.",
+    "Native JSON/quantity arithmetic, strategy options, OS paths and transport uncertainty stay explicit.",
+    "KubernetesLens never acquires deployed resources."
+  ]
+}

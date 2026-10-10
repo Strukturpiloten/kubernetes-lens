@@ -218,11 +218,13 @@ fn decoded_partial_values_are_indexed_private_and_never_coerced() -> TestResult 
     Ok(())
 }
 #[test]
-fn every_rwop_historical_stage_and_preservation_only_root_stays_unadmitted() -> TestResult {
+fn typed_storage_roots_keep_every_rwop_historical_stage_unadmitted() -> TestResult {
     for kind in ["PersistentVolume", "PersistentVolumeClaim"] {
-        let resources = set(&serde_json::to_string(
-            &json!({"apiVersion":"v1", "kind":kind, "metadata":if kind == "PersistentVolume" {json!({"name":"storage"})} else {json!({"name":"storage","namespace":"ns"})}, "spec":{"accessModes":["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"]}}),
-        )?)?;
+        let mut document = json!({"apiVersion":"v1", "kind":kind, "metadata":if kind == "PersistentVolume" {json!({"name":"storage"})} else {json!({"name":"storage","namespace":"ns"})}, "spec":{"accessModes":["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"]}});
+        if kind == "PersistentVolume" {
+            document["spec"]["nfs"] = json!({"server":"storage", "path":"/data"});
+        }
+        let resources = set(&serde_json::to_string(&document)?)?;
         for minor in [20, 22, 25, 28, 29, 37] {
             assert!(paths(&resources, minor, FindingCode::UnadmittedField)?.contains(&"/spec/accessModes/1".into()));
             assert!(
@@ -485,16 +487,44 @@ fn generic_ephemeral_access_modes_are_indexed_in_every_served_pod_binding() -> T
 }
 
 #[test]
-fn preservation_only_roots_report_malformed_shapes_separately_from_unadmitted_strings() -> TestResult {
-    for (value, suffix) in [(json!("ReadWriteOncePod"), ""), (json!([1]), "/0"), (json!({}), "")] {
-        let resources = set(&serde_json::to_string(
-            &json!({"apiVersion":"v1","kind":"PersistentVolume","metadata":{"name":"sample"},"spec":{"accessModes":value}}),
-        )?)?;
-        assert!(
-            paths(&resources, 37, FindingCode::NativeFieldInvalid)?.contains(&format!("/spec/accessModes{suffix}"))
-        );
-        assert!(paths(&resources, 37, FindingCode::UnadmittedField)?.is_empty());
-        assert!(generate(&resources, &target(37)?, OutputFormat::Json, &options()).is_err());
+fn typed_storage_roots_report_malformed_shapes_separately_from_unadmitted_strings() -> TestResult {
+    for kind in ["PersistentVolume", "PersistentVolumeClaim"] {
+        for (value, suffix) in [(json!("ReadWriteOncePod"), ""), (json!([1]), "/0"), (json!({}), "")] {
+            let mut document = json!({"apiVersion":"v1","kind":kind,"metadata":if kind == "PersistentVolume" {json!({"name":"sample"})} else {json!({"name":"sample","namespace":"ns"})},"spec":{"accessModes":value}});
+            if kind == "PersistentVolume" {
+                document["spec"]["nfs"] = json!({"server":"storage","path":"/data"});
+            }
+            let text = serde_json::to_string(&document)?;
+            let parsed = parse_source(
+                SourceInput {
+                    id: SourceId(91),
+                    format: DocumentFormat::Json,
+                    origin: InputOrigin::ClusterExport,
+                    source_version: None,
+                    bytes: text.as_bytes(),
+                },
+                &ParseLimits::default(),
+            )
+            .map_err(|_| "parse malformed storage fixture")?;
+            let findings = parsed
+                .flatten_resources()
+                .err()
+                .ok_or("malformed storage field accepted")?;
+            let path = format!("/spec/accessModes{suffix}");
+            assert!(
+                findings
+                    .iter()
+                    .any(|finding| finding.code == FindingCode::NativeFieldInvalid
+                        && finding.path.as_ref().is_some_and(|candidate| candidate
+                            .reveal(&ExplicitSourceAccess::explicitly_allow_raw_source())
+                            == path))
+            );
+            assert!(
+                findings
+                    .iter()
+                    .all(|finding| finding.code != FindingCode::UnadmittedField)
+            );
+        }
     }
     Ok(())
 }

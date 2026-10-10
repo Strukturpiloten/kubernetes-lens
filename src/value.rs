@@ -416,14 +416,6 @@ impl LabelSelector {
     /// # Errors
     /// Reports fixed findings for invalid keys/values or operator/value combinations.
     pub fn validate(&self) -> Result<(), Finding> {
-        if !self.unknown.is_empty()
-            || self
-                .match_expressions
-                .value()
-                .is_some_and(|items| items.iter().any(|item| !item.unknown.is_empty()))
-        {
-            return Err(Finding::error(FindingCode::UnadmittedField, Phase::Validation));
-        }
         if matches!(self.match_labels, Presence::Null) || matches!(self.match_expressions, Presence::Null) {
             return Err(invalid_value());
         }
@@ -448,6 +440,14 @@ impl LabelSelector {
                     return Err(invalid_value());
                 }
             }
+        }
+        if !self.unknown.is_empty()
+            || self
+                .match_expressions
+                .value()
+                .is_some_and(|items| items.iter().any(|item| !item.unknown.is_empty()))
+        {
+            return Err(Finding::error(FindingCode::UnadmittedField, Phase::Validation));
         }
         Ok(())
     }

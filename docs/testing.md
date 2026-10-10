@@ -6,8 +6,9 @@ failure/skip propagation, repository/release boundaries, and real Renovate extra
 Renovate tests import the locked tool itself and require its RE2 engine to be available.
 
 Rust check, Clippy, test, doctest, Rustdoc, MSRV, cargo-deny, and local package validation run against
-the locked package. The empty native library honestly has zero runtime unit tests and zero doctests. A repository-only
-Cargo integration harness executes the Python policy suite; it is not native conformance.
+the locked package. Offline native unit/integration tests and doctests verify the delivered
+foundation and typed resource cohorts. A separate Cargo integration harness executes the Python
+policy suite. These tests do not establish API-server or runtime conformance.
 There is no native coverage ratchet or conformance gate yet; do not fabricate passing fixture,
 coverage, version or cluster evidence. Native suites and meaningful thresholds belong to #7.
 
@@ -52,3 +53,10 @@ cover all eighteen roots, generated fixed points, source-free validation, API re
 RBAC/selector resolution and protected evidence. Quota scopes, HPA Create context and LimitRange
 relationships use authenticated native source expectations. Cumulative work/payload and report tests
 retain one pathless terminal finding. Local code checks do not establish native runtime conformance.
+
+Configuration/storage development checks use `cargo test --locked --lib --test configuration_storage
+--test access_modes`. Independent cases cover all five roots, protected configuration/secret
+values, supplied key domains, known-invalid selectors with unknown descendants, immutable
+version boundaries and finite PV Create/source/affinity checks. Processing exhaustion stays
+pathless and sticky. Static witness and code evidence do not establish API-server, controller,
+binding or provisioning conformance; those domains remain pending.

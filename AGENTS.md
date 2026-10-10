@@ -8,8 +8,9 @@ and config, and targeted reads as a fallback. Use Context7 for current library/t
 
 ## Boundaries
 
-KubernetesLens owns native Kubernetes formats and cannot depend on BoxFerry product crates. This
-bootstrap exports no native functionality and claims no native conformance. Implement native code
+KubernetesLens owns native Kubernetes formats and cannot depend on BoxFerry product crates. The
+unpublished implementation exports the reviewed native APIs and claims no unexecuted native
+conformance. Implement native code
 originally; never copy or mechanically translate external oracle implementations. Record oracle
 version, command, provenance, license and redistribution status when later evidence is introduced.
 Treat input as fallible, retain source evidence and explicit versions, redact protected values by

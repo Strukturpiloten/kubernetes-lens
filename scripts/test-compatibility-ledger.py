@@ -267,6 +267,57 @@ class ContractTests(unittest.TestCase):
 
 
 
+    @staticmethod
+    def workload_current_code_errors(evidence):
+        """Authenticate the current candidate without rewriting historical receipts."""
+        errors = []
+        expected_sources = {
+            'schemas/capabilities/kubernetes-1.20-1.37.json',
+            'src/capability.rs', 'src/generation.rs', 'src/graph.rs', 'src/model.rs',
+            'src/processing.rs', 'src/registry.rs', 'src/resources/common.rs',
+            'src/resources/common/native_helpers.rs', 'src/resources/common/native_time.rs',
+            'src/resources/common/unknown_scopes_tests.rs', 'src/resources/common/workload_specs.rs',
+            'src/resources/mod.rs', 'src/resources/workloads.rs', 'src/source.rs',
+            'src/syntax.rs', 'src/value.rs', 'src/value/access_modes.rs',
+            'src/value/exact_json_number.rs', 'src/value/protected_json.rs',
+            'src/value/protected_json_tests.rs', 'tests/access_modes.rs',
+            'tests/exact_json_number.rs', 'tests/foundation/core.rs', 'tests/foundation/graph.rs',
+            'tests/foundation/root-status-role-evidence.json', 'tests/protected_json.rs',
+            'tests/workloads.rs',
+        } | {str(path.relative_to(ROOT)) for path in (ROOT / 'src/resources/workloads').glob('*.rs')}
+        current = evidence.get('current_evaluation', {})
+        bindings = current.get('source_sha256', {})
+        if set(bindings) != expected_sources:
+            errors.append('incomplete current workload source binding')
+        for name, digest in bindings.items():
+            if name not in expected_sources or hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != digest:
+                errors.append('stale current workload source binding')
+        if current.get('status') != 'source_bound_native_conformance_pending' or current.get('native_conformance') != 'pending':
+            errors.append('unsupported current workload conformance claim')
+        validation = evidence.get('current_evaluation_validation', {})
+        if validation.get('status') != 'candidate_validation_receipts_required' or validation.get('native_conformance') != 'pending':
+            errors.append('unsupported current workload validation claim')
+        return errors
+
+    def test_workload_current_evaluation_authenticates_current_source_separately_from_history(self):
+        evidence = json.loads((ROOT / 'schemas/capabilities/workload-code-evidence.json').read_text())
+        self.assertEqual(self.workload_current_code_errors(evidence), [])
+
+    def test_workload_current_evaluation_refuses_omitted_stale_or_fabricated_guards(self):
+        evidence = json.loads((ROOT / 'schemas/capabilities/workload-code-evidence.json').read_text())
+        historical = {key: copy.deepcopy(evidence[key]) for key in ['source_sha256', 'local_run', 'prior_evaluations']}
+        changed = copy.deepcopy(evidence)
+        changed['current_evaluation']['source_sha256'].pop('src/graph.rs')
+        self.assertIn('incomplete current workload source binding', self.workload_current_code_errors(changed))
+        changed = copy.deepcopy(evidence)
+        changed['current_evaluation']['source_sha256']['src/graph.rs'] = '0' * 64
+        self.assertIn('stale current workload source binding', self.workload_current_code_errors(changed))
+        for section in ['current_evaluation', 'current_evaluation_validation']:
+            changed = copy.deepcopy(evidence)
+            changed[section]['native_conformance'] = 'passed'
+            self.assertTrue(self.workload_current_code_errors(changed))
+        self.assertEqual({key: evidence[key] for key in historical}, historical)
+
     def access_code_errors(self, evidence):
         errors = []
         if evidence.get('format') != 'local_access_code_evidence_v1' or evidence.get('issue') != 12:
@@ -427,6 +478,146 @@ class ContractTests(unittest.TestCase):
         changed = copy.deepcopy(evidence)
         changed['roots'][0]['native_case_status'] = 'passed'
         self.assertIn('incomplete or unsupported networking roots', self.networking_code_errors(changed))
+
+
+    def storage_code_errors(self, evidence):
+        errors = []
+        expected_roots = []
+        for i, resource in enumerate(self.ledger['resources']):
+            if resource['cohort_issue'] != 11:
+                continue
+            for j, profile in enumerate(resource['proposed_admitted_api_profiles']):
+                expected_roots.append({
+                    'kind': resource['kind'], 'api_version': profile['api_version'],
+                    'selected_field_catalogue_pointer': f'/resources/{i}/proposed_admitted_api_profiles/{j}',
+                    'expected_availability_ranges': profile['target_availability_ranges'],
+                    'code_registration': 'src/resources/configuration_storage.rs', 'native_case_status': 'pending',
+                })
+        if evidence.get('roots') != expected_roots or len({r['kind'] for r in expected_roots}) != 5:
+            errors.append('incomplete or unsupported storage roots')
+        expected_sources = {
+            'src/capability.rs', 'src/generation.rs', 'src/graph.rs', 'src/model.rs',
+            'src/registry.rs', 'src/resources/mod.rs', 'src/resources/common.rs',
+            'src/resources/common/native_helpers.rs', 'src/value.rs',
+            'src/resources/configuration_storage.rs', 'tests/configuration_storage.rs', 'tests/access_modes.rs',
+        } | {str(p.relative_to(ROOT)) for directory in ['src/resources/configuration_storage', 'tests/configuration_storage']
+             for p in (ROOT / directory).rglob('*.rs')}
+        sources = evidence.get('source_sha256', {})
+        if set(sources) != expected_sources:
+            errors.append('incomplete source binding')
+        for name, digest in sources.items():
+            if name not in expected_sources or hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != digest:
+                errors.append('stale source binding')
+        expected_cases = []
+        for path in [ROOT / 'tests/configuration_storage.rs', *sorted((ROOT / 'tests/configuration_storage').rglob('*.rs'))]:
+            prefix = '' if path.name == 'configuration_storage.rs' else path.stem + '::'
+            expected_cases.extend(prefix + case for case in re.findall(r'#\[test\]\s*fn (\w+)\(', path.read_text()))
+        if len(expected_cases) != 41 or evidence.get('independent_storage_tests') != expected_cases:
+            errors.append('incomplete independent cases')
+        canonical = evidence.get('canonical_ledger', {})
+        if canonical.get('path') != str(contract.LEDGER.relative_to(ROOT)) or canonical.get('sha256') != hashlib.sha256(contract.LEDGER.read_bytes()).hexdigest():
+            errors.append('stale canonical ledger')
+        if evidence.get('status') != 'typed-native-static-code-present-native-profiles-pending':
+            errors.append('invalid static status')
+        if evidence.get('conformance') != {name: 'pending' for name in ['api_server', 'runtime', 'controller_driver', 'official_corpus', 'native_kind_profiles']}:
+            errors.append('fabricated native success')
+        witness_path = 'tests/configuration_storage/native-source-witnesses.json'
+        witness = json.loads((ROOT / witness_path).read_text())
+        if evidence.get('native_source_witnesses') != {'path': witness_path, 'sha256': hashlib.sha256((ROOT / witness_path).read_bytes()).hexdigest()}:
+            errors.append('stale native witnesses')
+        errors.extend(self.storage_witness_errors(witness))
+        if not evidence.get('limitations') or len(evidence.get('reviewed_correction_groups', [])) != 5:
+            errors.append('missing reviewed scope or limitations')
+        return errors
+
+    @staticmethod
+    def storage_witness_errors(witness):
+        errors = []
+        if witness.get('evidence_kind') != 'static-source-inspection-only' or witness.get('native_commands_run') is not False:
+            errors.append('unsupported witness claim')
+        records = witness.get('records', [])
+        if len(records) != 66 or witness.get('acquisition_record_count') != 66:
+            errors.append('incomplete native witnesses')
+        sources = {}
+        for record in records:
+            commit = record.get('commit', record.get('resolved_commit', ''))
+            path = record.get('source_path', '')
+            digest = record.get('sha256', '')
+            size = record.get('byte_size')
+            source_url = record.get('immutable_source_url', '')
+            project = next((name for name in ['kubernetes', 'website'] if source_url ==
+                            f'https://raw.githubusercontent.com/kubernetes/{name}/{commit}/{path}'), None)
+            expected_license = 'CC-BY-4.0' if project == 'website' else 'Apache-2.0'
+            valid = (re.fullmatch(r'[0-9a-f]{40}', commit) and
+                     re.fullmatch(r'[0-9a-f]{64}', digest) and
+                     isinstance(size, int) and not isinstance(size, bool) and size > 0 and
+                     path and not path.startswith('/') and '..' not in path.split('/') and
+                     project and record.get('license') == expected_license and
+                     record.get('license_url') == f'https://github.com/kubernetes/{project}/blob/{commit}/LICENSE')
+            receipt = record.get('acquisition_receipt_sha256')
+            if receipt is not None and not re.fullmatch(r'[0-9a-f]{64}', receipt):
+                valid = False
+            if 'receipt_path' in record or not valid:
+                errors.append('invalid witness integrity or attribution')
+            key = (project, commit, path)
+            integrity = (digest, size, record.get('license'), record.get('license_url'))
+            if key in sources and sources[key] != integrity:
+                errors.append('contradictory source acquisitions')
+            sources[key] = integrity
+        if len(sources) != 62 or witness.get('distinct_source_count') != 62:
+            errors.append('incomplete distinct native sources')
+        return errors
+
+    def test_storage_code_evidence_binds_roots_sources_cases_and_pending_native_profiles(self):
+        evidence = json.loads((ROOT / 'schemas/capabilities/storage-code-evidence.json').read_text())
+        self.assertEqual(self.storage_code_errors(evidence), [])
+
+    def test_storage_code_evidence_rejects_missing_stale_and_fabricated_claims(self):
+        evidence = json.loads((ROOT / 'schemas/capabilities/storage-code-evidence.json').read_text())
+        for field in ['roots', 'independent_storage_tests']:
+            changed = copy.deepcopy(evidence)
+            changed[field].pop()
+            self.assertTrue(self.storage_code_errors(changed), field)
+        changed = copy.deepcopy(evidence)
+        changed['source_sha256']['src/resources/configuration_storage.rs'] = '0' * 64
+        self.assertIn('stale source binding', self.storage_code_errors(changed))
+        changed = copy.deepcopy(evidence)
+        changed['source_sha256'].pop('src/model.rs')
+        self.assertIn('incomplete source binding', self.storage_code_errors(changed))
+        changed = copy.deepcopy(evidence)
+        changed['native_source_witnesses']['sha256'] = '0' * 64
+        self.assertIn('stale native witnesses', self.storage_code_errors(changed))
+        changed = copy.deepcopy(evidence)
+        changed['conformance']['api_server'] = 'passed'
+        self.assertIn('fabricated native success', self.storage_code_errors(changed))
+        changed = copy.deepcopy(evidence)
+        changed['roots'][0]['native_case_status'] = 'passed'
+        self.assertIn('incomplete or unsupported storage roots', self.storage_code_errors(changed))
+
+    def test_storage_witnesses_authenticate_heterogeneous_and_repeated_acquisitions(self):
+        witness = json.loads((ROOT / 'tests/configuration_storage/native-source-witnesses.json').read_text())
+        self.assertEqual(self.storage_witness_errors(witness), [])
+        self.assertTrue(any('id' not in record for record in witness['records']))
+        changed = copy.deepcopy(witness)
+        changed['records'].pop()
+        self.assertIn('incomplete native witnesses', self.storage_witness_errors(changed))
+        for field, value in [('sha256', 'invalid'), ('commit', 'main'),
+                             ('license_url', 'https://github.com/kubernetes/kubernetes/blob/main/LICENSE'),
+                             ('immutable_source_url', 'https://example.invalid/source'),
+                             ('receipt_path', '/tmp/nonportable-research-receipt.json')]:
+            changed = copy.deepcopy(witness)
+            changed['records'][0][field] = value
+            self.assertIn('invalid witness integrity or attribution', self.storage_witness_errors(changed), field)
+        changed = copy.deepcopy(witness)
+        first = changed['records'][0]
+        repeated = next(record for record in changed['records'][1:]
+                        if record.get('commit', record.get('resolved_commit')) == first['commit']
+                        and record['source_path'] == first['source_path'])
+        repeated['sha256'] = '0' * 64
+        self.assertIn('contradictory source acquisitions', self.storage_witness_errors(changed))
+        changed = copy.deepcopy(witness)
+        changed['native_commands_run'] = True
+        self.assertIn('unsupported witness claim', self.storage_witness_errors(changed))
 
 
 if __name__ == '__main__':

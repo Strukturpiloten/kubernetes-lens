@@ -139,7 +139,8 @@ also retains explicit finalizers. Default Debug continues to redact labels, keys
 
 ## Finite volume access-mode migration
 
-`PersistentVolumeClaimSpec.access_modes` and `ClaimTemplateStatus.access_modes` now use
+`PersistentVolumeSpec.access_modes`, `PersistentVolumeClaimSpec.access_modes` and
+`ClaimTemplateStatus.access_modes` now use
 `Presence<AccessModes>`; see [ADR 0007](decisions/0007-finite-volume-access-modes.md). Caller
 construction uses `AccessModes::new` with `EstablishedVolumeAccessMode` values: ReadWriteOnce,
 ReadOnlyMany and ReadWriteMany. Order and duplicates are retained. `selected()` returns both
@@ -307,3 +308,14 @@ parity; workload validation retains only a budgeted set needed for its native un
 Storage access-mode inspection charges its complete member scan and reports partial understanding
 at its owning scope. Original supplied occurrences remain the authority for preservation; neither
 copied holders nor identical private payloads establish destination provenance.
+
+## Configuration/storage native API
+
+The `resources::configuration_storage` module registers ConfigMap, Secret,
+PersistentVolumeClaim, PersistentVolume and StorageClass through the existing sealed native
+registry. Root values preserve explicit presence and unknown fields. ConfigMap text values
+use `Protected<String>`; call their explicit source-access method to inspect a value.
+Default Debug and output retain the protected boundary for text, binary and Secret payloads.
+ConfigMap key facts expose text-only and text/binary domains without revealing payloads.
+Supplied references never assert provisioned storage, an installed driver or a live binding.
+See [storage limits](storage.md) and [ADR 0010](decisions/0010-native-configuration-storage.md).

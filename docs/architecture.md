@@ -29,8 +29,9 @@ and access/policy eighteen roots for thirteen kinds. Shared native helpers live 
 for validation, facts, observations and generation. Networking adds exact Service front-port
 subjects, named target-port supplier evidence, versionless GroupKind references and same-entry
 NetworkPolicy selector conjunctions. These are supplied-only relationships, with no controller,
-routing or policy-enforcement assertion. The other cohorts and custom documents
-remain preservation-only with structured findings. The frozen compatibility ledger and all
+routing or policy-enforcement assertion. Five configuration/storage roots add protected configuration values, selected static Create checks
+and supplied-only storage/key relationships. Extension definitions and custom documents remain
+preservation-only with structured findings. The frozen compatibility ledger and all
 named native conformance cells remain pending; focused code tests are separate evidence. See
 [ADR 0003](decisions/0003-offline-native-foundation.md) and the
 [foundation integration contract](foundation-api.md), supplemented by
