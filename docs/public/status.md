@@ -12,7 +12,9 @@ Eight workload kinds have typed codecs, native validation and generation, includ
 CronJob APIs. Shared helpers, bounded authoring, supplied facts and exact observation roles are
 available; see [workload limits](../workloads.md). Six networking kinds provide ten served roots
 with finite validation, availability, preservation and supplied-only graph operations; see
-[networking limits](../networking.md). The remaining eight built-in kinds remain preservation-only.
+[networking limits](../networking.md). Five configuration/storage kinds add protected values, finite static validation and supplied-only
+storage/key relationships; see [storage limits](../storage.md). The remaining three extension kinds
+remain preservation-only.
 Preservation requires explicit output policy and produces structured findings.
 No supported Kubernetes minor, renderer, server-admission/runtime behavior, deployment workflow, or live
 cluster client is claimed.

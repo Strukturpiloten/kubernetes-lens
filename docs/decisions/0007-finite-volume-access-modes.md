@@ -43,7 +43,8 @@ precedes the remaining unadmitted-output checks.
 
 ## Migration and evidence
 
-`PersistentVolumeClaimSpec.access_modes` and `ClaimTemplateStatus.access_modes` intentionally
+`PersistentVolumeSpec.access_modes`, `PersistentVolumeClaimSpec.access_modes` and
+`ClaimTemplateStatus.access_modes` intentionally
 change from `Presence<Vec<String>>` to `Presence<AccessModes>` before publication. Construct a
 finite collection with `AccessModes::new(Vec<EstablishedVolumeAccessMode>)`. For decoded input,
 consume both components of `selected()`; use explicit source access only when raw strings are

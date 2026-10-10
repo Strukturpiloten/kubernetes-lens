@@ -12,4 +12,6 @@
 | [0008](0008-exact-protected-json.md)                 | Accepted                       | Exact JSON numbers, bounded protected arenas and private snapshot errors    |
 | [0009](0009-native-access-policy.md)                 | Accepted                       | Typed access/policy and finite native admission versus controller semantics |
 
+| [0010](0010-native-configuration-storage.md) | Accepted | Typed protected configuration and finite storage validation versus runtime behavior |
+
 Add a new numbered ADR when an accepted decision changes; preserve and supersede historical decisions.

@@ -703,13 +703,6 @@ pub(crate) enum ClaimPatternDraft {
 }
 #[derive(Clone)]
 pub(crate) enum NativeFact {
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Closed key-set extension exercised by foundation codecs; configuration cohort is pending"
-        )
-    )]
     Keys {
         domain: KeyDomain,
         state: FactState<KeyNames>,
@@ -1904,7 +1897,13 @@ fn recheck_keys(
     path: &FieldPath,
     state: FactState<KeyNames>,
 ) -> FactState<KeyNames> {
-    let state = ctx.state(path, state);
+    // ConfigMap and Secret inventories aggregate separate root maps. The empty
+    // aggregate path is not a native field; each exact map/key is admitted below.
+    let state = if path.0.is_empty() {
+        state
+    } else {
+        ctx.state(path, state)
+    };
     if let FactState::Known(keys) = &state {
         let fields: &[&str] = match domain {
             KeyDomain::ConfigMapText => &["data"],

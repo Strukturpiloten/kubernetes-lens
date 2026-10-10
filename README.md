@@ -9,7 +9,9 @@ ReplicationController, Job and historical/current CronJob APIs, with validation,
 and native generation. Typed access, RBAC, scaling and policy resources and six networking kinds
 use the same bounded native contracts. Networking covers Service, Endpoints, EndpointSlice,
 Ingress, IngressClass and NetworkPolicy across ten served roots, with finite validation and
-supplied-only graph evidence. Other resource cohorts remain preservation-only. No Kubernetes
+supplied-only graph evidence. Typed configuration and storage support adds ConfigMap, Secret, PersistentVolumeClaim,
+PersistentVolume and StorageClass; see [storage support and limits](docs/storage.md).
+Extension definitions remain preservation-only. No Kubernetes
 minor, renderer or runtime conformance is claimed. Renderer execution and live cluster operations
 are not delivered. See [workload support and limits](docs/workloads.md),
 [access support and limits](docs/access.md) and [networking support and limits](docs/networking.md).

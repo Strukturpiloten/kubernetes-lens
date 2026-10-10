@@ -47,7 +47,8 @@ bounded private-value factories remain separate from server precision and schema
 Private snapshot failures now omit traversal paths while retaining their code and phase.
 
 [ADR 0007](decisions/0007-finite-volume-access-modes.md) intentionally changes
-PersistentVolumeClaimSpec.access_modes and ClaimTemplateStatus.access_modes from
+PersistentVolumeSpec.access_modes, PersistentVolumeClaimSpec.access_modes and
+ClaimTemplateStatus.access_modes from
 Presence<Vec<String>> to Presence<AccessModes>. Construct selected modes with the finite
 EstablishedVolumeAccessMode enum. Decoded selected() inspection returns completeness and
 original indexes together; unsupported strings require ExplicitSourceAccess. Copied partial
@@ -57,3 +58,11 @@ The access/policy cohort adds eighteen concrete API roots with typed authoring, 
 and finite native validation. HPA Create rules are operation-specific; arbitrary grouped targets do
 not establish a scale subresource. LimitRange comparisons expose their conservative native arithmetic
 boundary, while unresolved rounding/defaulting remains explicit. See [ADR 0009](decisions/0009-native-access-policy.md).
+
+The configuration/storage cohort adds five typed API roots. ConfigMap `data` values use
+`Protected<String>` and require explicit source access, just like binary and secret values;
+ordinary Debug, findings and default output never reveal them. Public holders retain field
+presence and unknown source data. Selected `immutable` fields follow the frozen stable-only
+profile (typed from 1.21). PV/PVC validation requires explicit Create intent for reviewed
+operation-specific rules; static validity does not prove binding, scheduling or driver behavior.
+See [ADR 0010](decisions/0010-native-configuration-storage.md).
