@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Add finite storage access modes with original-occurrence preservation and bounded native
+  unknown-field capture and traversal. Native resource conformance remains pending.
+
 - Introduce exact JSON numbers and protected immutable JSON arenas; preserve raw numeric magnitude
   and hide snapshot traversal paths. Extension/schema conformance remains pending.
 

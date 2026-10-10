@@ -78,6 +78,8 @@ fn bounded_construction_counts_keys_cumulatively_and_escapes_before_byte_limit()
     let ctx = EncodeContext {
         target: None,
         include_unknown: true,
+        authoring_snapshot: false,
+        occurrences: None,
         budget: crate::syntax::EncodingBudget::new(limits),
         limits: limits.parser,
     };
@@ -97,6 +99,8 @@ fn bounded_construction_counts_keys_cumulatively_and_escapes_before_byte_limit()
     let ctx = EncodeContext {
         target: None,
         include_unknown: true,
+        authoring_snapshot: false,
+        occurrences: None,
         budget: crate::syntax::EncodingBudget::new(limits),
         limits: limits.parser,
     };
@@ -545,6 +549,8 @@ fn constructor_scalar_and_key_bytes_share_one_cumulative_boundary() -> TestResul
     let ctx = EncodeContext {
         target: None,
         include_unknown: true,
+        authoring_snapshot: false,
+        occurrences: None,
         budget: crate::syntax::EncodingBudget::new(limits),
         limits: limits.parser,
     };

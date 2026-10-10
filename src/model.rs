@@ -318,6 +318,8 @@ pub struct ResourceDocument {
     pub(crate) evidence: Arc<SourceEvidence>,
     pub(crate) field_evidence: FieldEvidenceMap,
     pub(crate) original_known: Option<TreeNode>,
+    /// Sealed anchors captured with `original_known`; callers cannot replace this table.
+    pub(crate) original_occurrences: crate::syntax::NativeOccurrences,
     pub(crate) resource: Option<Box<dyn NativeResource>>,
     pub(crate) decode: Option<registry::DecodeFn>,
     pub(crate) capability: Option<KindCapability>,
@@ -437,8 +439,8 @@ impl ResourceDocument {
             &standalone
         };
         let ctx = ctx.for_source(*self.evidence.limits());
-        let tree = self
-            .current_tree_in(target, Some(&ctx))
+        let (tree, occurrences) = self
+            .current_tree_with_occurrences_in(target, Some(&ctx), true)
             .map_err(|finding| vec![finding.for_resource(self.id)])?;
         let identity = identity_in(
             &tree,
@@ -493,6 +495,7 @@ impl ResourceDocument {
         );
         Ok(EffectiveProjection {
             tree,
+            occurrences,
             identity,
             resource,
             observations,
@@ -550,6 +553,15 @@ impl ResourceDocument {
         target: Option<&crate::capability::TargetProfile>,
         ctx: Option<&registry::EncodeContext<'_>>,
     ) -> Result<TreeNode, Finding> {
+        self.current_tree_with_occurrences_in(target, ctx, false)
+            .map(|(tree, _)| tree)
+    }
+    fn current_tree_with_occurrences_in(
+        &self,
+        target: Option<&crate::capability::TargetProfile>,
+        ctx: Option<&registry::EncodeContext<'_>>,
+        observe: bool,
+    ) -> Result<(TreeNode, crate::syntax::NativeOccurrences), Finding> {
         let standalone;
         let ctx = if let Some(ctx) = ctx {
             ctx
@@ -565,6 +577,13 @@ impl ResourceDocument {
                 ),
             );
             &standalone
+        };
+        let observed;
+        let ctx = if observe && self.resource.is_some() {
+            observed = ctx.observed()?;
+            &observed
+        } else {
+            ctx
         };
         let processing = ctx.budget.processing();
         let phase = ctx.budget.phase();
@@ -629,7 +648,7 @@ impl ResourceDocument {
                 Phase::Generation,
             ));
         }
-        Ok(tree)
+        Ok((tree, ctx.take_occurrences()))
     }
 }
 /// Ordered supplied resources, retained wrappers, and immutable private sources.
@@ -682,6 +701,8 @@ impl ResourceSet {
         let ctx = registry::EncodeContext {
             target: Some(target),
             include_unknown: true,
+            authoring_snapshot: true,
+            occurrences: None,
             budget: budget.clone(),
             limits: limits.parser,
         };
@@ -971,51 +992,58 @@ impl ResourceSet {
         charge_identity(&tree, &self.processing, Phase::Decoding)?;
         let original_identity = identity(&tree, scope)?;
         let id = ResourceId(u64::try_from(self.documents.len()).map_err(|_| invalid())?);
-        let (resource, original_known, capability) = if let Some(entry) = registry.entries.get(&gvk) {
-            if entry.gvk != gvk || entry.scope != scope {
-                return Err(Finding::error(FindingCode::InvalidRegistration, Phase::Decoding));
-            }
-            let resource = (entry.decode)(
-                &tree,
-                &evidence,
-                &DecodeContext {
-                    gvk: &gvk,
-                    scope,
-                    fields: registry::FieldDecodeContext::new(
-                        *evidence.limits(),
-                        self.processing.clone(),
-                        Phase::Decoding,
-                    ),
-                },
-            )
-            .map_err(|findings| {
-                findings
-                    .into_iter()
-                    .next()
-                    .unwrap_or_else(|| Finding::error(FindingCode::NativeFieldInvalid, Phase::Decoding))
-                    .for_resource(id)
-            })?;
-            let ctx = registry::EncodeContext::in_operation(None, *evidence.limits(), self.processing.clone());
-            let known = registry::encode_in(resource.as_ref(), &ctx)?;
-            charge_identity(&known, &self.processing, Phase::Decoding)?;
-            if identity(&known, scope)? != original_identity {
-                return Err(Finding::error(FindingCode::CodecIdentityMismatch, Phase::Decoding));
-            }
-            (Some(resource), Some(known), Some(entry.capability.clone()))
-        } else {
-            let finding = Finding::warning(
-                if crate::capability::builtin_scope(&gvk).is_some() {
-                    FindingCode::UnadmittedKind
-                } else {
-                    FindingCode::UnknownKind
-                },
-                Phase::Decoding,
-            )
-            .for_resource(id);
-            self.processing.report(&finding, Phase::Decoding)?;
-            self.findings.push(finding);
-            (None, None, None)
-        };
+        let (resource, original_known, original_occurrences, capability) =
+            if let Some(entry) = registry.entries.get(&gvk) {
+                if entry.gvk != gvk || entry.scope != scope {
+                    return Err(Finding::error(FindingCode::InvalidRegistration, Phase::Decoding));
+                }
+                let resource = (entry.decode)(
+                    &tree,
+                    &evidence,
+                    &DecodeContext {
+                        gvk: &gvk,
+                        scope,
+                        fields: registry::FieldDecodeContext::new(
+                            *evidence.limits(),
+                            self.processing.clone(),
+                            Phase::Decoding,
+                        ),
+                    },
+                )
+                .map_err(|findings| {
+                    findings
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| Finding::error(FindingCode::NativeFieldInvalid, Phase::Decoding))
+                        .for_resource(id)
+                })?;
+                let ctx = registry::EncodeContext::in_operation(None, *evidence.limits(), self.processing.clone())
+                    .observed()?;
+                let known = registry::encode_in(resource.as_ref(), &ctx)?;
+                charge_identity(&known, &self.processing, Phase::Decoding)?;
+                if identity(&known, scope)? != original_identity {
+                    return Err(Finding::error(FindingCode::CodecIdentityMismatch, Phase::Decoding));
+                }
+                (
+                    Some(resource),
+                    Some(known),
+                    ctx.take_occurrences(),
+                    Some(entry.capability.clone()),
+                )
+            } else {
+                let finding = Finding::warning(
+                    if crate::capability::builtin_scope(&gvk).is_some() {
+                        FindingCode::UnadmittedKind
+                    } else {
+                        FindingCode::UnknownKind
+                    },
+                    Phase::Decoding,
+                )
+                .for_resource(id);
+                self.processing.report(&finding, Phase::Decoding)?;
+                self.findings.push(finding);
+                (None, None, BTreeMap::new(), None)
+            };
         crate::source::check_observation_budget(&tree, &gvk)?;
         let mut observations = crate::source::root_observation_paths();
         if let Some(resource) = &resource {
@@ -1036,6 +1064,7 @@ impl ResourceSet {
             evidence,
             field_evidence: fields,
             original_known,
+            original_occurrences,
             resource,
             decode: registry.entries.get(&gvk).map(|entry| entry.decode),
             capability,
@@ -1410,6 +1439,8 @@ pub(crate) struct EffectiveProjection {
     comparisons: std::cell::RefCell<BTreeMap<FieldPath, bool>>,
     pub(crate) findings: Vec<Finding>,
     pub(crate) tree: TreeNode,
+    /// Candidates from current typed encoding, captured before effective decode mints new tokens.
+    pub(crate) occurrences: crate::syntax::NativeOccurrences,
     pub(crate) identity: ResourceIdentity,
     pub(crate) resource: Option<Box<dyn NativeResource>>,
     pub(crate) observations: Vec<crate::source::ObservationPath>,

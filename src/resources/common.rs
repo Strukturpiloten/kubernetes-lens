@@ -1,5 +1,5 @@
 //! Shared finite native helpers, independent of concrete resource cohorts.
-use crate::value::{LabelSelector, Quantity};
+use crate::value::{AccessModes, LabelSelector, Quantity};
 use std::collections::BTreeMap;
 
 macro_rules! native_object {
@@ -18,9 +18,16 @@ macro_rules! native_object {
             pub const fn unknown_fields(&self) -> &$crate::syntax::UnknownFields { &self.unknown }
         }
         impl $crate::resources::common::UnknownScopes for $name {
+            #[cfg(test)]
             fn unknown_scopes(&self, path: &$crate::diagnostic::FieldPath, out: &mut std::collections::BTreeSet<$crate::diagnostic::FieldPath>) {
                 if !self.unknown.is_empty() { out.insert(path.clone()); }
                 $($crate::resources::common::UnknownScopes::unknown_scopes(&self.$field, &path.child($wire), out);)*
+            }
+            fn visit_unknown_scopes(&self, path: &$crate::diagnostic::FieldPath, visitor: &mut $crate::resources::common::UnknownScopeVisitor<'_>) -> bool {
+                if !visitor.step() || (!self.unknown.is_empty() && !visitor.found(path)) { return false; }
+                $(let Some(child) = visitor.child(path, $wire) else { return false; };
+                if !$crate::resources::common::UnknownScopes::visit_unknown_scopes(&self.$field, &child, visitor) { return false; })*
+                true
             }
         }
         impl $crate::registry::codec::FieldCodec for $name {
@@ -29,7 +36,7 @@ macro_rules! native_object {
                 ctx.processing.work(1, ctx.phase)?;
                 Ok(Self {
                     $($field: $crate::registry::codec::read_presence(node, $wire, ctx, path)?,)*
-                    unknown: $crate::syntax::UnknownFields::capture(node, Self::NATIVE_FIELDS),
+                    unknown: $crate::syntax::UnknownFields::capture_in(node, Self::NATIVE_FIELDS, ctx)?,
                 })
             }
             fn encode(&self, ctx: &$crate::registry::EncodeContext<'_>, path: &$crate::diagnostic::FieldPath) -> Result<$crate::syntax::TreeNode, $crate::diagnostic::Finding> {
@@ -162,7 +169,7 @@ native_object! {
 native_object! {
     /// Selected native `PersistentVolumeClaimSpec` members; unadmitted descendants remain private.
     pub struct PersistentVolumeClaimSpec {
-    "accessModes" => access_modes: Vec<String>,
+    "accessModes" => access_modes: AccessModes,
     "dataSource" => data_source: TypedLocalObjectReference,
     "resources" => resources: ClaimResourceRequirements,
     "selector" => selector: LabelSelector,
@@ -259,13 +266,107 @@ native_object! {
 
 // Private shape knowledge only: no unknown value, key, token or source bytes are exposed.
 pub(crate) trait UnknownScopes {
+    #[cfg(test)]
     fn unknown_scopes(
         &self,
         path: &crate::diagnostic::FieldPath,
         out: &mut std::collections::BTreeSet<crate::diagnostic::FieldPath>,
     );
+    /// Stream the same native unknown scopes through the inherited operation.
+    fn visit_unknown_scopes(
+        &self,
+        _path: &crate::diagnostic::FieldPath,
+        visitor: &mut UnknownScopeVisitor<'_>,
+    ) -> bool {
+        visitor.step()
+    }
 }
-macro_rules! no_unknown {($($ty:ty),* $(,)?)=>{$(impl UnknownScopes for $ty{fn unknown_scopes(&self,_:&crate::diagnostic::FieldPath,_:&mut std::collections::BTreeSet<crate::diagnostic::FieldPath>) {}})*};}
+
+pub(crate) fn copy_path(
+    path: &crate::diagnostic::FieldPath,
+    fields: &crate::registry::FieldDecodeContext,
+) -> Result<crate::diagnostic::FieldPath, crate::diagnostic::Finding> {
+    let bytes = path
+        .0
+        .iter()
+        .try_fold(0usize, |total, part| total.checked_add(part.len()))
+        .ok_or_else(|| fields.processing.fail(fields.phase))?;
+    fields.processing.work(path.0.len().saturating_add(1), fields.phase)?;
+    fields.processing.work(bytes, fields.phase)?;
+    fields.processing.payload_array::<String>(path.0.len(), fields.phase)?;
+    fields.processing.payload(bytes, fields.phase)?;
+    Ok(path.clone())
+}
+pub(crate) fn child_path(
+    path: &crate::diagnostic::FieldPath,
+    segment: &str,
+    fields: &crate::registry::FieldDecodeContext,
+) -> Result<crate::diagnostic::FieldPath, crate::diagnostic::Finding> {
+    let count = path
+        .0
+        .len()
+        .checked_add(1)
+        .ok_or_else(|| fields.processing.fail(fields.phase))?;
+    let bytes = path
+        .0
+        .iter()
+        .try_fold(segment.len(), |total, part| total.checked_add(part.len()))
+        .ok_or_else(|| fields.processing.fail(fields.phase))?;
+    fields.processing.work(count, fields.phase)?;
+    fields.processing.work(bytes, fields.phase)?;
+    fields.processing.payload_array::<String>(count, fields.phase)?;
+    fields.processing.payload(bytes, fields.phase)?;
+    Ok(path.child(segment))
+}
+pub(crate) fn index_path(
+    path: &crate::diagnostic::FieldPath,
+    index: usize,
+    fields: &crate::registry::FieldDecodeContext,
+) -> Result<crate::diagnostic::FieldPath, crate::diagnostic::Finding> {
+    fields.processing.work(20, fields.phase)?;
+    fields.processing.payload(20, fields.phase)?;
+    child_path(path, &index.to_string(), fields)
+}
+/// No collection, counter reset or callback after terminal exhaustion.
+pub(crate) struct UnknownScopeVisitor<'a> {
+    fields: &'a crate::registry::FieldDecodeContext,
+    emit: &'a mut dyn FnMut(crate::diagnostic::FieldPath) -> bool,
+}
+impl<'a> UnknownScopeVisitor<'a> {
+    pub(crate) fn new(
+        fields: &'a crate::registry::FieldDecodeContext,
+        emit: &'a mut dyn FnMut(crate::diagnostic::FieldPath) -> bool,
+    ) -> Self {
+        Self { fields, emit }
+    }
+    pub(crate) fn step(&self) -> bool {
+        self.charge(1)
+    }
+    /// Admit finite native helper scans before inspecting their entries.
+    pub(crate) fn charge(&self, units: usize) -> bool {
+        self.fields.processing.work(units, self.fields.phase).is_ok()
+    }
+    pub(crate) fn child(
+        &self,
+        path: &crate::diagnostic::FieldPath,
+        segment: &str,
+    ) -> Option<crate::diagnostic::FieldPath> {
+        child_path(path, segment, self.fields).ok()
+    }
+    fn index(&self, path: &crate::diagnostic::FieldPath, index: usize) -> Option<crate::diagnostic::FieldPath> {
+        index_path(path, index, self.fields).ok()
+    }
+    pub(crate) fn found(&mut self, path: &crate::diagnostic::FieldPath) -> bool {
+        if !self.step() {
+            return false;
+        }
+        let Ok(path) = copy_path(path, self.fields) else {
+            return false;
+        };
+        (self.emit)(path)
+    }
+}
+macro_rules! no_unknown {($($ty:ty),* $(,)?)=>{$(impl UnknownScopes for $ty{#[cfg(test)] fn unknown_scopes(&self,_:&crate::diagnostic::FieldPath,_:&mut std::collections::BTreeSet<crate::diagnostic::FieldPath>) {}})*};}
 no_unknown!(
     String,
     bool,
@@ -279,7 +380,25 @@ no_unknown!(
     crate::model::Metadata,
     crate::model::OwnerReference
 );
+impl UnknownScopes for AccessModes {
+    #[cfg(test)]
+    fn unknown_scopes(
+        &self,
+        path: &crate::diagnostic::FieldPath,
+        out: &mut std::collections::BTreeSet<crate::diagnostic::FieldPath>,
+    ) {
+        if self.completeness() == crate::value::AccessModeCompleteness::Partial {
+            out.insert(path.clone());
+        }
+    }
+    fn visit_unknown_scopes(&self, path: &crate::diagnostic::FieldPath, visitor: &mut UnknownScopeVisitor<'_>) -> bool {
+        visitor.step()
+            && visitor.charge(self.len())
+            && (self.completeness() != crate::value::AccessModeCompleteness::Partial || visitor.found(path))
+    }
+}
 impl<T> UnknownScopes for crate::value::Protected<T> {
+    #[cfg(test)]
     fn unknown_scopes(
         &self,
         _: &crate::diagnostic::FieldPath,
@@ -288,6 +407,7 @@ impl<T> UnknownScopes for crate::value::Protected<T> {
     }
 }
 impl<T: UnknownScopes> UnknownScopes for crate::value::Presence<T> {
+    #[cfg(test)]
     fn unknown_scopes(
         &self,
         path: &crate::diagnostic::FieldPath,
@@ -297,8 +417,16 @@ impl<T: UnknownScopes> UnknownScopes for crate::value::Presence<T> {
             v.unknown_scopes(path, out);
         }
     }
+    fn visit_unknown_scopes(&self, path: &crate::diagnostic::FieldPath, visitor: &mut UnknownScopeVisitor<'_>) -> bool {
+        visitor.step()
+            && match self {
+                Self::Value(value) => value.visit_unknown_scopes(path, visitor),
+                Self::Absent | Self::Null => true,
+            }
+    }
 }
 impl<T: UnknownScopes> UnknownScopes for Vec<T> {
+    #[cfg(test)]
     fn unknown_scopes(
         &self,
         path: &crate::diagnostic::FieldPath,
@@ -308,8 +436,23 @@ impl<T: UnknownScopes> UnknownScopes for Vec<T> {
             v.unknown_scopes(&path.child(i.to_string()), out);
         }
     }
+    fn visit_unknown_scopes(&self, path: &crate::diagnostic::FieldPath, visitor: &mut UnknownScopeVisitor<'_>) -> bool {
+        if !visitor.step() {
+            return false;
+        }
+        for (index, value) in self.iter().enumerate() {
+            let Some(child) = visitor.index(path, index) else {
+                return false;
+            };
+            if !value.visit_unknown_scopes(&child, visitor) {
+                return false;
+            }
+        }
+        true
+    }
 }
 impl<T: UnknownScopes> UnknownScopes for BTreeMap<String, T> {
+    #[cfg(test)]
     fn unknown_scopes(
         &self,
         path: &crate::diagnostic::FieldPath,
@@ -318,6 +461,20 @@ impl<T: UnknownScopes> UnknownScopes for BTreeMap<String, T> {
         for (k, v) in self {
             v.unknown_scopes(&path.child(k.clone()), out);
         }
+    }
+    fn visit_unknown_scopes(&self, path: &crate::diagnostic::FieldPath, visitor: &mut UnknownScopeVisitor<'_>) -> bool {
+        if !visitor.step() {
+            return false;
+        }
+        for (key, value) in self {
+            let Some(child) = visitor.child(path, key) else {
+                return false;
+            };
+            if !value.visit_unknown_scopes(&child, visitor) {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -328,3 +485,7 @@ mod workload_specs;
 pub use native_helpers::*;
 pub use native_time::NativeTime;
 pub use workload_specs::*;
+
+#[cfg(test)]
+#[path = "common/unknown_scopes_tests.rs"]
+mod unknown_scopes_tests;

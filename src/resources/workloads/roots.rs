@@ -36,11 +36,25 @@ macro_rules! root {
             }
         }
         impl crate::resources::common::UnknownScopes for $name {
+            #[cfg(test)]
             fn unknown_scopes(&self, path: &FieldPath, out: &mut std::collections::BTreeSet<FieldPath>) {
                 if !self.unknown.is_empty() {
                     out.insert(path.clone());
                 }
                 crate::resources::common::UnknownScopes::unknown_scopes(&self.spec, &path.child("spec"), out);
+            }
+            fn visit_unknown_scopes(
+                &self,
+                path: &FieldPath,
+                visitor: &mut crate::resources::common::UnknownScopeVisitor<'_>,
+            ) -> bool {
+                if !visitor.step() || (!self.unknown.is_empty() && !visitor.found(path)) {
+                    return false;
+                }
+                let Some(child) = visitor.child(path, "spec") else {
+                    return false;
+                };
+                crate::resources::common::UnknownScopes::visit_unknown_scopes(&self.spec, &child, visitor)
             }
         }
         impl FieldCodec for $name {
@@ -58,7 +72,7 @@ macro_rules! root {
                 Ok(Self {
                     metadata: crate::registry::codec::read_presence(node, "metadata", ctx, path)?,
                     spec: crate::registry::codec::read_presence(node, "spec", ctx, path)?,
-                    unknown: UnknownFields::capture(node, &["apiVersion", "kind", "metadata", "spec"]),
+                    unknown: UnknownFields::capture_in(node, &["apiVersion", "kind", "metadata", "spec"], ctx)?,
                 })
             }
             fn encode(&self, ctx: &EncodeContext<'_>, path: &FieldPath) -> Result<TreeNode, Finding> {

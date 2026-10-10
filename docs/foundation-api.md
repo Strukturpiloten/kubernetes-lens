@@ -136,6 +136,24 @@ explicitly inspect Presence when reading members. Absent and explicit empty rema
 null, malformed or unadmitted selector data cannot be treated as an empty match. Shared Metadata
 also retains explicit finalizers. Default Debug continues to redact labels, keys, UIDs and values.
 
+## Finite volume access-mode migration
+
+`PersistentVolumeClaimSpec.access_modes` and `ClaimTemplateStatus.access_modes` now use
+`Presence<AccessModes>`; see [ADR 0007](decisions/0007-finite-volume-access-modes.md). Caller
+construction uses `AccessModes::new` with `EstablishedVolumeAccessMode` values: ReadWriteOnce,
+ReadOnlyMany and ReadWriteMany. Order and duplicates are retained. `selected()` returns both
+completeness and indexed finite entries. Partial collections retain unsupported strings privately;
+raw inspection requires `ExplicitSourceAccess`. Presence remains authoritative for absent/null/empty.
+
+Unsupported values, including ReadWriteOncePod throughout 1.20–1.37, produce indexed unadmitted
+findings and block ordinary output. Explicit opaque/protected output preserves only the complete
+unchanged sequence at its original supplied occurrence. Neighboring typed edits are allowed;
+ancestor reorder/transplant/alias uncertainty and overlapping explicit patches fail closed.
+Copied partial holders cannot enter source-free authoring. Deliberate finite replacement/removal
+still obeys owning required/cardinality and unknown-loss rules. Authored-intent output strips
+reviewed observations before checking remaining unadmitted values. These local source contracts
+establish no binding, driver or native conformance claim.
+
 ## Supplied graph facts and future claims
 
 Object, template and key `GraphSubject` values remain distinct. Pod-template selection uses Pod
@@ -271,3 +289,15 @@ comparing independently of insertion order. Shape accounting includes every expa
 bounded output; `equivalent` provides budgeted exact comparison. Debug/failures hide keys and values.
 [ADR 0008](decisions/0008-exact-protected-json.md) specifies the limits and future schema-example
 null canonicalization requirement. Neither primitive establishes schema or native numeric parity.
+
+## Bounded unknown-field traversal
+
+Native decoding reserves comparison work, retained keys, entries and copied opaque trees before
+capturing unknown members. The shared operation remains sticky after exhaustion. Native helpers
+stream unknown scopes through the inherited context, reserving traversal and private paths before
+callbacks. Callback refusal stops traversal. The collected scope hook exists only in tests to check
+parity; workload validation retains only a budgeted set needed for its native union checks.
+
+Storage access-mode inspection charges its complete member scan and reports partial understanding
+at its owning scope. Original supplied occurrences remain the authority for preservation; neither
+copied holders nor identical private payloads establish destination provenance.
