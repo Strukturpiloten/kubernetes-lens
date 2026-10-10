@@ -37,3 +37,8 @@ raise them. NativeBytes exposes protected decoded bytes only with explicit sourc
 quantity ordering reports exact supplied order separately from native arithmetic uncertainty.
 Sealed field/native hook contexts now preserve one operation session through projections and
 reparsing. These intentional unpublished integration changes do not establish native conformance.
+
+[ADR 0008](decisions/0008-exact-protected-json.md) adds `ExactJsonNumber`, `ProtectedJsonBuilder`,
+opaque `JsonNodeId` and `ProtectedJsonValue`. Their exact mathematical/structured comparisons and
+bounded private-value factories remain separate from server precision and schema evaluation.
+Private snapshot failures now omit traversal paths while retaining their code and phase.

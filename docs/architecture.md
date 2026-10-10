@@ -18,6 +18,11 @@ Generation applies structural deltas to original values and refuses unknown-data
 target fields/APIs, API relabeling, and unauthorized private output. There is no filesystem output,
 renderer execution, live cluster acquisition, mutation, or ambient namespace discovery.
 
+The value layer owns exact JSON numbers and protected immutable arenas, defined in
+[ADR 0008](decisions/0008-exact-protected-json.md). Future schema helpers consume these bounded
+primitives and inherited operation contexts. Value construction creates no resource provenance
+and establishes neither schema evaluation nor server behavior.
+
 The workload cohort registers nine API roots for eight kinds; shared native helpers live in
 `resources::common`. Typed workload validation, facts, observations and generation use the
 same sealed registry and bounded core projection. The other cohorts and custom documents

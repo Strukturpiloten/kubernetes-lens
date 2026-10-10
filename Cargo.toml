@@ -8,7 +8,7 @@ readme = "README.md"
 repository = "https://github.com/Strukturpiloten/kubernetes-lens"
 license = "MPL-2.0"
 publish = false
-include = ["/src/**", "/Cargo.toml", "/Cargo.lock", "/LICENSE", "/README.md", "/CHANGELOG.md", "/schemas/capabilities/**", "/docs/compatibility/licenses/**", "/tests/foundation.rs", "/tests/foundation/**", "/tests/native_processing.rs", "/fixtures/foundation/**"]
+include = ["/src/**", "/Cargo.toml", "/Cargo.lock", "/LICENSE", "/README.md", "/CHANGELOG.md", "/schemas/capabilities/**", "/docs/compatibility/licenses/**", "/tests/foundation.rs", "/tests/foundation/**", "/tests/native_processing.rs", "/tests/exact_json_number.rs", "/tests/protected_json.rs", "/fixtures/foundation/**"]
 
 [workspace]
 resolver = "3"

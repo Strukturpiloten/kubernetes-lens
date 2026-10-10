@@ -90,6 +90,11 @@ impl NativeOperationBudget {
     pub(crate) fn payload(&self, bytes: usize, phase: Phase) -> Result<(), Finding> {
         self.reserve(&self.0.payload, bytes, self.0.limits.max_payload_bytes, phase)
     }
+    /// Test-only charged payload observation, not an allocator or RSS measurement.
+    #[cfg(test)]
+    pub(crate) fn charged_payload_bytes(&self) -> usize {
+        self.0.payload.get()
+    }
     pub(crate) fn work(&self, units: usize, phase: Phase) -> Result<(), Finding> {
         self.reserve(&self.0.work, units, self.0.limits.max_processing_units, phase)
     }

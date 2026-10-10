@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Introduce exact JSON numbers and protected immutable JSON arenas; preserve raw numeric magnitude
+  and hide snapshot traversal paths. Extension/schema conformance remains pending.
+
 - Establish the independent, unpublished repository bootstrap and validation tooling.
 - Add the offline native foundation: bounded YAML/JSON, immutable private evidence, identities
   and Lists, finite target checks, supplied references, merge-safe edits, deterministic private

@@ -42,3 +42,7 @@ and failed decode attempts without disclosing source values. They are not fake p
 
 Foundation fixture provenance is in `fixtures/foundation/README.md`. All named compatibility
 cells remain pending. Focused checks never replace the primary agent's final complete gate.
+
+JSON primitive checks are `cargo test --locked --test exact_json_number --test protected_json`.
+Internal snapshot cases cover raw numeric magnitude, duplicate keys, malformed numbers and private
+budget failures. These tests establish neither CRD evaluation nor API-server numeric parity.
