@@ -6,10 +6,13 @@ identities and Lists, explicit Kubernetes 1.20–1.37 target facts, supplied-onl
 merge-safe edits, deterministic private in-memory output and explicit bounded Linux input reads.
 Typed workload support covers Pod, Deployment, StatefulSet, DaemonSet, ReplicaSet,
 ReplicationController, Job and historical/current CronJob APIs, with validation, supplied facts
-and native generation. Typed access, RBAC, scaling and policy resources now use the same
-contracts; see [access support and limits](docs/access.md). Other resource cohorts remain preservation-only. No Kubernetes minor,
-renderer or runtime conformance is claimed. Renderer execution and live cluster operations are
-not delivered. See [workload support and limits](docs/workloads.md).
+and native generation. Typed access, RBAC, scaling and policy resources and six networking kinds
+use the same bounded native contracts. Networking covers Service, Endpoints, EndpointSlice,
+Ingress, IngressClass and NetworkPolicy across ten served roots, with finite validation and
+supplied-only graph evidence. Other resource cohorts remain preservation-only. No Kubernetes
+minor, renderer or runtime conformance is claimed. Renderer execution and live cluster operations
+are not delivered. See [workload support and limits](docs/workloads.md),
+[access support and limits](docs/access.md) and [networking support and limits](docs/networking.md).
 See the [foundation API and integration contract](docs/foundation-api.md).
 Shared native-processing limits now cover cumulative charged payload/work and diagnostic reports.
 Protected binary values and exact supplied-quantity ordering are available without claiming native

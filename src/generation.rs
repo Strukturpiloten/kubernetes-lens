@@ -543,8 +543,16 @@ pub fn generate(
         };
         findings.extend(projection.findings);
         let mut tree = projection.tree;
-        if options.intent == OutputIntent::AuthoredIntent {
-            strip_observation_paths(&mut tree, Some(doc.id), &projection.observations, &mut findings);
+        if let Err(error) = apply_observation_output(
+            doc,
+            &mut tree,
+            projection.observations,
+            options,
+            &mut findings,
+            &processing,
+        ) {
+            findings.push(error);
+            break;
         }
         preserve_access_mode_findings(doc, &tree, &projection.occurrences, options, &processing, &mut findings);
         if options.opaque_fields == OpaqueFieldPolicy::Block
@@ -1187,46 +1195,108 @@ fn strip_observation_paths(
     observations: &[crate::source::ObservationPath],
     findings: &mut ProcessingReport,
 ) {
-    let mut paths = observations
-        .iter()
-        .filter(|observation| {
-            matches!(
+    let processing = findings.processing().clone();
+    let result = (|| -> Result<(), Finding> {
+        processing.work(observations.len(), Phase::Generation)?;
+        processing.payload_array::<FieldPath>(observations.len(), Phase::Generation)?;
+        let mut paths = Vec::new();
+        let mut path_bytes = 0_usize;
+        for observation in observations {
+            if matches!(
                 observation.role,
                 crate::source::ObservationRole::ServerOwned | crate::source::ObservationRole::SubresourceOnly
-            )
-        })
-        .map(|observation| observation.path.clone())
-        .collect::<Vec<_>>();
-    paths.sort_by(|left, right| left.0.len().cmp(&right.0.len()).then(left.cmp(right)));
-    let mut removed: Vec<FieldPath> = Vec::new();
-    for path in paths {
-        if removed.iter().any(|parent| path.0.starts_with(&parent.0)) || tree.get_path(&path).is_none() {
-            continue;
-        }
-        match apply_edit(tree, &FieldEdit::Remove { path: path.clone() }) {
-            Ok(()) => {
-                // Retain source validation findings, but stripped opaque observations no longer block output.
-                for finding in findings.entries_mut().iter_mut().filter(|finding| {
-                    finding.resource == id
-                        && finding.code == FindingCode::UnadmittedField
-                        && finding
-                            .path
-                            .as_ref()
-                            .is_some_and(|finding| finding.0.starts_with(&path.0))
-                }) {
-                    finding.severity = Severity::Warning;
-                }
-                let mut finding =
-                    Finding::warning(FindingCode::ObservedFieldRemoved, Phase::Generation).at_path(path.clone());
-                finding.resource = id;
-                finding.severity = Severity::Information;
-                findings.push(finding);
-                removed.push(path);
+            ) {
+                processing.payload_array::<String>(observation.path.0.len(), Phase::Generation)?;
+                processing.payload_sizes(observation.path.0.iter().map(String::len), Phase::Generation)?;
+                path_bytes = path_bytes
+                    .saturating_add(observation.path.0.iter().map(String::len).sum::<usize>())
+                    .saturating_add(observation.path.0.len());
+                paths.push(observation.path.clone());
             }
-            Err(finding) => findings.push(finding),
         }
+        // Comparison sorting is bounded by n^2, including complete string comparisons.
+        processing.work(
+            path_bytes.saturating_mul(paths.len().saturating_add(1)),
+            Phase::Generation,
+        )?;
+        paths.sort_by(|left, right| left.0.len().cmp(&right.0.len()).then(left.cmp(right)));
+        processing.payload_array::<FieldPath>(paths.len(), Phase::Generation)?;
+        let mut removed: Vec<FieldPath> = Vec::new();
+        for path in paths {
+            processing.work(1, Phase::Generation)?;
+            let mut covered = false;
+            for parent in &removed {
+                processing.work(
+                    path.0
+                        .iter()
+                        .map(String::len)
+                        .sum::<usize>()
+                        .saturating_add(parent.0.iter().map(String::len).sum::<usize>())
+                        .saturating_add(1),
+                    Phase::Generation,
+                )?;
+                if path.0.starts_with(&parent.0) {
+                    covered = true;
+                    break;
+                }
+            }
+            if covered || observation_node(tree, &path, &processing)?.is_none() {
+                continue;
+            }
+            // Both the temporary edit and resulting report retain exact paths.
+            for _ in 0..2 {
+                processing.payload_array::<String>(path.0.len(), Phase::Generation)?;
+                processing.payload_sizes(path.0.iter().map(String::len), Phase::Generation)?;
+            }
+            apply_edit_in(
+                tree,
+                &FieldEdit::Remove { path: path.clone() },
+                &processing,
+                Phase::Generation,
+            )?;
+            for finding in findings.entries_mut() {
+                processing.work(1, Phase::Generation)?;
+                if finding.resource == id && finding.code == FindingCode::UnadmittedField {
+                    if let Some(found) = &finding.path {
+                        processing.work(
+                            found
+                                .0
+                                .iter()
+                                .map(String::len)
+                                .sum::<usize>()
+                                .saturating_add(path.0.iter().map(String::len).sum::<usize>())
+                                .saturating_add(found.0.len())
+                                .saturating_mul(2),
+                            Phase::Generation,
+                        )?;
+                        if found.0.starts_with(&path.0)
+                            || found.0.len() == path.0.len()
+                                && found
+                                    .0
+                                    .iter()
+                                    .zip(&path.0)
+                                    .all(|(part, actual)| part == "*" || part == actual)
+                        {
+                            finding.severity = Severity::Warning;
+                        }
+                    }
+                }
+            }
+            let mut finding =
+                Finding::warning(FindingCode::ObservedFieldRemoved, Phase::Generation).at_path(path.clone());
+            finding.resource = id;
+            finding.severity = Severity::Information;
+            findings.push(finding);
+            processing.work(0, Phase::Generation)?;
+            removed.push(path);
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        findings.push(error);
     }
 }
+
 fn has_unknown_fields(tree: &TreeNode, fields: &[FieldCapability]) -> bool {
     fn visit(node: &TreeNode, path: &FieldPath, fields: &[FieldCapability]) -> bool {
         if path.0.len() == 1 && matches!(path.0[0].as_str(), "apiVersion" | "kind") {
@@ -1499,6 +1569,7 @@ fn list_key(
 ) -> Result<Vec<String>, Finding> {
     context.tick()?;
     let tcp = port_tcp_rule(path, context.native.gvk, context.native.target);
+    let service_tcp = tcp && context.native.gvk.is_some_and(|gvk| gvk.kind == "Service");
     if tcp {
         let port_key = if keys == ["port", "protocol"] {
             "port"
@@ -1509,8 +1580,9 @@ fn list_key(
         };
         let valid_port = context.get(node, port_key)?.is_some_and(|node| matches!(&node.value, TreeValue::Number(number) if number.parse::<i32>().is_ok_and(|port| (1..=65535).contains(&port))));
         let valid_protocol = context.get(node, "protocol")?.is_none_or(|node| {
-            node.as_str()
-                .is_some_and(|protocol| matches!(protocol, "TCP" | "UDP" | "SCTP"))
+            node.as_str().is_some_and(|protocol| {
+                matches!(protocol, "TCP" | "UDP" | "SCTP") || (service_tcp && protocol.is_empty())
+            })
         });
         if !valid_port || !valid_protocol {
             return Err(conflict().at_path(path.clone()));
@@ -1527,6 +1599,10 @@ fn list_key(
                     Err(conflict().at_path(path.clone()))
                 };
             };
+            if service_tcp && *key == "protocol" && node.as_str() == Some("") {
+                context.processing.payload(5, context.phase)?;
+                return Ok(String::from("\"TCP\""));
+            }
             if matches!(
                 node.value,
                 TreeValue::Mapping(_) | TreeValue::Sequence(_) | TreeValue::Null | TreeValue::Tagged(..)
@@ -1570,46 +1646,6 @@ fn set_child(node: &mut TreeNode, key: &str, value: Option<TreeNode>) -> Result<
         entries.push((key.to_owned(), value));
     }
     Ok(())
-}
-pub(crate) fn apply_edit(tree: &mut TreeNode, edit: &FieldEdit) -> Result<(), Finding> {
-    let (path, value) = match edit {
-        FieldEdit::Set { path, value } => (path, Some(value.clone())),
-        FieldEdit::Remove { path } => (path, None),
-    };
-    let Some((last, parents)) = path.0.split_last() else {
-        return Err(conflict().at_path(path.clone()));
-    };
-    let mut node = tree;
-    for parent in parents {
-        match &mut node.value {
-            TreeValue::Mapping(entries) => {
-                let Some(index) = entries.iter().position(|(key, _)| key == parent) else {
-                    return Err(conflict().at_path(path.clone()));
-                };
-                node = &mut entries[index].1;
-            }
-            TreeValue::Sequence(items) => {
-                let index: usize = parent.parse().map_err(|_| conflict())?;
-                node = items.get_mut(index).ok_or_else(conflict)?;
-            }
-            _ => return Err(conflict().at_path(path.clone())),
-        }
-    }
-    match &mut node.value {
-        TreeValue::Sequence(items) => {
-            let index: usize = last.parse().map_err(|_| conflict())?;
-            if index >= items.len() {
-                return Err(conflict());
-            }
-            if let Some(value) = value {
-                items[index] = value;
-            } else {
-                items.remove(index);
-            }
-            Ok(())
-        }
-        _ => set_child(node, last, value),
-    }
 }
 pub(crate) fn json(node: &TreeNode, out: &mut String) -> Result<(), Finding> {
     match &node.value {
@@ -1959,6 +1995,204 @@ fn apply_edit_value_in(
         }
         context.processing.payload(last.len(), context.phase)?;
         set_child(node, last, value)
+    }
+}
+
+fn observation_node<'a>(
+    tree: &'a TreeNode,
+    path: &FieldPath,
+    processing: &NativeOperationBudget,
+) -> Result<Option<&'a TreeNode>, Finding> {
+    let context = BudgetedMergeContext {
+        native: MergeContext {
+            gvk: None,
+            target: None,
+        },
+        processing,
+        phase: Phase::Generation,
+    };
+    let mut current = Some(tree);
+    for part in &path.0 {
+        current = match current {
+            Some(node) if node.as_mapping().is_some() => context.get(node, part)?,
+            Some(node) => {
+                processing.work(part.len().saturating_add(1), Phase::Generation)?;
+                node.as_sequence()
+                    .and_then(|items| part.parse::<usize>().ok().and_then(|index| items.get(index)))
+            }
+            None => None,
+        };
+    }
+    Ok(current)
+}
+
+fn apply_observation_output(
+    doc: &crate::model::ResourceDocument,
+    tree: &mut TreeNode,
+    mut observations: Vec<crate::source::ObservationPath>,
+    options: &GenerationOptions,
+    findings: &mut ProcessingReport,
+    processing: &NativeOperationBudget,
+) -> Result<(), Finding> {
+    let topology = topology_observation_paths(doc, tree, processing)?;
+    if options.intent == OutputIntent::AuthoredIntent {
+        processing.payload_array::<crate::source::ObservationPath>(topology.len(), Phase::Generation)?;
+        observations.extend(topology.into_iter().map(|path| crate::source::ObservationPath {
+            path,
+            role: crate::source::ObservationRole::ServerOwned,
+        }));
+        strip_observation_paths(tree, Some(doc.id), &observations, findings);
+    } else if options.opaque_fields == OpaqueFieldPolicy::PreserveWithFinding
+        && options.protected_output == ProtectedOutput::Include
+        && doc.evidence.origin != crate::source::EvidenceOrigin::NativeAuthored
+        && !topology.is_empty()
+    {
+        for path in &topology {
+            processing.work(path.0.len(), Phase::Generation)?;
+            let Some((original, effective)) =
+                observation_node(&doc.original, path, processing)?.zip(observation_node(tree, path, processing)?)
+            else {
+                return Ok(());
+            };
+            if !same_observation_payload(original, effective, processing)? {
+                return Ok(());
+            }
+        }
+        for finding in findings.entries_mut() {
+            processing.work(1, Phase::Generation)?;
+            if finding.resource == Some(doc.id) && finding.code == FindingCode::UnadmittedField {
+                if let Some(path) = &finding.path {
+                    processing.work(
+                        topology.iter().fold(1_usize, |total, observation| {
+                            total
+                                .saturating_add(observation.0.iter().map(String::len).sum::<usize>())
+                                .saturating_add(path.0.iter().map(String::len).sum::<usize>())
+                                .saturating_add(path.0.len())
+                        }),
+                        Phase::Generation,
+                    )?;
+                    if path.0 == ["endpoints", "*", "deprecatedTopology"]
+                        || topology.iter().any(|observation| path.0.starts_with(&observation.0))
+                    {
+                        finding.severity = Severity::Warning;
+                    }
+                }
+            }
+        }
+    }
+    processing.work(0, Phase::Generation)
+}
+fn topology_observation_paths(
+    document: &crate::model::ResourceDocument,
+    tree: &TreeNode,
+    processing: &NativeOperationBudget,
+) -> Result<Vec<FieldPath>, Finding> {
+    let identity = &document.original_identity;
+    if identity.gvk.group.as_deref() != Some("discovery.k8s.io")
+        || identity.gvk.version != "v1"
+        || identity.gvk.kind != "EndpointSlice"
+    {
+        return Ok(Vec::new());
+    }
+    let Some(capability) = &document.capability else {
+        return Ok(Vec::new());
+    };
+    processing.work(capability.fields.len(), Phase::Generation)?;
+    if !capability
+        .fields
+        .iter()
+        .any(|field| field.path == "/endpoints/*/deprecatedTopology" && field.admission == FieldAdmission::PreserveOnly)
+    {
+        return Ok(Vec::new());
+    }
+    let mut paths = Vec::new();
+    let lookup = BudgetedMergeContext {
+        native: MergeContext {
+            gvk: None,
+            target: None,
+        },
+        processing,
+        phase: Phase::Generation,
+    };
+    if let Some(endpoints) = lookup.get(tree, "endpoints")?.and_then(TreeNode::as_sequence) {
+        for (index, endpoint) in endpoints.iter().enumerate() {
+            processing.work(
+                endpoint.as_mapping().map_or(1, |values| values.len().saturating_add(1)),
+                Phase::Generation,
+            )?;
+            if lookup.get(endpoint, "deprecatedTopology")?.is_some() {
+                processing.payload_array::<FieldPath>(1, Phase::Generation)?;
+                processing.payload_array::<String>(3, Phase::Generation)?;
+                processing.payload(47, Phase::Generation)?;
+                paths.push(FieldPath(vec![
+                    "endpoints".into(),
+                    index.to_string(),
+                    "deprecatedTopology".into(),
+                ]));
+            }
+        }
+    }
+    Ok(paths)
+}
+fn same_observation_payload(
+    left: &TreeNode,
+    right: &TreeNode,
+    processing: &NativeOperationBudget,
+) -> Result<bool, Finding> {
+    processing.work(1, Phase::Generation)?;
+    match (&left.value, &right.value) {
+        (TreeValue::Mapping(left), TreeValue::Mapping(right)) => {
+            if left.len() != right.len() {
+                return Ok(false);
+            }
+            processing.payload_array::<(&str, &TreeNode)>(right.len(), Phase::Generation)?;
+            for (key, _) in right {
+                processing.work(
+                    key.len()
+                        .saturating_add(1)
+                        .saturating_mul(right.len().saturating_add(1)),
+                    Phase::Generation,
+                )?;
+            }
+            let indexed: BTreeMap<&str, &TreeNode> = right.iter().map(|(key, value)| (key.as_str(), value)).collect();
+            for (key, value) in left {
+                processing.work(
+                    key.len()
+                        .saturating_add(1)
+                        .saturating_mul(right.len().saturating_add(1)),
+                    Phase::Generation,
+                )?;
+                let Some(other) = indexed.get(key.as_str()) else {
+                    return Ok(false);
+                };
+                if !same_observation_payload(value, other, processing)? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        (TreeValue::Sequence(left), TreeValue::Sequence(right)) => {
+            if left.len() != right.len() {
+                return Ok(false);
+            }
+            for (left, right) in left.iter().zip(right) {
+                if !same_observation_payload(left, right, processing)? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        (TreeValue::String(left), TreeValue::String(right)) | (TreeValue::Number(left), TreeValue::Number(right)) => {
+            processing.work(left.len().saturating_add(right.len()), Phase::Generation)?;
+            Ok(left == right)
+        }
+        (TreeValue::Tagged(left_tag, left), TreeValue::Tagged(right_tag, right)) => {
+            processing.work(left_tag.len().saturating_add(right_tag.len()), Phase::Generation)?;
+            Ok(left_tag == right_tag && same_observation_payload(left, right, processing)?)
+        }
+        (TreeValue::Bool(left), TreeValue::Bool(right)) => Ok(left == right),
+        (TreeValue::Null, TreeValue::Null) => Ok(true),
+        _ => Ok(false),
     }
 }
 

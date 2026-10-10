@@ -4,6 +4,9 @@ The unpublished package now exports the offline [foundation API](foundation-api.
 [ADR 0003](decisions/0003-offline-native-foundation.md) supersedes ADR 0001's empty API statement.
 [ADR 0004](decisions/0004-native-authoring-facts-observations.md) supersedes its source-only
 authoring and empty-codec milestone statements.
+[ADR 0005](decisions/0005-native-networking-relations.md) adds closed Service port subjects,
+NetworkPolicy peer conjunctions, versionless GroupKind binding and named target-port evidence.
+These additions retain supplied-only semantics and immutable source evidence.
 Rustdoc and independent foundation tests define the local source/behavior contract; no crates.io
 baseline or registry comparison is fabricated. Pre-1.0 intentional API breaks require an explicit
 ADR/migration decision. Publication remains separately authorized after the completion gate.

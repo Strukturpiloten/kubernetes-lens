@@ -44,7 +44,7 @@ pub enum FindingCode {
     UnknownKind,
     /// A native field is invalid.
     NativeFieldInvalid,
-    /// A reviewed native rule requires an explicit operation context.
+    /// A reviewed native rule needs operation, version, gate or defaulting context.
     NativeContextRequired,
     /// The target API is not served in the selected profile.
     UnavailableApi,

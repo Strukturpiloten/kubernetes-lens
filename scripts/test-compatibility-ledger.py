@@ -360,5 +360,74 @@ class ContractTests(unittest.TestCase):
         changed['roots'][0]['native_case_status'] = 'passed'
         self.assertIn('incomplete or unsupported access roots', self.access_code_errors(changed))
 
+    def networking_code_errors(self, evidence):
+        errors = []
+        expected_roots = []
+        for i, resource in enumerate(self.ledger['resources']):
+            if resource['cohort_issue'] != 10:
+                continue
+            for j, profile in enumerate(resource['proposed_admitted_api_profiles']):
+                expected_roots.append({
+                    'kind': resource['kind'], 'api_version': profile['api_version'],
+                    'selected_field_catalogue_pointer': f'/resources/{i}/proposed_admitted_api_profiles/{j}',
+                    'expected_availability_ranges': profile['target_availability_ranges'],
+                    'code_registration': 'src/resources/networking.rs', 'native_case_status': 'pending',
+                })
+        if evidence.get('roots') != expected_roots or len({r['kind'] for r in expected_roots}) != 6:
+            errors.append('incomplete or unsupported networking roots')
+        expected_sources = {
+            'src/capability.rs', 'src/generation.rs', 'src/graph.rs', 'src/model.rs',
+            'src/registry.rs', 'src/resources/mod.rs', 'src/resources/common.rs',
+            'src/resources/common/native_helpers.rs', 'src/value.rs',
+            'src/resources/networking.rs', 'tests/networking.rs',
+        } | {str(p.relative_to(ROOT)) for directory in ['src/resources/networking', 'tests/networking']
+             for p in (ROOT / directory).rglob('*.rs')}
+        sources = evidence.get('source_sha256', {})
+        if set(sources) != expected_sources:
+            errors.append('incomplete source binding')
+        for name, digest in sources.items():
+            if name not in expected_sources or hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != digest:
+                errors.append('stale source binding')
+        expected_cases = []
+        for path in [ROOT / 'tests/networking.rs', *sorted((ROOT / 'tests/networking').rglob('*.rs'))]:
+            prefix = '' if path.name == 'networking.rs' else path.stem + '::'
+            expected_cases.extend(prefix + case for case in re.findall(r'#\[test\]\s*fn (\w+)\(', path.read_text()))
+        if len(expected_cases) != 74 or evidence.get('independent_networking_tests') != expected_cases:
+            errors.append('incomplete independent cases')
+        canonical = evidence.get('canonical_ledger', {})
+        if canonical.get('path') != str(contract.LEDGER.relative_to(ROOT)) or canonical.get('sha256') != hashlib.sha256(contract.LEDGER.read_bytes()).hexdigest():
+            errors.append('stale canonical ledger')
+        if evidence.get('status') != 'typed-native-static-code-present-native-profiles-pending':
+            errors.append('invalid static status')
+        if evidence.get('conformance') != {name: 'pending' for name in ['api_server', 'runtime', 'controller_cni', 'official_corpus', 'native_kind_profiles']}:
+            errors.append('fabricated native success')
+        if not evidence.get('limitations') or len(evidence.get('reviewed_correction_groups', [])) != 7:
+            errors.append('missing reviewed scope or limitations')
+        return errors
+
+    def test_networking_code_evidence_binds_roots_sources_cases_and_pending_profiles(self):
+        evidence = json.loads((ROOT / 'schemas/capabilities/networking-code-evidence.json').read_text())
+        self.assertEqual(self.networking_code_errors(evidence), [])
+
+    def test_networking_code_evidence_rejects_missing_stale_and_fabricated_claims(self):
+        evidence = json.loads((ROOT / 'schemas/capabilities/networking-code-evidence.json').read_text())
+        for field in ['roots', 'independent_networking_tests']:
+            changed = copy.deepcopy(evidence)
+            changed[field].pop()
+            self.assertTrue(self.networking_code_errors(changed), field)
+        changed = copy.deepcopy(evidence)
+        changed['source_sha256']['src/resources/networking.rs'] = '0' * 64
+        self.assertIn('stale source binding', self.networking_code_errors(changed))
+        changed = copy.deepcopy(evidence)
+        changed['source_sha256'].pop('src/model.rs')
+        self.assertIn('incomplete source binding', self.networking_code_errors(changed))
+        changed = copy.deepcopy(evidence)
+        changed['conformance']['api_server'] = 'passed'
+        self.assertIn('fabricated native success', self.networking_code_errors(changed))
+        changed = copy.deepcopy(evidence)
+        changed['roots'][0]['native_case_status'] = 'passed'
+        self.assertIn('incomplete or unsupported networking roots', self.networking_code_errors(changed))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -78,6 +78,36 @@ pub enum ReferenceTarget {
         /// Closed subject selection.
         selection: SubjectSelection,
     },
+    /// Native group/kind/name identity without a manufactured served version.
+    GroupKindName {
+        /// Absent means core group for comparison only; null stays unavailable.
+        group: Presence<String>,
+        /// Explicit native kind.
+        kind: String,
+        /// Explicit native name.
+        name: String,
+    },
+    /// Conjunctive selectors belonging to one `NetworkPolicy` peer entry.
+    NetworkPolicyPeer {
+        /// Exact native namespace-selector presence.
+        namespace_selector: Presence<LabelSelector>,
+        /// Exact native Pod-selector presence.
+        pod_selector: Presence<LabelSelector>,
+    },
+    /// Universal peer declaration on one existing allow rule, not imagined subjects.
+    NetworkPolicyAllPeers {
+        /// Exact absent/empty/native-null peer-list distinction.
+        presence: PeerListPresence,
+    },
+    /// Service-selected Pod/template subjects with an admitted named container port.
+    NamedServiceTargetPort {
+        /// Nonempty native Service selector.
+        selector: LabelSelector,
+        /// Native targetPort name.
+        name: crate::value::Protected<String>,
+        /// Native Service protocol presence; absent/empty compares as TCP only under a target witness.
+        protocol: Presence<String>,
+    },
     /// Future native claim identity expectation, never runtime existence proof.
     GeneratedClaims {
         /// Closed core-bound expectation rule.
@@ -181,6 +211,20 @@ pub enum Resolution {
         /// Protected selected key.
         key: crate::value::Protected<String>,
     },
+    /// Existing Service with complete front-port evidence lacking this name or number.
+    MissingServicePort {
+        /// Exact supplying Service.
+        object: ResourceId,
+    },
+    /// Multiple front-port declarations match a protocol-free backend selector.
+    AmbiguousServicePorts(Vec<GraphSubject>),
+    /// Complete selected Pod/template declarations lack the named container port.
+    MissingContainerPort {
+        /// Actual selected subjects, without runtime existence proof.
+        selected: Vec<GraphSubject>,
+    },
+    /// Universal peers declared by one actual allow rule.
+    NetworkPolicyAllPeers(PeerListPresence),
     /// Explicitly optional absent supplied object/key.
     OptionalMissing(MissingSubject),
     /// Established supplied predicate incompatibility.
@@ -249,7 +293,13 @@ struct WorkingGraph {
     target: Option<std::sync::Arc<GraphTargetWitness>>,
 }
 impl WorkingGraph {
-    fn finish(self) -> ReferenceGraph {
+    fn finish(mut self) -> ReferenceGraph {
+        if self.findings.failed() {
+            for edge in &mut self.edges {
+                edge.resolution = Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+                edge.evidence.clear();
+            }
+        }
         ReferenceGraph {
             edges: self.edges,
             findings: self.findings.into_vec(),
@@ -426,7 +476,11 @@ fn reference_candidate(
         ReferenceTarget::External { .. } => false,
         ReferenceTarget::CheckedObject { .. }
         | ReferenceTarget::SubjectSelector { .. }
-        | ReferenceTarget::GeneratedClaims { .. } => {
+        | ReferenceTarget::GeneratedClaims { .. }
+        | ReferenceTarget::GroupKindName { .. }
+        | ReferenceTarget::NetworkPolicyPeer { .. }
+        | ReferenceTarget::NetworkPolicyAllPeers { .. }
+        | ReferenceTarget::NamedServiceTargetPort { .. } => {
             return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
         }
     })
@@ -555,6 +609,8 @@ fn selector_match(
 /// Closed reasons why native facts cannot yet establish a supplied relationship.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FactGap {
+    /// Duplicate supplied identities prevent establishing unique evidence.
+    AmbiguousSuppliedEvidence,
     /// A reviewed gate or conditional field requires an explicit target profile.
     TargetProfileRequired,
     /// Source-version evidence required by the rule was not supplied.
@@ -622,6 +678,13 @@ pub(crate) struct PortFact {
     pub(crate) protocol_path: FieldPath,
 }
 #[derive(Clone)]
+pub(crate) struct ServicePortFact {
+    pub(crate) name: Presence<String>,
+    pub(crate) port: i32,
+    pub(crate) protocol: Presence<String>,
+    pub(crate) path: FieldPath,
+}
+#[derive(Clone)]
 pub(crate) enum ClaimPatternDraft {
     StatefulSet {
         template_path: FieldPath,
@@ -652,14 +715,14 @@ pub(crate) enum NativeFact {
         state: FactState<KeyNames>,
         path: FieldPath,
     },
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Closed headless predicate exercised by foundation codecs; networking cohort is pending"
-        )
-    )]
-    ServiceHeadless { state: FactState<bool>, path: FieldPath },
+    ServiceHeadless {
+        state: FactState<bool>,
+        path: FieldPath,
+    },
+    ServicePorts {
+        state: FactState<Vec<ServicePortFact>>,
+        path: FieldPath,
+    },
     SelectorSubject {
         subject: LocalSubject,
         labels: FactState<LabelFacts>,
@@ -676,7 +739,14 @@ pub(crate) enum NativeFact {
 macro_rules! private_debug {
     ($($name:ty),+ $(,)?) => { $(impl fmt::Debug for $name { fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str(concat!(stringify!($name), "(<private>)")) } })+ };
 }
-private_debug!(KeyNames, LabelFacts, PortFact, ClaimPatternDraft, NativeFact);
+private_debug!(
+    KeyNames,
+    LabelFacts,
+    PortFact,
+    ServicePortFact,
+    ClaimPatternDraft,
+    NativeFact
+);
 
 /// Supplied native object, template or key; templates do not assert deployed Pods.
 #[derive(Clone, Eq, PartialEq)]
@@ -694,6 +764,13 @@ pub enum GraphSubject {
         path: FieldPath,
         /// Native template kind.
         template_kind: TemplateKind,
+    },
+    /// One exact supplying Service front-port declaration.
+    ServicePort {
+        /// Supplying Service resource.
+        resource: ResourceId,
+        /// Effective declaration path.
+        path: FieldPath,
     },
     /// An admitted key belonging to a supplied resource.
     Key {
@@ -715,8 +792,33 @@ pub enum ReferencePredicate {
         /// Exact selected key.
         key: crate::value::Protected<String>,
     },
+    /// Match declared Service front ports only; no target/container/node ports.
+    ServicePortExists {
+        /// Native backend port selector.
+        port: ServicePortSelector,
+    },
     /// Require explicit clusterIP None.
     HeadlessService,
+}
+/// Native Ingress backend Service-port selector with private spelling.
+#[derive(Clone, Eq, PartialEq)]
+pub enum ServicePortSelector {
+    /// Null, absent or malformed native backend-port evidence.
+    Unavailable(FactGap),
+    /// Exact declared Service-port name.
+    Name(crate::value::Protected<String>),
+    /// Exact declared Service front-port number.
+    Number(i32),
+}
+/// Presence of a peer list on an actual `NetworkPolicy` allow rule.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PeerListPresence {
+    /// No from/to field on the rule.
+    Absent,
+    /// Explicit empty from/to sequence.
+    ExplicitEmpty,
+    /// Explicit null is unavailable, not universal.
+    Null,
 }
 /// Closed selector subject policy.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -840,7 +942,13 @@ pub enum ClaimOwnership {
     /// This reviewed identity rule does not require an owner predicate.
     NotRequiredByThisRule,
 }
-private_debug!(GraphSubject, ReferencePredicate, MissingSubject, ClaimPattern);
+private_debug!(
+    GraphSubject,
+    ReferencePredicate,
+    ServicePortSelector,
+    MissingSubject,
+    ClaimPattern
+);
 
 /// Exact origin of one resolved gate setting in a retained target witness.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1111,6 +1219,69 @@ impl GraphBudget {
             failed: std::cell::Cell::new(false),
         }
     }
+    fn retain<T>(&self, count: usize) -> bool {
+        self.processing.payload_array::<T>(count, Phase::Analysis).is_ok()
+    }
+    fn path_copy(&self, path: &FieldPath, copies: usize) -> bool {
+        self.retain::<String>(path.0.len().saturating_mul(copies))
+            && self
+                .processing
+                .payload_sizes(
+                    path.0.iter().map(|part| part.len().saturating_mul(copies)),
+                    Phase::Analysis,
+                )
+                .is_ok()
+    }
+    fn local_copy(&self, subject: &LocalSubject, copies: usize) -> bool {
+        match subject {
+            LocalSubject::Object => true,
+            LocalSubject::Template { path, .. } => self.path_copy(path, copies),
+        }
+    }
+    fn selector_work(&self, selector: &LabelSelector, labels: Option<&BTreeMap<String, String>>) -> bool {
+        let mut bytes = 1_usize;
+        if let Some(required) = selector.match_labels.value() {
+            for (key, value) in required {
+                if !self.take(1) {
+                    return false;
+                }
+                bytes = bytes
+                    .saturating_add(key.len())
+                    .saturating_add(value.len())
+                    .saturating_add(1);
+            }
+        }
+        if let Some(required) = selector.match_expressions.value() {
+            for requirement in required {
+                if !self.take(1) {
+                    return false;
+                }
+                bytes = bytes.saturating_add(requirement.key.len()).saturating_add(1);
+                if let Some(values) = requirement.values.value() {
+                    for value in values {
+                        if !self.take(1) {
+                            return false;
+                        }
+                        bytes = bytes.saturating_add(value.len()).saturating_add(1);
+                    }
+                }
+            }
+        }
+        let mut label_bytes = 1_usize;
+        if let Some(labels) = labels {
+            for (key, value) in labels {
+                if !self.take(1) {
+                    return false;
+                }
+                label_bytes = label_bytes
+                    .saturating_add(key.len())
+                    .saturating_add(value.len())
+                    .saturating_add(1);
+            }
+        }
+        // Covers grammar validation, tree-map key comparisons and expression value comparisons.
+        self.take(bytes.saturating_mul(label_bytes).saturating_mul(4))
+    }
     fn take(&self, count: usize) -> bool {
         if self.failed.get() || self.processing.work(count, Phase::Analysis).is_err() || count > self.remaining.get() {
             self.failed.set(true);
@@ -1132,7 +1303,13 @@ impl ReferenceSink for BoundedReferences<'_> {
         self.exhausted || self.budget.processing.exhausted()
     }
     fn push(&mut self, reference: Reference) {
-        if self.budget.take(1) {
+        if self.budget.take(1)
+            && self
+                .budget
+                .processing
+                .payload_array::<Reference>(1, Phase::Analysis)
+                .is_ok()
+        {
             self.references.push(reference);
         } else {
             self.exhausted = true;
@@ -1153,7 +1330,8 @@ fn subject_resource(subject: &GraphSubject) -> ResourceId {
     match subject {
         GraphSubject::Object { resource }
         | GraphSubject::Template { resource, .. }
-        | GraphSubject::Key { resource, .. } => *resource,
+        | GraphSubject::Key { resource, .. }
+        | GraphSubject::ServicePort { resource, .. } => *resource,
     }
 }
 fn subject_path(subject: &LocalSubject) -> FieldPath {
@@ -1201,7 +1379,7 @@ fn contribution(
     path: FieldPath,
 ) -> Option<FactEvidence> {
     let resource = subject_resource(&subject);
-    if !budget.take(resources.documents.len()) {
+    if !budget.retain::<FactEvidence>(1) || !budget.path_copy(&path, 1) || !budget.take(resources.documents.len()) {
         return None;
     }
     let document = resources.documents.iter().find(|document| document.id == resource)?;
@@ -1359,6 +1537,14 @@ fn recheck_fact(ctx: &registry::ProjectionContext<'_>, fact: &mut NativeFact) ->
             *ports = recheck_ports(ctx, subject, ports.clone());
             (3, None, subject_path(subject))
         }
+        NativeFact::ServicePorts { state, path } => {
+            *state = recheck_service_ports(
+                ctx,
+                path,
+                std::mem::replace(state, FactState::Unknown(FactGap::IncompleteSuppliedEvidence)),
+            );
+            (5, None, path.clone())
+        }
         NativeFact::ClaimExpectation { path, .. } => (4, None, path.clone()),
     }
 }
@@ -1498,6 +1684,19 @@ impl GraphIndex<'_> {
                 selector,
                 selection,
             } => self.select_subjects(reference, kinds, selector, *selection, evidence),
+            ReferenceTarget::GroupKindName { group, kind, name } => {
+                self.group_kind_name(reference, group, kind, name, evidence)
+            }
+            ReferenceTarget::NetworkPolicyPeer {
+                namespace_selector,
+                pod_selector,
+            } => self.policy_peer(reference, namespace_selector, pod_selector, evidence),
+            ReferenceTarget::NetworkPolicyAllPeers { presence } => self.all_peers(reference, *presence),
+            ReferenceTarget::NamedServiceTargetPort {
+                selector,
+                name,
+                protocol,
+            } => self.named_target_port(reference, selector, name.native_value(), protocol, evidence),
             ReferenceTarget::GeneratedClaims { pattern } => self.evaluate_claims(reference, pattern, evidence),
             _ => {
                 if self.failed.values().any(|identity| match &reference.target {
@@ -1581,8 +1780,10 @@ fn resolve_edges(index: &GraphIndex<'_>, references: Vec<Reference>, graph: &mut
                     FindingCode::MissingReference
                 },
             ),
-            Resolution::MissingKey { .. } => Some(FindingCode::MissingReference),
-            Resolution::Ambiguous(_) => Some(FindingCode::AmbiguousReference),
+            Resolution::MissingKey { .. }
+            | Resolution::MissingServicePort { .. }
+            | Resolution::MissingContainerPort { .. } => Some(FindingCode::MissingReference),
+            Resolution::AmbiguousServicePorts(_) | Resolution::Ambiguous(_) => Some(FindingCode::AmbiguousReference),
             Resolution::External(_) => Some(FindingCode::ExternalPrerequisite),
             Resolution::Unsupported(SafeReason::OperatorOwned) => Some(FindingCode::OperatorOwned),
             Resolution::Unsupported(SafeReason::ScopeUnknown) => Some(FindingCode::ScopeUnknown),
@@ -1947,6 +2148,11 @@ impl GraphIndex<'_> {
         }) || matches!(optional, Presence::Null) {
             return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
         }
+        if let Some(ReferencePredicate::ServicePortExists { port }) = predicate {
+            if let Err(reason) = self.check_backend_port(reference, name, port, evidence) {
+                return Resolution::Unsupported(reason);
+            }
+        }
         let namespace = match selected_namespace(reference, identities, context) {
             Ok(namespace) => namespace,
             Err(reason) => return Resolution::Unsupported(reason),
@@ -2022,6 +2228,9 @@ impl GraphIndex<'_> {
             None => Resolution::ResolvedSubjects(vec![subject]),
             Some(predicate @ ReferencePredicate::KeyExists { .. }) => {
                 self.checked_key(gvk, object, subject, predicate, optional, evidence)
+            }
+            Some(ReferencePredicate::ServicePortExists { port }) => {
+                self.service_front_port(gvk, object, port, evidence)
             }
             Some(ReferencePredicate::HeadlessService) => {
                 if gvk.group.is_some() || gvk.kind != "Service" {
@@ -2159,6 +2368,11 @@ impl GraphIndex<'_> {
         let budget = self.budget;
         let facts = self.facts;
 
+        if !budget.selector_work(selector, None)
+            || !budget.retain::<SubjectGap>(self.failed.len().saturating_add(identities.len()))
+        {
+            return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
         if selector.validate().is_err() {
             return Resolution::Unsupported(SafeReason::UnsupportedRelationship);
         }
@@ -2241,16 +2455,7 @@ impl GraphIndex<'_> {
                 });
             }
         }
-        if !result.gaps.is_empty() {
-            Resolution::PartiallyResolvedSubjects {
-                matched: result.matched,
-                unavailable: result.gaps,
-            }
-        } else if result.matched.is_empty() {
-            Resolution::Missing
-        } else {
-            Resolution::ResolvedSubjects(result.matched)
-        }
+        resolution_subjects(result)
     }
     fn select_fact(
         &self,
@@ -2265,9 +2470,15 @@ impl GraphIndex<'_> {
         let resources = self.resources;
         let projections = self.projections;
         let witness = self.witness;
+        if !budget.retain::<GraphSubject>(1) || !budget.retain::<SubjectGap>(1) || !budget.local_copy(subject, 3) {
+            return;
+        }
         let bound = local_subject(resource, subject);
         match labels {
             FactState::Known(labels) => {
+                if !budget.selector_work(selector, Some(&labels.values)) || !budget.path_copy(&labels.path, 2) {
+                    return;
+                }
                 if let Some(field) = contribution(
                     budget,
                     resources,
@@ -2975,5 +3186,1208 @@ fn tree_cost(node: &crate::syntax::TreeNode) -> usize {
             value.len().saturating_add(1)
         }
         _ => 1,
+    }
+}
+
+fn native_string(
+    node: Option<&crate::syntax::TreeNode>,
+    processing: &crate::processing::NativeOperationBudget,
+) -> Result<Presence<String>, FactGap> {
+    match node {
+        None => Ok(Presence::Absent),
+        Some(node) if node.value == crate::syntax::TreeValue::Null => Ok(Presence::Null),
+        Some(node) => {
+            let value = node.as_str().ok_or(FactGap::IncompleteSuppliedEvidence)?;
+            processing
+                .work(value.len().saturating_add(1), Phase::Analysis)
+                .map_err(|_| FactGap::IncompleteSuppliedEvidence)?;
+            processing
+                .payload(value.len(), Phase::Analysis)
+                .map_err(|_| FactGap::IncompleteSuppliedEvidence)?;
+            Ok(Presence::Value(value.to_owned()))
+        }
+    }
+}
+pub(crate) fn service_port_declarations(
+    tree: &crate::syntax::TreeNode,
+    path: &FieldPath,
+    fields: &registry::FieldDecodeContext,
+) -> FactState<Vec<ServicePortFact>> {
+    let Some(node) = tree.get_path(path) else {
+        return FactState::Known(Vec::new());
+    };
+    let Some(items) = node.as_sequence() else {
+        return FactState::Unknown(FactGap::IncompleteSuppliedEvidence);
+    };
+    if fields
+        .processing
+        .payload_array::<ServicePortFact>(items.len(), fields.phase)
+        .is_err()
+    {
+        return FactState::Unknown(FactGap::IncompleteSuppliedEvidence);
+    }
+    let mut declarations = Vec::new();
+    for (index, item) in items.iter().enumerate() {
+        if fields.processing.work(tree_cost(item), fields.phase).is_err()
+            || fields
+                .processing
+                .payload_array::<String>(path.0.len().saturating_add(1), fields.phase)
+                .is_err()
+            || fields
+                .processing
+                .payload_sizes(path.0.iter().map(String::len).chain([20]), fields.phase)
+                .is_err()
+        {
+            return FactState::Unknown(FactGap::IncompleteSuppliedEvidence);
+        }
+
+        let port = item.get("port").and_then(|node| match &node.value {
+            crate::syntax::TreeValue::Number(value) => value.parse::<i32>().ok(),
+            _ => None,
+        });
+        let (Some(port), Ok(name), Ok(protocol)) = (
+            port,
+            native_string(item.get("name"), &fields.processing),
+            native_string(item.get("protocol"), &fields.processing),
+        ) else {
+            return FactState::Unknown(FactGap::IncompleteSuppliedEvidence);
+        };
+        if !(1..=65535).contains(&port)
+            || matches!(name, Presence::Null)
+            || matches!(protocol, Presence::Null)
+            || protocol
+                .value()
+                .is_some_and(|value| !matches!(value.as_str(), "" | "TCP" | "UDP" | "SCTP"))
+            || name
+                .value()
+                .is_some_and(|value| !value.is_empty() && !crate::value::dns_label(value))
+        {
+            return FactState::Unknown(FactGap::IncompleteSuppliedEvidence);
+        }
+        declarations.push(ServicePortFact {
+            name,
+            port,
+            protocol,
+            path: path.child(index.to_string()),
+        });
+    }
+    FactState::Known(declarations)
+}
+fn recheck_service_ports(
+    ctx: &registry::ProjectionContext<'_>,
+    path: &FieldPath,
+    state: FactState<Vec<ServicePortFact>>,
+) -> FactState<Vec<ServicePortFact>> {
+    if ctx.gvk.group.is_some() || ctx.gvk.version != "v1" || ctx.gvk.kind != "Service" || path.0 != ["spec", "ports"] {
+        return FactState::Unadmitted;
+    }
+    let FactState::Known(emitted) = &state else {
+        return ctx.state(path, state);
+    };
+    let actual = service_port_declarations(ctx.tree, path, &ctx.fields);
+    let FactState::Known(actual) = actual else {
+        return ctx.state(path, actual);
+    };
+    for port in actual.iter().chain(emitted) {
+        if ctx
+            .fields
+            .processing
+            .work(
+                port.path
+                    .0
+                    .iter()
+                    .map(String::len)
+                    .sum::<usize>()
+                    .saturating_add(port.name.value().map_or(0, String::len))
+                    .saturating_add(port.protocol.value().map_or(0, String::len))
+                    .saturating_add(1),
+                ctx.fields.phase,
+            )
+            .is_err()
+        {
+            return FactState::Unknown(FactGap::IncompleteSuppliedEvidence);
+        }
+    }
+    if actual.len() != emitted.len()
+        || actual
+            .iter()
+            .zip(emitted)
+            .any(|(a, b)| a.path != b.path || a.port != b.port || a.name != b.name || a.protocol != b.protocol)
+    {
+        return FactState::Unadmitted;
+    }
+    for port in &actual {
+        for leaf in ["name", "port", "protocol"] {
+            match ctx.state(&port.path.child(leaf), FactState::Known(())) {
+                FactState::Known(()) => {}
+                FactState::Unknown(gap) => return FactState::Unknown(gap),
+                FactState::Unadmitted => return FactState::Unadmitted,
+            }
+        }
+    }
+    ctx.state(path, FactState::Known(actual))
+}
+fn resolution_subjects(result: SelectedSubjects) -> Resolution {
+    if !result.gaps.is_empty() {
+        Resolution::PartiallyResolvedSubjects {
+            matched: result.matched,
+            unavailable: result.gaps,
+        }
+    } else if result.matched.is_empty() {
+        Resolution::Missing
+    } else {
+        Resolution::ResolvedSubjects(result.matched)
+    }
+}
+fn source_backend_port(source: &crate::syntax::TreeNode) -> Option<ServicePortSelector> {
+    if source.as_mapping().is_some() {
+        let has_name = source
+            .get("name")
+            .and_then(crate::syntax::TreeNode::as_str)
+            .is_some_and(|value| !value.is_empty());
+        let has_number = source.get("number").is_some_and(|node| match &node.value {
+            crate::syntax::TreeValue::Number(value) => value.parse::<i32>().is_ok_and(|value| value != 0),
+            _ => false,
+        });
+        if has_name == has_number {
+            return None;
+        }
+    }
+    if let Some(value) = source.as_str() {
+        Some(ServicePortSelector::Name(crate::value::Protected::new(
+            value.to_owned(),
+        )))
+    } else if let crate::syntax::TreeValue::Number(value) = &source.value {
+        value.parse::<i32>().ok().map(ServicePortSelector::Number)
+    } else if let Some(value) = source
+        .get("name")
+        .and_then(crate::syntax::TreeNode::as_str)
+        .filter(|value| !value.is_empty())
+    {
+        Some(ServicePortSelector::Name(crate::value::Protected::new(
+            value.to_owned(),
+        )))
+    } else {
+        source
+            .get("number")
+            .and_then(|node| match &node.value {
+                crate::syntax::TreeValue::Number(value) => value.parse::<i32>().ok(),
+                _ => None,
+            })
+            .filter(|number| *number != 0)
+            .map(ServicePortSelector::Number)
+    }
+}
+impl GraphIndex<'_> {
+    fn add_evidence(&self, subject: GraphSubject, path: FieldPath, evidence: &mut Vec<FactEvidence>) {
+        if let Some(field) = contribution(
+            self.budget,
+            self.resources,
+            self.projections,
+            self.witness,
+            subject,
+            path,
+        ) {
+            evidence.push(field);
+        }
+    }
+    fn path_admission(&self, resource: ResourceId, path: &FieldPath) -> Result<(), SafeReason> {
+        if !self.budget.take(self.resources.documents.len()) {
+            return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        let doc = self
+            .resources
+            .documents
+            .iter()
+            .find(|doc| doc.id == resource)
+            .ok_or(SafeReason::InvalidIdentity)?;
+        let projection = self.projections.get(&resource).ok_or(SafeReason::InvalidIdentity)?;
+        let capability = doc.capability.as_ref().ok_or(SafeReason::FactUnadmitted)?;
+        if !self
+            .budget
+            .take(tree_cost(&projection.tree).saturating_add(capability.fields.len()))
+        {
+            return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        let ctx = registry::ProjectionContext::new_in(
+            &projection.tree,
+            &projection.identity.gvk,
+            &doc.evidence,
+            self.witness.map(|witness| witness.profile()),
+            capability,
+            self.budget.processing.clone(),
+        );
+        match ctx.state(path, FactState::Known(())) {
+            FactState::Known(()) => Ok(()),
+            FactState::Unknown(gap) => Err(SafeReason::FactUnknown(gap)),
+            FactState::Unadmitted => Err(SafeReason::FactUnadmitted),
+        }
+    }
+    fn check_backend_port(
+        &self,
+        reference: &Reference,
+        name: &str,
+        selected: &ServicePortSelector,
+        evidence: &mut Vec<FactEvidence>,
+    ) -> Result<(), SafeReason> {
+        if let ServicePortSelector::Unavailable(gap) = selected {
+            return Err(SafeReason::FactUnknown(*gap));
+        }
+        let projection = self
+            .projections
+            .get(&reference.from)
+            .ok_or(SafeReason::InvalidIdentity)?;
+        if reference.path.0.len() > 9 {
+            return Err(SafeReason::UnsupportedRelationship);
+        }
+        if !self.budget.retain::<&str>(reference.path.0.len())
+            || !self.budget.path_copy(&reference.path, 4)
+            || !self.budget.take(tree_cost(&projection.tree).saturating_mul(8))
+        {
+            return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        let parts: Vec<&str> = reference.path.0.iter().map(String::as_str).collect();
+        let path_matches = matches!(
+            parts.as_slice(),
+            ["spec", "defaultBackend", "service", "port"] | ["spec", "backend", "servicePort"]
+        ) || matches!(parts.as_slice(), ["spec","rules",rule,"http","paths",entry,"backend","service","port"] | ["spec","rules",rule,"http","paths",entry,"backend","servicePort"] if rule.parse::<usize>().is_ok() && entry.parse::<usize>().is_ok());
+        if projection.identity.gvk.kind != "Ingress"
+            || !matches!(
+                projection.identity.gvk.group.as_deref(),
+                Some("networking.k8s.io" | "extensions")
+            )
+            || !matches!(reference.scope, ReferenceScope::SameNamespace)
+            || !path_matches
+        {
+            return Err(SafeReason::UnsupportedRelationship);
+        }
+        let source = projection
+            .tree
+            .get_path(&reference.path)
+            .ok_or(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence))?;
+        let parent = FieldPath(reference.path.0[..reference.path.0.len().saturating_sub(1)].to_vec());
+        let name_path = parent.child(if source.as_mapping().is_some() {
+            "name"
+        } else {
+            "serviceName"
+        });
+        if projection
+            .tree
+            .get_path(&name_path)
+            .and_then(crate::syntax::TreeNode::as_str)
+            != Some(name)
+        {
+            return Err(SafeReason::FactUnadmitted);
+        }
+        let actual = source_backend_port(source);
+        if actual.as_ref() != Some(selected) {
+            return Err(SafeReason::FactUnadmitted);
+        }
+        self.path_admission(reference.from, &reference.path)?;
+        self.path_admission(reference.from, &name_path)?;
+        if source.as_mapping().is_some() {
+            self.path_admission(
+                reference.from,
+                &reference.path.child(match selected {
+                    ServicePortSelector::Name(_) => "name",
+                    ServicePortSelector::Number(_) => "number",
+                    ServicePortSelector::Unavailable(_) => {
+                        return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+                    }
+                }),
+            )?;
+        }
+        self.add_evidence(
+            GraphSubject::Object {
+                resource: reference.from,
+            },
+            name_path,
+            evidence,
+        );
+        Ok(())
+    }
+    fn service_front_port(
+        &self,
+        gvk: &GroupVersionKind,
+        object: ResourceId,
+        selected: &ServicePortSelector,
+        evidence: &mut Vec<FactEvidence>,
+    ) -> Resolution {
+        if gvk.group.is_some() || gvk.kind != "Service" {
+            return Resolution::Unsupported(SafeReason::UnsupportedRelationship);
+        }
+        if matches!(selected, ServicePortSelector::Number(number) if !(1..=65535).contains(number))
+            || matches!(selected, ServicePortSelector::Name(name) if name.native_value().is_empty())
+        {
+            return Resolution::Unsupported(SafeReason::InvalidIdentity);
+        }
+        let Some((state, path)) = self
+            .facts
+            .get(&object)
+            .into_iter()
+            .flatten()
+            .find_map(|fact| match fact {
+                NativeFact::ServicePorts { state, path } => Some((state, path)),
+                _ => None,
+            })
+        else {
+            return Resolution::Unsupported(SafeReason::FactUnadmitted);
+        };
+        self.add_evidence(GraphSubject::Object { resource: object }, path.clone(), evidence);
+        let FactState::Known(ports) = state else {
+            return Resolution::Unsupported(unavailable(state).unwrap_or(SafeReason::FactUnadmitted));
+        };
+        let mut matches = Vec::new();
+        for port in ports {
+            if !self
+                .budget
+                .take(port.name.value().map_or(0, String::len).saturating_add(1))
+                || !self.budget.retain::<GraphSubject>(1)
+                || !self.budget.path_copy(&port.path, 8)
+            {
+                return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+            }
+            let selected_here = match selected {
+                ServicePortSelector::Unavailable(gap) => return Resolution::Unsupported(SafeReason::FactUnknown(*gap)),
+                ServicePortSelector::Number(number) => port.port == *number,
+                ServicePortSelector::Name(name) => port.name.value().is_some_and(|value| value == name.native_value()),
+            };
+            if selected_here {
+                let subject = GraphSubject::ServicePort {
+                    resource: object,
+                    path: port.path.clone(),
+                };
+                for leaf in ["name", "port", "protocol"] {
+                    self.add_evidence(subject.clone(), port.path.child(leaf), evidence);
+                }
+                matches.push(subject);
+            }
+        }
+        match matches.len() {
+            0 => Resolution::MissingServicePort { object },
+            1 => Resolution::ResolvedSubjects(matches),
+            _ => Resolution::AmbiguousServicePorts(matches),
+        }
+    }
+    fn group_kind_scope_binding(
+        &self,
+        reference: &Reference,
+        projection: &crate::model::EffectiveProjection,
+        source: &crate::syntax::TreeNode,
+        evidence: &mut Vec<FactEvidence>,
+    ) -> Result<(), SafeReason> {
+        let gvk = &projection.identity.gvk;
+        if reference.path.0.len() > 8 {
+            return Err(SafeReason::UnsupportedRelationship);
+        }
+        if !self.budget.retain::<&str>(reference.path.0.len())
+            || !self.budget.path_copy(&reference.path, 12)
+            || !self.budget.take(tree_cost(&projection.tree).saturating_mul(8))
+        {
+            return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        let parts: Vec<&str> = reference.path.0.iter().map(String::as_str).collect();
+        if gvk.kind == "Ingress" && matches!(gvk.group.as_deref(), Some("networking.k8s.io" | "extensions")) {
+            let path_matches = matches!(parts.as_slice(), ["spec", "defaultBackend" | "backend", "resource"])
+                || matches!(parts.as_slice(),["spec","rules",rule,"http","paths",entry,"backend","resource"] if rule.parse::<usize>().is_ok() && entry.parse::<usize>().is_ok());
+            return if path_matches && matches!(reference.scope, ReferenceScope::SameNamespace) {
+                Ok(())
+            } else {
+                Err(SafeReason::UnsupportedRelationship)
+            };
+        }
+        if gvk.kind != "IngressClass"
+            || gvk.group.as_deref() != Some("networking.k8s.io")
+            || parts != ["spec", "parameters"]
+        {
+            return Err(SafeReason::UnsupportedRelationship);
+        }
+        let scope_matches = match source.get("scope") {
+            None => matches!(reference.scope, ReferenceScope::Cluster),
+            Some(scope) if scope.as_str() == Some("Cluster") => matches!(reference.scope, ReferenceScope::Cluster),
+            Some(scope) if scope.as_str() == Some("Namespace") => {
+                matches!(&reference.scope,ReferenceScope::Namespace(namespace) if native_string(source.get("namespace"), &self.budget.processing).ok().as_ref() == Some(namespace))
+            }
+            _ => return Err(SafeReason::ScopeUnknown),
+        };
+        if !scope_matches {
+            return Err(SafeReason::FactUnadmitted);
+        }
+        for leaf in ["scope", "namespace"] {
+            let path = reference.path.child(leaf);
+            if source.get(leaf).is_some() {
+                self.path_admission(reference.from, &path)?;
+            }
+            self.add_evidence(
+                GraphSubject::Object {
+                    resource: reference.from,
+                },
+                path,
+                evidence,
+            );
+        }
+        Ok(())
+    }
+    fn group_kind_binding<'b>(
+        &self,
+        reference: &Reference,
+        group: &'b Presence<String>,
+        kind: &str,
+        name: &str,
+        evidence: &mut Vec<FactEvidence>,
+    ) -> Result<Option<&'b str>, SafeReason> {
+        let Some(projection) = self.projections.get(&reference.from) else {
+            return Err(SafeReason::InvalidIdentity);
+        };
+        if !self.budget.take(
+            kind.len()
+                .saturating_add(name.len())
+                .saturating_add(group.value().map_or(0, String::len))
+                .saturating_mul(4)
+                .saturating_add(1),
+        ) {
+            return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        let Some(source) = projection.tree.get_path(&reference.path) else {
+            return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        };
+        self.group_kind_scope_binding(reference, projection, source, evidence)?;
+        if native_string(source.get("apiGroup"), &self.budget.processing)
+            .ok()
+            .as_ref()
+            != Some(group)
+            || source.get("kind").and_then(crate::syntax::TreeNode::as_str) != Some(kind)
+            || source.get("name").and_then(crate::syntax::TreeNode::as_str) != Some(name)
+        {
+            return Err(SafeReason::FactUnadmitted);
+        }
+        for leaf in ["apiGroup", "kind", "name"] {
+            let path = reference.path.child(leaf);
+            if source.get(leaf).is_some() {
+                self.path_admission(reference.from, &path)?;
+            }
+            self.add_evidence(
+                GraphSubject::Object {
+                    resource: reference.from,
+                },
+                path,
+                evidence,
+            );
+        }
+        let group = match group {
+            Presence::Absent => None,
+            Presence::Value(value) if !value.is_empty() && crate::value::dns_subdomain(value) => Some(value.as_str()),
+            _ => return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence)),
+        };
+        // These networking references use native path segments, independent of a
+        // supplied object's own metadata-name grammar.
+        let path_segment =
+            |value: &str| !value.is_empty() && value != "." && value != ".." && !value.contains(['/', '%']);
+        if !path_segment(kind) || !path_segment(name) {
+            return Err(SafeReason::InvalidIdentity);
+        }
+        Ok(group)
+    }
+    fn identity_match_work(
+        &self,
+        identity: &ResourceIdentity,
+        group: Option<&str>,
+        kind: &str,
+        name: &str,
+        namespace: Option<&str>,
+    ) -> bool {
+        self.budget.take(
+            identity
+                .gvk
+                .kind
+                .len()
+                .saturating_add(identity.gvk.group.as_ref().map_or(0, String::len))
+                .saturating_add(identity.name.value().map_or(0, String::len))
+                .saturating_add(identity.namespace.value().map_or(0, String::len))
+                .saturating_add(kind.len())
+                .saturating_add(name.len())
+                .saturating_add(group.map_or(0, str::len))
+                .saturating_add(namespace.map_or(0, str::len))
+                .saturating_add(1),
+        )
+    }
+    fn group_kind_name(
+        &self,
+        reference: &Reference,
+        group: &Presence<String>,
+        kind: &str,
+        name: &str,
+        evidence: &mut Vec<FactEvidence>,
+    ) -> Resolution {
+        let group = match self.group_kind_binding(reference, group, kind, name, evidence) {
+            Ok(group) => group,
+            Err(reason) => return Resolution::Unsupported(reason),
+        };
+        let namespace = match selected_namespace(reference, self.identities, self.context) {
+            Ok(namespace) => namespace,
+            Err(reason) => return Resolution::Unsupported(reason),
+        };
+        if !self.budget.retain::<ResourceId>(self.identities.len())
+            || !self.budget.retain::<GraphSubject>(self.identities.len())
+        {
+            return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        let mut matches = Vec::new();
+        let mut unknown_scope = false;
+        let mut failed = false;
+        for (resource, identity) in self.identities {
+            if !self.identity_match_work(identity, group, kind, name, namespace) {
+                return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+            }
+            if identity.gvk.group.as_deref() != group
+                || identity.gvk.kind != kind
+                || identity.name.value().is_none_or(|value| value != name)
+            {
+                continue;
+            }
+            if identity.scope.namespaced().is_none() {
+                unknown_scope = true;
+                continue;
+            }
+            if in_namespace(identity, namespace, self.context) {
+                matches.push(*resource);
+            }
+        }
+        for identity in self.failed.values() {
+            if !self.identity_match_work(identity, group, kind, name, namespace) {
+                return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+            }
+            if identity.gvk.group.as_deref() == group
+                && identity.gvk.kind == kind
+                && identity.name.value().is_some_and(|value| value == name)
+            {
+                failed = true;
+            }
+        }
+        for resource in &matches {
+            self.add_evidence(
+                GraphSubject::Object { resource: *resource },
+                FieldPath(vec!["metadata".into(), "name".into()]),
+                evidence,
+            );
+        }
+        if matches.len() > 1 {
+            Resolution::Ambiguous(matches)
+        } else if unknown_scope {
+            Resolution::Unsupported(SafeReason::ScopeUnknown)
+        } else if failed {
+            Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence))
+        } else if matches.is_empty() {
+            Resolution::Missing
+        } else {
+            let identity = &self.identities[&matches[0]];
+            if let Some(declaration) = crate::capability::declaration(&identity.gvk) {
+                if self.witness.is_some_and(|witness| {
+                    !(declaration.first..=declaration.last).contains(&witness.profile().kubernetes.minor())
+                }) {
+                    return Resolution::Unsupported(SafeReason::FactUnadmitted);
+                }
+                if self.witness.is_none() && (declaration.first > 20 || declaration.last < 37) {
+                    return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::TargetProfileRequired));
+                }
+            } else if crate::capability::builtin_scope(&identity.gvk).is_some() {
+                return Resolution::Unsupported(SafeReason::FactUnadmitted);
+            }
+            Resolution::ResolvedSubjects(
+                matches
+                    .into_iter()
+                    .map(|resource| GraphSubject::Object { resource })
+                    .collect(),
+            )
+        }
+    }
+    fn all_peers(&self, reference: &Reference, presence: PeerListPresence) -> Resolution {
+        let Some(projection) = self.projections.get(&reference.from) else {
+            return Resolution::Unsupported(SafeReason::InvalidIdentity);
+        };
+        let path = &reference.path;
+        let [spec, direction, index, peers] = path.0.as_slice() else {
+            return Resolution::Unsupported(SafeReason::UnsupportedRelationship);
+        };
+        if projection.identity.gvk.group.as_deref() != Some("networking.k8s.io")
+            || projection.identity.gvk.kind != "NetworkPolicy"
+            || spec != "spec"
+            || !matches!(
+                (direction.as_str(), peers.as_str()),
+                ("ingress", "from") | ("egress", "to")
+            )
+            || index.parse::<usize>().is_err()
+        {
+            return Resolution::Unsupported(SafeReason::UnsupportedRelationship);
+        }
+        let parent = FieldPath(path.0[..3].to_vec());
+        if projection
+            .tree
+            .get_path(&parent)
+            .is_none_or(|node| node.as_mapping().is_none())
+        {
+            return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        let actual = match projection.tree.get_path(path) {
+            None => PeerListPresence::Absent,
+            Some(node) if node.as_sequence().is_some_and(<[_]>::is_empty) => PeerListPresence::ExplicitEmpty,
+            _ => return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence)),
+        };
+        if actual != presence {
+            return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        match self.path_admission(reference.from, path) {
+            Ok(()) => Resolution::NetworkPolicyAllPeers(presence),
+            Err(reason) => Resolution::Unsupported(reason),
+        }
+    }
+    fn namespace_conjunct(
+        &self,
+        identity: &ResourceIdentity,
+        namespace_selector: &Presence<LabelSelector>,
+        policy_namespace: Option<&str>,
+        namespaces: &BTreeMap<String, Vec<ResourceId>>,
+        evidence: &mut Vec<FactEvidence>,
+    ) -> Result<bool, FactUnavailable> {
+        let namespace = match &identity.namespace {
+            Presence::Value(value) => Some(value.as_str()),
+            Presence::Absent => self.context.default_namespace.as_deref(),
+            Presence::Null => None,
+        };
+        let unknown = FactUnavailable::Unknown(FactGap::IncompleteSuppliedEvidence);
+        if !self.budget.take(
+            namespace
+                .map_or(0, str::len)
+                .saturating_add(policy_namespace.map_or(0, str::len))
+                .saturating_mul(namespaces.len().saturating_add(1))
+                .saturating_add(1),
+        ) {
+            return Err(unknown);
+        }
+        match namespace_selector {
+            Presence::Absent => namespace
+                .zip(policy_namespace)
+                .map(|(candidate, policy)| candidate == policy)
+                .ok_or(unknown),
+            Presence::Null => Err(unknown),
+            Presence::Value(selector) => {
+                if selector.match_labels.value().is_none_or(BTreeMap::is_empty)
+                    && selector.match_expressions.value().is_none_or(Vec::is_empty)
+                {
+                    return Ok(true);
+                }
+                let ids = namespace.and_then(|name| namespaces.get(name)).ok_or(unknown)?;
+                if ids.len() != 1 {
+                    for id in ids {
+                        self.add_evidence(
+                            GraphSubject::Object { resource: *id },
+                            FieldPath(vec!["metadata".into(), "name".into()]),
+                            evidence,
+                        );
+                    }
+                    return Err(FactUnavailable::Unknown(FactGap::AmbiguousSuppliedEvidence));
+                }
+                let resource = ids[0];
+                let state = self
+                    .facts
+                    .get(&resource)
+                    .into_iter()
+                    .flatten()
+                    .find_map(|fact| match fact {
+                        NativeFact::SelectorSubject {
+                            subject: LocalSubject::Object,
+                            labels,
+                        } => Some(labels),
+                        _ => None,
+                    })
+                    .ok_or(FactUnavailable::Unadmitted)?;
+                self.label_conjunct(resource, &LocalSubject::Object, state, selector, evidence)
+            }
+        }
+    }
+    fn label_conjunct(
+        &self,
+        resource: ResourceId,
+        subject: &LocalSubject,
+        state: &FactState<LabelFacts>,
+        selector: &LabelSelector,
+        evidence: &mut Vec<FactEvidence>,
+    ) -> Result<bool, FactUnavailable> {
+        if !self.budget.take(1) {
+            return Err(FactUnavailable::Unknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        match state {
+            FactState::Known(labels) => {
+                if !self.budget.selector_work(selector, Some(&labels.values))
+                    || !self.budget.local_copy(subject, 1)
+                    || !self.budget.path_copy(&labels.path, 1)
+                {
+                    return Err(FactUnavailable::Unknown(FactGap::IncompleteSuppliedEvidence));
+                }
+                self.add_evidence(local_subject(resource, subject), labels.path.clone(), evidence);
+                selector
+                    .matches(&labels.values)
+                    .map_err(|_| FactUnavailable::Unadmitted)
+            }
+            FactState::Unknown(gap) => Err(FactUnavailable::Unknown(*gap)),
+            FactState::Unadmitted => Err(FactUnavailable::Unadmitted),
+        }
+    }
+    fn policy_peer_binding(
+        &self,
+        reference: &Reference,
+        namespace_selector: &Presence<LabelSelector>,
+        pod_selector: &Presence<LabelSelector>,
+        evidence: &mut Vec<FactEvidence>,
+    ) -> Result<(), SafeReason> {
+        for selector in [namespace_selector.value(), pod_selector.value()].into_iter().flatten() {
+            if !self.budget.selector_work(selector, None) {
+                return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+            }
+        }
+        if !self.budget.path_copy(&reference.path, 4) {
+            return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        if matches!(namespace_selector, Presence::Null)
+            || matches!(pod_selector, Presence::Null)
+            || matches!((namespace_selector, pod_selector), (Presence::Absent, Presence::Absent))
+            || namespace_selector
+                .value()
+                .is_some_and(|selector| selector.validate().is_err())
+            || pod_selector
+                .value()
+                .is_some_and(|selector| selector.validate().is_err())
+        {
+            return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        let Some(projection) = self.projections.get(&reference.from) else {
+            return Err(SafeReason::InvalidIdentity);
+        };
+        let [spec, direction, rule, peers, entry] = reference.path.0.as_slice() else {
+            return Err(SafeReason::UnsupportedRelationship);
+        };
+        if projection.identity.gvk.group.as_deref() != Some("networking.k8s.io")
+            || projection.identity.gvk.kind != "NetworkPolicy"
+            || spec != "spec"
+            || !matches!(
+                (direction.as_str(), peers.as_str()),
+                ("ingress", "from") | ("egress", "to")
+            )
+            || rule.parse::<usize>().is_err()
+            || entry.parse::<usize>().is_err()
+            || !matches!(reference.scope, ReferenceScope::SameNamespace)
+        {
+            return Err(SafeReason::UnsupportedRelationship);
+        }
+        let Some(source) = projection.tree.get_path(&reference.path) else {
+            return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        };
+        if !self.budget.take(self.resources.documents.len()) {
+            return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        let document = self
+            .resources
+            .documents
+            .iter()
+            .find(|document| document.id == reference.from)
+            .ok_or(SafeReason::InvalidIdentity)?;
+        let fields = registry::FieldDecodeContext::new(
+            *document.evidence.limits(),
+            self.budget.processing.clone(),
+            Phase::Analysis,
+        );
+        if !self.budget.take(tree_cost(source).saturating_mul(4)) {
+            return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        let actual = |key| match source.get(key) {
+            None => Ok(Presence::Absent),
+            Some(node) if node.value == crate::syntax::TreeValue::Null => Ok(Presence::Null),
+            Some(node) => {
+                <LabelSelector as registry::codec::FieldCodec>::decode(node, &fields, &reference.path.child(key))
+                    .map(Presence::Value)
+                    .map_err(|_| SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence))
+            }
+        };
+        if source.get("ipBlock").is_some()
+            || actual("namespaceSelector").ok().as_ref() != Some(namespace_selector)
+            || actual("podSelector").ok().as_ref() != Some(pod_selector)
+        {
+            return Err(SafeReason::FactUnadmitted);
+        }
+        for leaf in ["namespaceSelector", "podSelector"] {
+            if source.get(leaf).is_some() {
+                let path = reference.path.child(leaf);
+                self.path_admission(reference.from, &path)?;
+                self.add_evidence(
+                    GraphSubject::Object {
+                        resource: reference.from,
+                    },
+                    path,
+                    evidence,
+                );
+            }
+        }
+        self.path_admission(reference.from, &reference.path)?;
+        Ok(())
+    }
+    fn supplied_namespaces(&self) -> Result<BTreeMap<String, Vec<ResourceId>>, SafeReason> {
+        let mut namespaces = BTreeMap::<String, Vec<ResourceId>>::new();
+        for (resource, identity) in self.identities {
+            if !self.budget.take(1) {
+                return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+            }
+            if identity.gvk.group.is_none()
+                && identity.gvk.kind == "Namespace"
+                && identity.scope.namespaced() == Some(false)
+            {
+                if let Some(name) = identity.name.value() {
+                    if !self
+                        .budget
+                        .take(name.len().saturating_mul(self.identities.len().saturating_add(1)))
+                        || !self.budget.retain::<(String, Vec<ResourceId>)>(1)
+                        || !self.budget.retain::<ResourceId>(1)
+                        || self.budget.processing.payload(name.len(), Phase::Analysis).is_err()
+                    {
+                        return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+                    }
+                    namespaces.entry(name.clone()).or_default().push(*resource);
+                }
+            }
+        }
+        Ok(namespaces)
+    }
+    fn policy_peer(
+        &self,
+        reference: &Reference,
+        namespace_selector: &Presence<LabelSelector>,
+        pod_selector: &Presence<LabelSelector>,
+        evidence: &mut Vec<FactEvidence>,
+    ) -> Resolution {
+        if let Err(reason) = self.policy_peer_binding(reference, namespace_selector, pod_selector, evidence) {
+            return Resolution::Unsupported(reason);
+        }
+        let policy_namespace = selected_namespace(reference, self.identities, self.context)
+            .ok()
+            .flatten();
+        if !self
+            .budget
+            .retain::<SubjectGap>(self.identities.len().saturating_add(self.failed.len()))
+        {
+            return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        let namespaces = match self.supplied_namespaces() {
+            Ok(namespaces) => namespaces,
+            Err(reason) => return Resolution::Unsupported(reason),
+        };
+        let mut result = SelectedSubjects {
+            matched: Vec::new(),
+            gaps: Vec::new(),
+        };
+        for (resource, identity) in self.identities {
+            if !self.budget.take(1) {
+                break;
+            }
+            if !pod_template_owner(identity) {
+                continue;
+            }
+            let namespace =
+                self.namespace_conjunct(identity, namespace_selector, policy_namespace, &namespaces, evidence);
+            if namespace == Ok(false) {
+                continue;
+            }
+            let mut found = false;
+            for fact in self.facts.get(resource).into_iter().flatten() {
+                if !self.budget.take(1) {
+                    break;
+                }
+                let NativeFact::SelectorSubject { subject, labels } = fact else {
+                    continue;
+                };
+                if !(matches!(
+                    subject,
+                    LocalSubject::Template {
+                        template_kind: TemplateKind::Pod,
+                        ..
+                    }
+                ) || matches!(subject, LocalSubject::Object)
+                    && identity.gvk.group.is_none()
+                    && identity.gvk.kind == "Pod")
+                {
+                    continue;
+                }
+                if !self.budget.retain::<GraphSubject>(1)
+                    || !self.budget.retain::<SubjectGap>(1)
+                    || !self.budget.local_copy(subject, 2)
+                {
+                    break;
+                }
+                found = true;
+                let pod = pod_selector.value().map_or(Ok(true), |selector| {
+                    self.label_conjunct(*resource, subject, labels, selector, evidence)
+                });
+                // A known false conjunct excludes even when the other evidence is unknown.
+                if pod == Ok(false) {
+                    continue;
+                }
+                match (pod, namespace) {
+                    (Ok(true), Ok(true)) => result.matched.push(local_subject(*resource, subject)),
+                    (Err(reason), _) | (_, Err(reason)) => result.gaps.push(SubjectGap {
+                        resource: *resource,
+                        path: Some(subject_path(subject)),
+                        reason,
+                    }),
+                    _ => {}
+                }
+            }
+            if !found {
+                result.gaps.push(SubjectGap {
+                    resource: *resource,
+                    path: None,
+                    reason: FactUnavailable::Unadmitted,
+                });
+            }
+        }
+        for (resource, identity) in self.failed {
+            if !self.budget.take(1) {
+                break;
+            }
+            if pod_template_owner(identity)
+                && !result.gaps.iter().any(|gap| gap.resource == *resource)
+                && self.namespace_conjunct(identity, namespace_selector, policy_namespace, &namespaces, evidence)
+                    != Ok(false)
+            {
+                result.gaps.push(SubjectGap {
+                    resource: *resource,
+                    path: None,
+                    reason: FactUnavailable::Unknown(FactGap::IncompleteSuppliedEvidence),
+                });
+            }
+        }
+        resolution_subjects(result)
+    }
+    fn named_target_port_binding<'b>(
+        &self,
+        reference: &Reference,
+        selector: &LabelSelector,
+        name: &str,
+        protocol: &'b Presence<String>,
+        evidence: &mut Vec<FactEvidence>,
+    ) -> Result<&'b str, SafeReason> {
+        if name.is_empty()
+            || selector.match_labels.value().is_none_or(BTreeMap::is_empty)
+                && selector.match_expressions.value().is_none_or(Vec::is_empty)
+        {
+            return Err(SafeReason::UnsupportedRelationship);
+        }
+        let Some(projection) = self.projections.get(&reference.from) else {
+            return Err(SafeReason::InvalidIdentity);
+        };
+        if projection.identity.gvk.group.is_some()
+            || projection.identity.gvk.kind != "Service"
+            || reference.path.0.len() != 4
+            || reference.path.0[..2] != ["spec", "ports"]
+            || reference.path.0[3] != "targetPort"
+        {
+            return Err(SafeReason::UnsupportedRelationship);
+        }
+        let base = FieldPath(reference.path.0[..3].to_vec());
+        if projection
+            .tree
+            .get_path(&reference.path)
+            .and_then(crate::syntax::TreeNode::as_str)
+            != Some(name)
+            || native_string(
+                projection.tree.get_path(&base.child("protocol")),
+                &self.budget.processing,
+            )
+            .ok()
+            .as_ref()
+                != Some(protocol)
+        {
+            return Err(SafeReason::FactUnadmitted);
+        }
+        let selector_path = FieldPath(vec!["spec".into(), "selector".into()]);
+        if !self.budget.path_copy(&reference.path, 4) || !self.budget.take(name.len().saturating_add(1)) {
+            return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        if let Some(source) = projection.tree.get_path(&selector_path) {
+            self.budget
+                .processing
+                .tree_copy(source, Phase::Analysis)
+                .map_err(|_| SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence))?;
+        }
+        let actual = projection
+            .tree
+            .get_path(&selector_path)
+            .and_then(crate::syntax::TreeNode::as_mapping)
+            .and_then(|values| {
+                values
+                    .iter()
+                    .map(|(key, value)| value.as_str().map(|value| (key.clone(), value.to_owned())))
+                    .collect::<Option<BTreeMap<_, _>>>()
+            });
+        if actual.as_ref() != selector.match_labels.value() || !selector.match_expressions.is_absent() {
+            return Err(SafeReason::FactUnadmitted);
+        }
+        for path in [selector_path, base.child("protocol")] {
+            self.path_admission(reference.from, &path)?;
+            self.add_evidence(
+                GraphSubject::Object {
+                    resource: reference.from,
+                },
+                path,
+                evidence,
+            );
+        }
+        let requested = match protocol {
+            Presence::Value(value) if matches!(value.as_str(), "TCP" | "UDP" | "SCTP") => value.as_str(),
+            Presence::Value(value) if value.is_empty() && self.witness.is_some() => "TCP",
+            Presence::Absent if self.witness.is_some() => "TCP",
+            Presence::Absent => {
+                return Err(SafeReason::FactUnknown(FactGap::TargetProfileRequired));
+            }
+            _ => return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence)),
+        };
+        self.path_admission(reference.from, &reference.path)?;
+        Ok(requested)
+    }
+    fn subject_ports(&self, resource: ResourceId, subject: &GraphSubject) -> Option<&FactState<Vec<PortFact>>> {
+        for fact in self.facts.get(&resource)? {
+            if !self.budget.take(1) {
+                return None;
+            }
+            let NativeFact::ContainerPorts { subject: local, ports } = fact else {
+                continue;
+            };
+            let same = match (local, subject) {
+                (LocalSubject::Object, GraphSubject::Object { resource: id }) => *id == resource,
+                (
+                    LocalSubject::Template { path, template_kind },
+                    GraphSubject::Template {
+                        resource: id,
+                        path: actual,
+                        template_kind: kind,
+                    },
+                ) => {
+                    if !self.budget.take(
+                        path.0
+                            .iter()
+                            .map(String::len)
+                            .sum::<usize>()
+                            .saturating_add(actual.0.iter().map(String::len).sum::<usize>())
+                            .saturating_add(1),
+                    ) {
+                        return None;
+                    }
+                    *id == resource && path == actual && template_kind == kind
+                }
+                _ => false,
+            };
+            if same {
+                return Some(ports);
+            }
+        }
+        None
+    }
+    fn named_target_port(
+        &self,
+        reference: &Reference,
+        selector: &LabelSelector,
+        name: &str,
+        protocol: &Presence<String>,
+        evidence: &mut Vec<FactEvidence>,
+    ) -> Resolution {
+        let requested = match self.named_target_port_binding(reference, selector, name, protocol, evidence) {
+            Ok(requested) => requested,
+            Err(reason) => return Resolution::Unsupported(reason),
+        };
+        let selection = self.select_subjects(
+            reference,
+            &[KindId::Pod],
+            selector,
+            SubjectSelection::PodObjectsAndTemplates,
+            evidence,
+        );
+        let (selected, mut gaps) = match selection {
+            Resolution::ResolvedSubjects(subjects) => (subjects, Vec::new()),
+            Resolution::PartiallyResolvedSubjects { matched, unavailable } => (matched, unavailable),
+            other => return other,
+        };
+        if !self.budget.retain::<GraphSubject>(selected.len()) || !self.budget.retain::<SubjectGap>(selected.len()) {
+            return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
+        }
+        let mut matched = Vec::new();
+        for subject in &selected {
+            if !self.budget.take(1) {
+                break;
+            }
+            let resource = subject_resource(subject);
+            let state = self.subject_ports(resource, subject);
+            match state {
+                Some(FactState::Known(ports)) => {
+                    let mut found = false;
+                    let mut unknown = false;
+                    for port in ports {
+                        if !self.budget.take(
+                            port.name
+                                .value()
+                                .map_or(0, String::len)
+                                .saturating_add(name.len())
+                                .saturating_add(1),
+                        ) || !self.budget.path_copy(&port.name_path, 1)
+                            || !self.budget.path_copy(&port.protocol_path, 1)
+                            || !self.budget.path_copy(&port.container_port_path, 1)
+                        {
+                            break;
+                        }
+                        self.add_evidence(subject.clone(), port.name_path.clone(), evidence);
+                        self.add_evidence(subject.clone(), port.protocol_path.clone(), evidence);
+                        self.add_evidence(subject.clone(), port.container_port_path.clone(), evidence);
+                        if port.name.value().is_none_or(|value| value != name) {
+                            continue;
+                        }
+                        let candidate = match &port.protocol {
+                            Presence::Value(value) => Some(value.as_str()),
+                            Presence::Absent if self.witness.is_some() => Some("TCP"),
+                            _ => None,
+                        };
+                        if candidate == Some(requested) {
+                            found = true;
+                        } else if candidate.is_none() {
+                            unknown = true;
+                        }
+                    }
+                    if found {
+                        matched.push(subject.clone());
+                    } else if unknown {
+                        gaps.push(SubjectGap {
+                            resource,
+                            path: None,
+                            reason: FactUnavailable::Unknown(FactGap::TargetProfileRequired),
+                        });
+                    }
+                }
+                Some(FactState::Unknown(gap)) => gaps.push(SubjectGap {
+                    resource,
+                    path: None,
+                    reason: FactUnavailable::Unknown(*gap),
+                }),
+                _ => gaps.push(SubjectGap {
+                    resource,
+                    path: None,
+                    reason: FactUnavailable::Unadmitted,
+                }),
+            }
+        }
+        if !gaps.is_empty() {
+            Resolution::PartiallyResolvedSubjects {
+                matched,
+                unavailable: gaps,
+            }
+        } else if matched.is_empty() {
+            Resolution::MissingContainerPort { selected }
+        } else {
+            Resolution::ResolvedSubjects(matched)
+        }
     }
 }

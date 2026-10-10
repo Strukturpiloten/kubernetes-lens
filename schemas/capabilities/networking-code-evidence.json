@@ -1,0 +1,269 @@
+{
+  "format": 1,
+  "status": "typed-native-static-code-present-native-profiles-pending",
+  "issue": 10,
+  "canonical_ledger": {
+    "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
+    "sha256": "5a9a11aedd2a4b4dec2587923dc0357fb7ea40209302f8dab3bc007e845388f6"
+  },
+  "roots": [
+    {
+      "kind": "Service",
+      "api_version": "v1",
+      "selected_field_catalogue_pointer": "/resources/8/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/networking.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "Endpoints",
+      "api_version": "v1",
+      "selected_field_catalogue_pointer": "/resources/9/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/networking.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "EndpointSlice",
+      "api_version": "discovery.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/10/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.21",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/networking.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "EndpointSlice",
+      "api_version": "discovery.k8s.io/v1beta1",
+      "selected_field_catalogue_pointer": "/resources/10/proposed_admitted_api_profiles/1",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.24"
+        }
+      ],
+      "code_registration": "src/resources/networking.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "Ingress",
+      "api_version": "extensions/v1beta1",
+      "selected_field_catalogue_pointer": "/resources/11/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.21"
+        }
+      ],
+      "code_registration": "src/resources/networking.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "Ingress",
+      "api_version": "networking.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/11/proposed_admitted_api_profiles/1",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/networking.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "Ingress",
+      "api_version": "networking.k8s.io/v1beta1",
+      "selected_field_catalogue_pointer": "/resources/11/proposed_admitted_api_profiles/2",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.21"
+        }
+      ],
+      "code_registration": "src/resources/networking.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "IngressClass",
+      "api_version": "networking.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/12/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/networking.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "IngressClass",
+      "api_version": "networking.k8s.io/v1beta1",
+      "selected_field_catalogue_pointer": "/resources/12/proposed_admitted_api_profiles/1",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.21"
+        }
+      ],
+      "code_registration": "src/resources/networking.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "NetworkPolicy",
+      "api_version": "networking.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/13/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/networking.rs",
+      "native_case_status": "pending"
+    }
+  ],
+  "field_selection_rule": "Catalogue pointers define requested inventory; typed codec capability members and selected validators establish only admitted local field behavior. Context/opaque outcomes remain visible; a catalogue row is not native API evidence.",
+  "source_sha256": {
+    "src/capability.rs": "15a973ef0ef34325165e1a1258c886ddb5ca01618a5c6d1a0e32a22e91f2d69d",
+    "src/generation.rs": "6905882e1672641c1007d00d1f29e3a7fb6c181d1a56baebe4e9828f4f329527",
+    "src/graph.rs": "6768fb506e18b2b1a7ddac2311c1c966142be7bb4dd201b5d802b3c6a5b4361e",
+    "src/model.rs": "4e66307f90d065836c86837de3db7c94cd484784ff2cb35d9b1a182a40233636",
+    "src/registry.rs": "71bf00721a16773a22aeddc78dd6f0a1d1f39df994aa09bbad2d1a6bcff47b25",
+    "src/resources/common/native_helpers.rs": "ac2b96b49c9dad81ea2164406662370b1e5c87d894f476a7731d3dbf206474ba",
+    "src/resources/common.rs": "3f29b27b3b8891ef1d8443dc2109a292c5e8ccdefe95d3b318afdd31446d11d6",
+    "src/resources/mod.rs": "9e30f2680023fd1f34ed70f0ff34faa7796a9230db9cf26ae8fce4b72a6e1f87",
+    "src/resources/networking/capabilities.rs": "8a2a6351fb89f3c8c3fa15fa615f72961d988bef1d1e31688dafb465784a8312",
+    "src/resources/networking/facts.rs": "0830b170963720c7a565728b8867932cc3a8e1025bf7b846172fb9dc4da54d04",
+    "src/resources/networking/required.rs": "0d0c3f3e95ea000df6be91cc3f153f6bc913c5473eeca70b78dc1d87f24a1099",
+    "src/resources/networking/roots.rs": "93ce3e9e3da01f6094f6798c6d9afb1f1827106468847fd6bc7774a99102e0cb",
+    "src/resources/networking/types.rs": "bd48bc9cb0bec166ded6363c585a61dcb2a37366e6e1706fddc55364e9588812",
+    "src/resources/networking/validation/ip_context.rs": "8b390629814bb36ef868f2db8c5597d53496497809269a67331e9a8a621bff9c",
+    "src/resources/networking/validation/processing_tests.rs": "7a78ec2aeb794eaf4e12b265c002f68371cdaa249ffc7a57164b20b54d3ac081",
+    "src/resources/networking/validation.rs": "a9b8a47eb412054c9a76cf1b1162fdfefdf1561c5be1ffade27285ba85d81a22",
+    "src/resources/networking.rs": "2797fbf66ac9b8ab7788c4eb88a3f71faa84f14c8eaa84f23e85e294e09b4873",
+    "src/value.rs": "d738ce545fd20a86891ef16e2aba6cd403a787de05ba23b085928bd357bf10db",
+    "tests/networking/authoring.rs": "99cdbf70f33fb8ed7ca94018d81466929e322ae22f67d1baef165f679bb6dc33",
+    "tests/networking/availability.rs": "f13e2f5ca8a6008ff48789cb5e1d2bdfce7a38f9a0711edf2805770652dd9f82",
+    "tests/networking/native.rs": "88d8637e575bb19ca3259cecd3b2f731e6954f5c3a99a97f39008655a460b5bf",
+    "tests/networking/preservation.rs": "c70d132ef0bd13db9e58ea4694c8029f14ddafc2c7ce48892c77bf78aceebc6d",
+    "tests/networking/processing.rs": "741978c305f0bd96662eb8af05308ab78e1b3d0029136060d55d699990c440df",
+    "tests/networking/references.rs": "025c9f79c1447016d82aca8aefc7ba8f01b64e18daa36073fdacf091ada99c21",
+    "tests/networking/static_contract.rs": "9428f0abab8677199ccba9913e1dc19019026643e5cb115073925632bcfe14bf",
+    "tests/networking.rs": "a66f0e0684999f84f56cc9413706159fc6de16ee6e9c4be745c9a68214634fdd"
+  },
+  "independent_networking_tests": [
+    "authoring::source_free_networking_declarations_generate_with_private_positionless_evidence",
+    "authoring::source_free_limits_and_required_fields_are_not_bypassed",
+    "authoring::every_beta_and_policy_root_supports_real_source_free_construction",
+    "availability::ten_exact_api_roots_decode_and_generate_without_relabeling",
+    "availability::served_api_boundaries_do_not_relabel_beta_or_materialize_fields",
+    "availability::stable_gate_boundaries_reject_explicit_pre_stable_enable",
+    "availability::endpoint_conditions_node_names_and_class_scopes_keep_each_gate_boundary",
+    "availability::endpoint_slice_required_array_profile_boundary_is_preserved",
+    "native::service_ports_types_classes_and_cross_fields_fail_at_native_paths",
+    "native::ingress_backend_union_port_union_paths_and_hosts_are_independent",
+    "native::policy_peer_presence_union_selector_and_cidr_constraints_stay_distinct",
+    "native::addresses_and_condition_presence_validate_without_readiness_defaults",
+    "native::class_parameter_shape_scope_and_cluster_metadata_remain_explicit",
+    "native::malformed_service_map_keys_keep_concrete_native_validation_findings",
+    "preservation::service_unknown_neighbors_follow_typed_nonkey_edit_and_deterministic_generation",
+    "preservation::omitted_tcp_service_merge_keeps_absence_and_unknown_descendants",
+    "preservation::atomic_endpoint_edits_refuse_unknown_loss_until_explicit_replacement",
+    "preservation::unadmitted_endport_hints_and_topology_are_retained_with_findings",
+    "preservation::unselected_traffic_distribution_is_retained_but_explicit_preservation_cannot_admit_it",
+    "preservation::optional_null_and_absence_do_not_materialize_readiness_protocol_or_selectors",
+    "preservation::freeform_native_looking_keys_do_not_become_semantic_controls",
+    "preservation::networking_debug_findings_and_default_output_hide_sensitive_markers",
+    "preservation::stable_topology_is_exportable_only_as_unchanged_source_backed_observation",
+    "processing::tiny_networking_graph_work_and_payload_ceilings_fail_closed",
+    "processing::late_networking_graph_exhaustion_removes_prior_positive_evidence",
+    "processing::networking_graph_caller_cannot_raise_retained_source_ceiling",
+    "processing::topology_preservation_and_authored_stripping_share_output_budget",
+    "processing::stripped_topology_cannot_turn_report_exhaustion_into_success",
+    "processing::networking_graph_and_generation_cannot_raise_retained_edit_ceiling",
+    "references::service_selector_uses_real_pod_subjects_and_tracks_explicit_source_edits",
+    "references::slice_service_label_and_ingress_front_port_evidence_do_not_claim_routing",
+    "references::absent_service_selector_and_empty_policy_rules_do_not_fabricate_peer_edges",
+    "references::endpoint_target_reference_uses_declared_cluster_scope_without_a_namespace",
+    "references::ingress_front_ports_never_match_target_or_container_ports_and_keep_beta_forms",
+    "references::service_identity_port_ambiguity_and_unavailable_evidence_are_distinct",
+    "references::named_service_target_ports_combine_selection_protocol_and_complete_port_evidence",
+    "references::policy_universal_presence_and_same_entry_unknown_conjunction_are_explicit",
+    "references::versionless_backend_and_class_parameters_preserve_group_and_scope_presence",
+    "references::named_service_target_port_edits_recompute_selection_and_protocol",
+    "references::policy_absent_namespaces_require_explicit_comparison_context",
+    "references::normalized_duplicate_service_ports_fail_closed_until_explicit_repair",
+    "references::ingress_rule_backends_follow_reordered_front_ports_and_source_patches",
+    "references::native_namespace_and_pod_selectors_conjoin_within_each_peer_and_union_across_peers",
+    "static_contract::headless_externalname_and_front_port_grammars_match_distinct_native_roles",
+    "static_contract::service_authored_defaults_remain_explicit_with_context_and_round_trip",
+    "static_contract::service_dual_stack_checks_families_without_guessing_clusterip_normalization",
+    "static_contract::service_ranges_external_addresses_and_nodeport_keys_have_native_boundaries",
+    "static_contract::loadbalancer_port_10250_has_a_one_33_boundary",
+    "static_contract::endpoints_subsets_front_names_and_special_ip_predicate_are_distinct",
+    "static_contract::endpoint_slice_port_default_names_and_topology_cardinality_are_bounded",
+    "static_contract::slice_pointer_protocol_defaults_do_not_admit_explicit_empty",
+    "static_contract::endpoint_slice_duplicate_addresses_and_patch_sensitive_special_ips_are_explicit",
+    "static_contract::ingress_resource_and_class_parameter_names_are_path_segments",
+    "static_contract::ingressclass_controller_accepts_http_path_punctuation_with_a_total_limit",
+    "static_contract::ingress_tls_hosts_and_beta_wildcard_http_compatibility_are_separate",
+    "static_contract::ingress_backend_service_names_distinguish_dns1035_and_relaxed_gate_context",
+    "static_contract::policy_type_defaulting_and_duplicates_do_not_fabricate_native_constraints",
+    "static_contract::noncanonical_ip_cidr_gate_and_old_value_context_is_actionable",
+    "static_contract::empty_service_protocol_compares_as_tcp_without_materializing_a_default",
+    "static_contract::finite_native_corrections_reparse_and_have_source_free_generation_fixed_points",
+    "static_contract::explicit_create_generation_refuses_stable_wildcard_http_errors",
+    "static_contract::unclassified_native_ip_variants_do_not_become_false_family_or_subnet_rejections",
+    "static_contract::preserved_fqdn_addresses_and_legacy_special_ips_keep_distinct_findings",
+    "static_contract::backend_ports_use_effective_union_values_without_changing_authored_spelling",
+    "static_contract::rule_hosts_reject_decimal_ipv4_variants_while_tls_retains_dns_spelling",
+    "static_contract::unsupported_policy_selectors_keep_edges_and_private_unknown_evidence",
+    "static_contract::nullable_native_pointers_preserve_exact_parsed_and_source_free_envelopes",
+    "static_contract::present_named_targetref_without_api_witness_remains_explicitly_unsupported",
+    "static_contract::wildcard_hosts_bound_the_full_authored_name_before_removing_the_prefix",
+    "static_contract::empty_endpoints_hostname_differs_from_a_present_empty_slice_pointer",
+    "static_contract::peer_pointer_nulls_do_not_count_as_effective_selectors",
+    "static_contract::service_metadata_uses_native_label_and_prefix_callbacks_at_relaxed_gate_boundaries",
+    "static_contract::service_prefix_envelope_delegation_preserves_other_native_identity_checks",
+    "static_contract::native_empty_enum_exception_does_not_admit_other_values_or_cohorts"
+  ],
+  "reviewed_correction_groups": [
+    "effective Ingress backend-port union",
+    "modern sloppy IPv4 host rejection with historical context outcomes",
+    "unknown selectors never create positive membership",
+    "field-specific null and empty handling",
+    "incomplete endpoint references retained",
+    "complete wildcard host length",
+    "Service-specific identity and finite default-enum rules"
+  ],
+  "conformance": {
+    "api_server": "pending",
+    "runtime": "pending",
+    "controller_cni": "pending",
+    "official_corpus": "pending",
+    "native_kind_profiles": "pending"
+  },
+  "limitations": [
+    "Static source review and local tests do not establish API-server or CNI/controller behavior.",
+    "Historical IPv4/EndpointSlice patch differences without independent witnesses retain NativeContextRequired.",
+    "PreferClose is the finite selected trafficDistribution enum; PreferSameZone remains retained but unadmitted and blocks native emission.",
+    "Generic opaque preservation is explicit and cannot admit unsupported known enum values or prove native conformance.",
+    "KubernetesLens does not acquire resources from live clusters."
+  ]
+}

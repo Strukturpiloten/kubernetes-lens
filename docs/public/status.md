@@ -10,8 +10,10 @@ allocation or resident memory, and arithmetic does not claim server rounding/pro
 
 Eight workload kinds have typed codecs, native validation and generation, including both admitted
 CronJob APIs. Shared helpers, bounded authoring, supplied facts and exact observation roles are
-available; see [workload limits](../workloads.md). The remaining 14 built-in kinds remain
-preservation-only. Preservation requires explicit output policy and produces structured findings.
+available; see [workload limits](../workloads.md). Six networking kinds provide ten served roots
+with finite validation, availability, preservation and supplied-only graph operations; see
+[networking limits](../networking.md). The remaining eight built-in kinds remain preservation-only.
+Preservation requires explicit output policy and produces structured findings.
 No supported Kubernetes minor, renderer, server-admission/runtime behavior, deployment workflow, or live
 cluster client is claimed.
 

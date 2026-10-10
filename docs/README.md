@@ -10,7 +10,9 @@ The [frozen compatibility contract](compatibility/README.md) records executable 
 pending native evidence for the agreed version/kind slice.
 
 The [foundation API](foundation-api.md) records delivered offline behavior, private evidence and
-sealed cohort integration. Runtime and renderer conformance remain pending.
+sealed cohort integration. [Workload](workloads.md), [access and policy](access.md), and
+[networking](networking.md) pages describe the delivered native cohorts. Runtime and renderer
+conformance remain pending.
 
-[Access and policy](access.md) records typed resource/field boundaries and source-only admission
-witnesses. Its local code ledger does not substitute for the pending native conformance gate.
+The access contract records typed resource/field boundaries and source-only admission witnesses.
+Its local code ledger does not substitute for the pending native conformance gate.

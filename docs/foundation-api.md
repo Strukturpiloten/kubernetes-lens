@@ -1,8 +1,9 @@
 # Foundation API and cohort integration
 
-This unpublished library implements offline foundation behavior and the workload cohort. Nine
-served workload registrations are delivered; the full 35-kind inventory and runtime conformance
-remain incomplete. ADRs 0003 and 0004 record the foundation and workload integration decisions.
+This unpublished library implements offline foundation behavior, nine workload API roots and ten
+networking API roots across fourteen kinds. The full 35-kind inventory and runtime conformance
+remain incomplete. ADRs 0003–0006 record the foundation, native authoring, networking and shared
+processing decisions. See [networking support and limits](networking.md) for exact native roots.
 
 ## Public boundaries
 
@@ -72,7 +73,7 @@ a typed List is not evidence of a delivered resource codec. `ResourceRegistratio
 provides exact delivered field pointers (use `*` for sequence/map items), gates, availability,
 admission and explicit merge keys. A parent field never prefix-admits arbitrary descendants.
 
-The fixed aggregator is `src/resources/mod.rs`. Its planned slots are `workloads`, `networking`,
+The fixed aggregator is `src/resources/mod.rs`. Its delivered slots are `workloads` and `networking`; planned slots are
 `configuration_storage`, `identity_access`, and `extensions`; their source modules/register calls
 are added only when actual cohort implementations exist. Each future file provides
 `pub(crate) fn register(&mut RegistryBuilder) -> Result<(), Finding>` and owns only its assigned
