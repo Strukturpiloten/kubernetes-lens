@@ -216,5 +216,41 @@
     "Per-kind identity/naming completion belongs to shared issue12 integration.",
     "Supplied facts prove finite offline relationships, never deployed/controller behavior.",
     "No renderer or live-cluster acquisition interface is delivered by this cohort."
-  ]
+  ],
+  "current_evaluation": {
+    "issue": 24,
+    "status": "source_bound_native_conformance_pending",
+    "historical_local_run_applicability": "The original source_sha256 and local_run are retained historical evidence; they do not certify this later source. Current gates and independent review must bind this candidate separately.",
+    "source_sha256": {
+      "src/generation.rs": "6de38b7acff8d8efd9a10067606fbfbdca62713f14577ed5cd0814d9c5a21021",
+      "src/graph.rs": "a92cc434978d1d00cb6b6dc1f8f953f12bab0830a52d8a74eb5597c963019fa3",
+      "src/model.rs": "f2e4e296abc1940e94d4b7ffbfc7621e66fb985365c937ad3057c051d4055615",
+      "src/processing.rs": "2df13c2ad6f06d71f809b10848c6652da542c3d7f603f882cf475993e85e29e5",
+      "src/registry.rs": "37f66c30a7efe50b274acc59bc2956bf1b13ff088531ed70e2691a2453a87a4f",
+      "src/resources/common.rs": "f4b42cbc76508fb427a78967e864b0db777e735ac645e9850485045e8b555abd",
+      "src/resources/common/native_helpers.rs": "d807e072942ca8df513b6b369df9fe0f4486a2b464bb42a4599fa79354781733",
+      "src/resources/common/native_time.rs": "6e5b81bdb3c5cf9e71dd3485278f1378c6201b246163905030cdb68122290469",
+      "src/resources/common/workload_specs.rs": "5b302801a6668d45ca79a261be683041af6268c1749cef07f95848291368aa92",
+      "src/resources/mod.rs": "9c10dc5e4fd8c5b0916d460b5799859423189aac51076e28e0162e4649474898",
+      "src/resources/workloads.rs": "f314730dfc93548dd39eaf43d65cf94552b9187909dbe9494238928dbc7c4583",
+      "src/resources/workloads/capabilities.rs": "71268750cdbad52c8c3e3845f09f98ead1e9febc1eee6805698c04f70ccfb6c0",
+      "src/resources/workloads/facts.rs": "33b0bf7a1abbb32c5be95012ab809fc11838a0701324e9d25e59c28aafed98af",
+      "src/resources/workloads/gates.rs": "1ca68c53656caf9dfaf62c1eed475f26a5320f651d5bacfdc6c61ae67ce4c44c",
+      "src/resources/workloads/roots.rs": "85234cdd049de280b8a3790420bc0bd2d699344d1a7cd74fa0c70c8c7b02ab8f",
+      "src/resources/workloads/rules.rs": "e6e9050619f2d0d65df7b73f49609edf26d08e56f5aa75ec9a8075a04d2e5d23",
+      "src/resources/workloads/schedule.rs": "346fc200d665ca34080467ae9419ee372dc8f11132167f0e03630720b8247ead",
+      "src/resources/workloads/validation.rs": "e3455c1b1a28d930b24798a3e0b9ecbe34cbbc158246ca93fe693186f0c76e74",
+      "src/source.rs": "5df62b9a50108d60e0598fbb1054522e55a59d808e2f0354eee4e1ae46adb4af",
+      "src/syntax.rs": "089f9113ae2eb2424d6652e0f4af9495c06eb887aa99116cfcba6a4f35c5c2cf",
+      "src/value.rs": "0172149c88d6779bc5525ca6cad0707c5409b5a139b73d40e8ceb92afd3ce0fd",
+      "src/value/exact_json_number.rs": "251e56f91f65e182fb478413a8a50c4d567dc91fa278ef402a08fc8ee39739ba",
+      "src/value/protected_json.rs": "6172e7cf972a921b28a0a58c40bd8ecc79d4ee80ff64359fbc7368659bf0bb9b",
+      "src/value/protected_json_tests.rs": "054477e96424366c9871b20df63f38d831a8baf6df9bcd9303476f35d38863f3",
+      "tests/exact_json_number.rs": "f9305a6d0f011a6880dc7725aa8b4a0be889d7a7e4430353f8b5438e25aaef01",
+      "tests/foundation/graph.rs": "3c19a678f873abb4be4bf4b862a0dfc0c02b95ab25cad8977b180d8b10a099e4",
+      "tests/protected_json.rs": "6adb4c257e68aab87568b66de99c56aabbe0c454e1599002078b8ba4f1b3461d",
+      "tests/workloads.rs": "24ef1d1c9d8f1a0c6933a628ad6e2ac027cdf4647ef4267136458ce12e4d4653"
+    },
+    "native_conformance": "pending"
+  }
 }

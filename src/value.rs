@@ -2,10 +2,14 @@
 use crate::diagnostic::{Finding, FindingCode, Phase};
 use crate::source::ExplicitSourceAccess;
 use std::{collections::BTreeMap, fmt};
+mod exact_json_number;
 mod native_bytes;
 mod native_quantity;
+pub(crate) mod protected_json;
+pub use exact_json_number::ExactJsonNumber;
 pub use native_bytes::NativeBytes;
 pub use native_quantity::{NativeQuantityDomain, SuppliedQuantityOrder};
+pub use protected_json::{JsonNodeId, ProtectedJsonBuilder, ProtectedJsonValue};
 
 /// Explicit authored presence; omission and explicit null remain different.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]

@@ -256,3 +256,18 @@ Generic List metadata validation charges shared work even when no diagnostic is 
 exhaustion stops the scan immediately. Mapping-delta insertion reserves copied key and member
 payloads before insertion and charges its lookup work; a later checked-view copy is a separate
 reservation, not retroactive coverage of the first copy.
+
+## Exact protected JSON
+
+`ExactJsonNumber` retains bounded strict JSON spelling and supplies mathematical equality/order
+without floats or exponent expansion. Signed zero compares equal. Grammar failures are invalid;
+valid numbers exceeding representation ceilings yield `LimitExceeded`.
+
+`ProtectedJsonBuilder` adds scalar nodes and arrays/objects referencing earlier nodes, then seals
+one root. Opaque handles cannot cross builders or form cycles. `ProtectedJsonValue` shares immutable
+arena backing. Null is a real member; arrays remain ordered and objects reject duplicate keys while
+comparing independently of insertion order. Shape accounting includes every expanded shared child.
+`parse_json` establishes no resource provenance. `to_json` requires explicit private access and
+bounded output; `equivalent` provides budgeted exact comparison. Debug/failures hide keys and values.
+[ADR 0008](decisions/0008-exact-protected-json.md) specifies the limits and future schema-example
+null canonicalization requirement. Neither primitive establishes schema or native numeric parity.

@@ -511,6 +511,14 @@ impl EncodingBudget {
     }
     /// Stream JSON directly into a checked byte buffer, with no unbounded intermediary.
     pub(crate) fn snapshot(&self, node: &TreeNode) -> Result<Vec<u8>, Finding> {
+        self.snapshot_in(node).map_err(|mut finding| {
+            // Private snapshots may contain payload-bearing keys. Diagnostics keep
+            // their code/phase, but never expose a traversal path into those keys.
+            finding.path = None;
+            finding
+        })
+    }
+    fn snapshot_in(&self, node: &TreeNode) -> Result<Vec<u8>, Finding> {
         self.verify(node)?;
         let mut out = Vec::new();
         self.json(node, &mut out, &FieldPath::default())?;
@@ -572,7 +580,14 @@ impl EncodingBudget {
             TreeValue::Bool(value) => self.append(out, if *value { b"true" } else { b"false" }, path),
             TreeValue::Number(value) => {
                 // The strict parser checks lexemes too; fail safely before writing malformed JSON.
-                if serde_json::from_str::<serde_json::Number>(value).is_err() {
+                // Validate grammar using the raw parser: numeric magnitude must not
+                // be coerced through serde_json's finite floating-point Number.
+                if !value
+                    .as_bytes()
+                    .first()
+                    .is_some_and(|byte| matches!(byte, b'-' | b'0'..=b'9'))
+                    || !serde_json::from_str::<&serde_json::value::RawValue>(value).is_ok_and(|raw| raw.get() == value)
+                {
                     return Err(
                         Finding::error(FindingCode::NativeFieldInvalid, Phase::Generation).at_path(path.clone())
                     );
@@ -612,4 +627,68 @@ impl EncodingBudget {
 }
 fn encoding_limit(path: &FieldPath) -> Finding {
     Finding::error(FindingCode::LimitExceeded, Phase::Generation).at_path(path.clone())
+}
+
+#[cfg(test)]
+mod snapshot_privacy_tests {
+    use super::*;
+    use crate::source::AuthoringLimits;
+    #[test]
+    fn raw_numeric_grammar_preserves_magnitude_outside_float_and_typed_number_ranges() -> Result<(), String> {
+        for spelling in ["1e400", "1e2147483648", "-9007199254740993"] {
+            let tree = TreeNode::mapping(vec![(
+                "unknown".into(),
+                TreeNode::new(TreeValue::Number(spelling.into())),
+            )]);
+            let budget = EncodingBudget::new(AuthoringLimits::default());
+            let bytes = budget.snapshot(&tree).map_err(|_| "valid raw number rejected")?;
+            assert_eq!(bytes, format!("{{\"unknown\":{spelling}}}").as_bytes());
+        }
+        Ok(())
+    }
+    #[test]
+    fn private_keys_never_escape_snapshot_verification_or_serialization_errors() -> Result<(), String> {
+        const MARKER: &str = "PRIVATE-snapshot-key";
+        let null = || TreeNode::new(TreeValue::Null);
+        let tree = |value| TreeNode::mapping(vec![(MARKER.into(), value)]);
+        let cases = [
+            (
+                TreeNode::mapping(vec![(MARKER.into(), null()), (MARKER.into(), null())]),
+                AuthoringLimits::default(),
+                FindingCode::DuplicateKey,
+            ),
+            (
+                tree(null()),
+                AuthoringLimits {
+                    parser: ParseLimits {
+                        max_scalar_bytes: 1,
+                        ..ParseLimits::default()
+                    },
+                    ..AuthoringLimits::default()
+                },
+                FindingCode::LimitExceeded,
+            ),
+            (
+                tree(null()),
+                AuthoringLimits {
+                    max_total_snapshot_bytes: 4,
+                    ..AuthoringLimits::default()
+                },
+                FindingCode::LimitExceeded,
+            ),
+            (
+                tree(TreeNode::new(TreeValue::Number("1e+".into()))),
+                AuthoringLimits::default(),
+                FindingCode::NativeFieldInvalid,
+            ),
+        ];
+        for (tree, limits, expected) in cases {
+            let budget = EncodingBudget::new(limits);
+            let finding = budget.snapshot(&tree).err().ok_or("invalid snapshot succeeded")?;
+            assert_eq!(finding.code, expected);
+            assert!(finding.path.is_none());
+            assert!(!format!("{finding:?}").contains(MARKER));
+        }
+        Ok(())
+    }
 }
