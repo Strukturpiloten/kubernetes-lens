@@ -12,4 +12,3 @@ pub use roots::*;
 pub use types::*;
 
 pub(crate) use capabilities::source_default_enum;
-pub(crate) use validation::service_generate_name_identity_envelope;

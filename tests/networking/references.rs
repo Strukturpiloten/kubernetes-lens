@@ -254,9 +254,42 @@ fn service_identity_port_ambiguity_and_unavailable_evidence_are_distinct() -> Te
     ));
     let beta = ingress("networking.k8s.io/v1beta1");
     let set = resources(&json!({"apiVersion":"v1","kind":"List","items":[service(),beta]}))?;
-    assert!(matches!(
-        backend_port(&resolve_references_for_target(&set, &target(25)?))?.resolution,
-        Resolution::Unsupported(SafeReason::FactUnadmitted)
+    let graph = resolve_references_for_target(&set, &target(25)?);
+    assert!(graph.findings.iter().any(
+        |finding| finding.code == FindingCode::UnavailableApi && finding.resource == Some(set.documents()[1].id())
+    ));
+    assert!(
+        !graph
+            .edges
+            .iter()
+            .any(|edge| edge.reference.from == set.documents()[1].id())
+    );
+    let reference = kubernetes_lens::graph::Reference {
+        from: set.documents()[1].id(),
+        path: FieldPath::parse("/spec/backend")?,
+        relation: kubernetes_lens::graph::RelationshipKind::Dependency,
+        target: kubernetes_lens::graph::ReferenceTarget::CheckedObject {
+            gvk: kubernetes_lens::model::GroupVersionKind::new("v1", "Service")?,
+            name: "native".into(),
+            predicate: Some(kubernetes_lens::graph::ReferencePredicate::ServicePortExists {
+                port: kubernetes_lens::graph::ServicePortSelector::Number(80),
+            }),
+            optional: kubernetes_lens::value::Presence::Absent,
+        },
+        scope: kubernetes_lens::graph::ReferenceScope::SameNamespace,
+    };
+    let graph = kubernetes_lens::graph::resolve_supplied_references_for_target(
+        &set,
+        &[reference],
+        &kubernetes_lens::graph::ReferenceContext::default(),
+        &target(25)?,
+    );
+    assert_eq!(
+        backend_port(&graph)?.resolution,
+        Resolution::Unsupported(SafeReason::InvalidIdentity)
+    );
+    assert!(graph.findings.iter().any(
+        |finding| finding.code == FindingCode::UnavailableApi && finding.resource == Some(set.documents()[1].id())
     ));
     Ok(())
 }

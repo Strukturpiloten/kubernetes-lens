@@ -137,7 +137,7 @@ impl ResourceIdentity {
     /// Derive a resolvable identity, ignoring served version. No namespace is invented.
     #[must_use]
     pub fn collision_key(&self) -> Option<CollisionKey> {
-        let name = self.name.value()?.clone();
+        let name = self.name.value().filter(|name| !name.is_empty())?.clone();
         let namespaced = self.scope.namespaced()?;
         if namespaced && !matches!(self.namespace, Presence::Value(_)) {
             return None;
@@ -771,7 +771,13 @@ impl ResourceSet {
         .into_iter()
         .map(|finding| {
             let mut finding = positionless(finding);
-            if finding.code == FindingCode::UnadmittedField {
+            if finding.code == FindingCode::UnadmittedField
+                && !finding.path.as_ref().is_some_and(|path| {
+                    path.0.len() == 2
+                        && path.0[0] == "metadata"
+                        && matches!(path.0[1].as_str(), "name" | "generateName" | "namespace")
+                })
+            {
                 finding.severity = crate::diagnostic::Severity::Warning;
             }
             finding
@@ -1480,30 +1486,17 @@ pub(crate) fn identity(tree: &TreeNode, scope: ResourceScope) -> Result<Resource
     if metadata.is_some_and(|n| n.as_mapping().is_none()) {
         return Err(invalid());
     }
-    let field = |name| string_field(metadata.and_then(|m| m.get(name)));
+    let field = |name| {
+        string_field(metadata.and_then(|m| m.get(name))).map_err(|_| {
+            Finding::error(FindingCode::NativeFieldInvalid, Phase::Decoding)
+                .at_path(FieldPath::default().child("metadata").child(name))
+        })
+    };
     let namespace = field("namespace")?;
     let name = field("name")?;
     let generate_name = field("generateName")?;
-    if name.value().is_some_and(|n| !crate::value::dns_subdomain(n))
-        || namespace.value().is_some_and(|n| !crate::value::dns_label(n))
-        || generate_name.value().is_some_and(|n| {
-            n.is_empty()
-                || n.len() > 253
-                || if gvk.group.is_none() && gvk.version == "v1" && gvk.kind == "Service" {
-                    !crate::resources::networking::service_generate_name_identity_envelope(n)
-                } else {
-                    !crate::value::dns_subdomain(n.trim_end_matches('-'))
-                }
-        })
-    {
-        return Err(invalid());
-    }
-    if name.value().is_none() && generate_name.value().is_none() {
-        return Err(invalid());
-    }
-    if scope.namespaced() == Some(false) && namespace.value().is_some() {
-        return Err(Finding::error(FindingCode::ScopeMismatch, Phase::Decoding));
-    }
+    // Acquisition retains exact bounded spelling. Native naming is selected only
+    // with an admitted target and operation context; it never rewrites identity.
     Ok(ResourceIdentity {
         gvk,
         scope,

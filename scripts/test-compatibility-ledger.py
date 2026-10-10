@@ -10,6 +10,16 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+NAMING_SHARED_SOURCES = {'src/diagnostic.rs', 'src/resources/common/native_naming.rs',
+                         'tests/native_naming.rs'}
+NAMING_SOURCES = NAMING_SHARED_SOURCES | {
+    'src/model.rs', 'src/generation.rs', 'src/graph.rs', 'src/resources/common.rs',
+    'src/resources/networking.rs', 'src/resources/networking/validation.rs',
+    'scripts/test-compatibility-ledger.py', 'scripts/fixtures/native_acceptance.py',
+    'src/resources/extensions/custom_documents.rs', 'tests/foundation/graph.rs', 'tests/foundation.rs',
+    'tests/networking/native.rs', 'tests/networking/references.rs',
+    'tests/networking/static_contract.rs',
+}
 spec = importlib.util.spec_from_file_location('contract', ROOT / 'scripts/compatibility-ledger.py')
 contract = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(contract)
@@ -305,7 +315,7 @@ class ContractTests(unittest.TestCase):
     def workload_current_code_errors(evidence):
         """Authenticate the current candidate without rewriting historical receipts."""
         errors = []
-        expected_sources = {
+        expected_sources = NAMING_SHARED_SOURCES | {
             'schemas/capabilities/kubernetes-1.20-1.37.json',
             'src/capability.rs', 'src/generation.rs', 'src/graph.rs', 'src/model.rs',
             'src/processing.rs', 'src/registry.rs', 'src/resources/common.rs',
@@ -383,7 +393,7 @@ class ContractTests(unittest.TestCase):
                 })
         if len(expected_roots) != 18 or evidence.get('roots') != expected_roots:
             errors.append('incomplete or unsupported access roots')
-        expected_sources = {
+        expected_sources = NAMING_SHARED_SOURCES | {
             'src/capability.rs', 'src/generation.rs', 'src/graph.rs', 'src/model.rs', 'src/registry.rs',
             'src/resources/common.rs', 'src/resources/common/native_helpers.rs', 'src/resources/mod.rs',
             'src/resources/access.rs', 'src/value.rs', 'src/value/native_quantity.rs',
@@ -460,7 +470,7 @@ class ContractTests(unittest.TestCase):
                 })
         if evidence.get('roots') != expected_roots or len({r['kind'] for r in expected_roots}) != 6:
             errors.append('incomplete or unsupported networking roots')
-        expected_sources = {
+        expected_sources = NAMING_SHARED_SOURCES | {
             'src/capability.rs', 'src/generation.rs', 'src/graph.rs', 'src/model.rs',
             'src/registry.rs', 'src/resources/mod.rs', 'src/resources/common.rs',
             'src/resources/common/native_helpers.rs', 'src/value.rs',
@@ -477,7 +487,7 @@ class ContractTests(unittest.TestCase):
         for path in [ROOT / 'tests/networking.rs', *sorted((ROOT / 'tests/networking').rglob('*.rs'))]:
             prefix = '' if path.name == 'networking.rs' else path.stem + '::'
             expected_cases.extend(prefix + case for case in re.findall(r'#\[test\]\s*fn (\w+)\(', path.read_text()))
-        if len(expected_cases) != 74 or evidence.get('independent_networking_tests') != expected_cases:
+        if len(expected_cases) != 75 or evidence.get('independent_networking_tests') != expected_cases:
             errors.append('incomplete independent cases')
         canonical = evidence.get('canonical_ledger', {})
         if canonical.get('path') != str(contract.LEDGER.relative_to(ROOT)) or canonical.get('sha256') != hashlib.sha256(contract.LEDGER.read_bytes()).hexdigest():
@@ -529,7 +539,7 @@ class ContractTests(unittest.TestCase):
                 })
         if evidence.get('roots') != expected_roots or len({r['kind'] for r in expected_roots}) != 5:
             errors.append('incomplete or unsupported storage roots')
-        expected_sources = {
+        expected_sources = NAMING_SHARED_SOURCES | {
             'src/capability.rs', 'src/generation.rs', 'src/graph.rs', 'src/model.rs',
             'src/registry.rs', 'src/resources/mod.rs', 'src/resources/common.rs',
             'src/resources/common/native_helpers.rs', 'src/value.rs',
@@ -679,7 +689,7 @@ class ContractTests(unittest.TestCase):
                 })
         if evidence.get('roots') != expected or len(expected) != 6:
             errors.append('extension root profiles')
-        sources = {
+        sources = NAMING_SHARED_SOURCES | {
             'src/resources/extensions.rs', 'src/resources/mod.rs', 'src/capability.rs',
             'src/generation.rs', 'src/graph.rs', 'src/model.rs', 'src/registry.rs',
             'src/value/protected_json.rs', 'tests/extensions.rs',
@@ -727,6 +737,99 @@ class ContractTests(unittest.TestCase):
         mutations.append(custom_claimed)
         for mutation in mutations:
             self.assertTrue(self.extension_code_errors(mutation))
+
+
+    @staticmethod
+    def naming_contract_errors(evidence):
+        errors = []
+        ledger_path = 'schemas/capabilities/kubernetes-1.20-1.37.json'
+        ledger = json.loads((ROOT / ledger_path).read_text())
+        if evidence.get('canonical_ledger') != {
+            'path': ledger_path, 'sha256': hashlib.sha256((ROOT / ledger_path).read_bytes()).hexdigest(),
+        }:
+            errors.append('naming ledger binding')
+        bindings = evidence.get('source_sha256', {})
+        if set(bindings) != NAMING_SOURCES:
+            errors.append('naming source completeness')
+        for name, digest in bindings.items():
+            if name not in NAMING_SOURCES or hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != digest:
+                errors.append('naming source freshness')
+        if evidence.get('native_conformance') != 'pending' or evidence.get('supported_kubernetes_versions') != []:
+            errors.append('unsupported naming conformance claim')
+        expected_files = {
+            'schemas/capabilities/native-naming-contract.json',
+            'schemas/capabilities/native-naming-independent-cases.json',
+            'schemas/capabilities/native-naming-source-manifest.json',
+            'schemas/capabilities/native-naming-source-witnesses.json',
+        }
+        selected = ledger.get('native_naming_contract', {})
+        facts = selected.get('source_rules', [])
+        if {fact.get('path') for fact in facts} != expected_files or len(facts) != 4:
+            errors.append('naming fact completeness')
+        for fact in facts:
+            path = fact.get('path')
+            if path not in expected_files or hashlib.sha256((ROOT / path).read_bytes()).hexdigest() != fact.get('sha256'):
+                errors.append('naming fact freshness')
+        if selected.get('kind_count') != 35 or selected.get('api_profile_count') != 48 or selected.get('lookup_served_version_in_key') is not False:
+            errors.append('naming selected boundaries')
+        table = json.loads((ROOT / 'schemas/capabilities/native-naming-contract.json').read_text())
+        expected_profiles = {
+            (resource['kind'], profile['api_version'], json.dumps(profile['target_availability_ranges'], sort_keys=True))
+            for resource in ledger['resources'] for profile in resource['proposed_admitted_api_profiles']
+        }
+        profiles = {
+            (kind['kind'], profile['api_version'], json.dumps(profile['target_availability_ranges'], sort_keys=True))
+            for kind in table['kind_policies'] for profile in kind['frozen_api_profiles']
+        }
+        if profiles != expected_profiles or len(table['kind_policies']) != 35 or len(profiles) != 48:
+            errors.append('naming exact profiles')
+        if table.get('lookup_identity', {}).get('served_api_version_in_key') is not False or table.get('native_conformance') != 'pending':
+            errors.append('naming identity or conformance')
+        undeclared = table.get('undeclared_gvk_naming', {})
+        if undeclared.get('outcome') != 'unverified' or undeclared.get('ordinary_target_evidence') != 'blocked' or undeclared.get('schema_checked_and_bound') != 'schema_relationship_only':
+            errors.append('undeclared naming evidence claim')
+        cases = json.loads((ROOT / 'schemas/capabilities/native-naming-independent-cases.json').read_text())
+        ids = [case['id'] for case in cases['cases']]
+        if len(ids) != 125 or len(set(ids)) != 125 or 'cronjob-beta-unavailable122' in ids:
+            errors.append('naming independent case identity')
+        corrected = next(case for case in cases['cases'] if case['id'] == 'cronjob-beta-unavailable125')
+        if corrected['target_minor'] != '1.25' or cases.get('native_conformance') != 'pending':
+            errors.append('naming corrected beta boundary')
+        manifest = json.loads((ROOT / 'schemas/capabilities/native-naming-source-manifest.json').read_text())
+        witnesses = json.loads((ROOT / 'schemas/capabilities/native-naming-source-witnesses.json').read_text())
+        source_ids = {record['id'] for record in manifest['records']}
+        required_ids = {source for kind in table['kind_policies'] for source in kind['evidence_source_ids']}
+        if not required_ids <= source_ids or len(source_ids) != len(manifest['records']):
+            errors.append('naming source witness coverage')
+        for record in manifest['records']:
+            if not re.fullmatch(r'[0-9a-f]{40}', record['commit']) or not re.fullmatch(r'[0-9a-f]{64}', record['sha256']):
+                errors.append('naming source integrity')
+            if record['commit'] not in record['immutable_source_url'] or not record.get('license') or not record.get('license_url') or 'cache_path' in record:
+                errors.append('naming source provenance')
+        if witnesses.get('source_manifest_path') != 'schemas/capabilities/native-naming-source-manifest.json':
+            errors.append('naming witness owner')
+        if 'native-naming-unverified' not in ledger['diagnostics']['stable_codes']:
+            errors.append('naming diagnostic identity')
+        return errors
+
+    def test_naming_facts_current_code_and_independent_frozen_boundaries(self):
+        evidence = json.loads((ROOT / 'schemas/capabilities/native-naming-code-evidence.json').read_text())
+        self.assertEqual(self.naming_contract_errors(evidence), [])
+
+    def test_naming_evidence_refuses_stale_incomplete_and_fabricated_success(self):
+        evidence = json.loads((ROOT / 'schemas/capabilities/native-naming-code-evidence.json').read_text())
+        stale = copy.deepcopy(evidence)
+        stale['source_sha256']['src/model.rs'] = '0' * 64
+        self.assertIn('naming source freshness', self.naming_contract_errors(stale))
+        missing = copy.deepcopy(evidence)
+        missing['source_sha256'].pop('src/resources/common/native_naming.rs')
+        self.assertIn('naming source completeness', self.naming_contract_errors(missing))
+        changed = copy.deepcopy(evidence)
+        changed['canonical_ledger']['sha256'] = '0' * 64
+        self.assertIn('naming ledger binding', self.naming_contract_errors(changed))
+        changed = copy.deepcopy(evidence)
+        changed['native_conformance'] = 'passed'
+        self.assertIn('unsupported naming conformance claim', self.naming_contract_errors(changed))
 
 
 if __name__ == '__main__':

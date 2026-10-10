@@ -1,0 +1,5590 @@
+{
+  "status": "frozen_naming_specification_facts_native_conformance_pending",
+  "repository": "Strukturpiloten/kubernetes-lens",
+  "counts": {
+    "kinds": 35,
+    "api_profiles": 48,
+    "target_minors": 18
+  },
+  "rules": {
+    "dns1123-subdomain": {
+      "max_utf8_bytes": 253,
+      "alphabet": "ASCII lowercase letters,digits,hyphen,dot",
+      "component_boundaries": "nonempty components start/end lowercase alphanumeric",
+      "per_component_max_63_enforced_by_native_helper": false
+    },
+    "dns1123-label": {
+      "max_utf8_bytes": 63,
+      "alphabet": "ASCII lowercase letters,digits,hyphen",
+      "start_end": "lowercase alphanumeric; native digit start allowed"
+    },
+    "dns1035-label-frozen-unrelaxed": {
+      "max_utf8_bytes": 63,
+      "alphabet": "ASCII lowercase letters,digits,hyphen",
+      "start": "lowercase ASCII letter",
+      "end": "lowercase alphanumeric",
+      "relaxed_variant": "Native branch starts1.34; alpha false1.34-1.35,beta true1.36,GA locked true1.37; remains outside frozen admission; not universally native-invalid"
+    },
+    "path-segment": {
+      "forbidden_exact": [".", ".."],
+      "forbidden_substrings": ["/", "%"],
+      "native_length_cap": null,
+      "native_nonempty_requirement": "generic metadata concrete name required after generation; path helper alone permits empty"
+    },
+    "path-prefix": {
+      "forbidden_substrings": ["/", "%"],
+      "exact_dot_or_dotdot_permitted": true,
+      "native_length_cap": null
+    },
+    "native-dns-prefix": {
+      "identity_mutation_permitted": false,
+      "comparison_only_transform": "if trailing dash, native helper replaces final two bytes with ASCII a;1.22+ requires input byte length>1",
+      "single_dash_1_20_1_21": "upstream slicing hazard; Lens preserves and reports safe context/compatibility uncertainty; never panics",
+      "single_dash_1_22_plus": "unchanged, violates DNS grammar",
+      "normalization_forbidden": [
+        "trim_end_matches",
+        "lowercase",
+        "NFC/NFKC",
+        "URL decode",
+        "generated suffix inference"
+      ]
+    }
+  },
+  "kind_policies": [
+    {
+      "kind": "Pod",
+      "scope": "namespaced",
+      "cohort_issue": 9,
+      "native_source_family": "core",
+      "frozen_api_profiles": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "core-v1.20.0",
+        "core-v1.21.0",
+        "core-v1.22.0",
+        "core-v1.23.0",
+        "core-v1.24.0",
+        "core-v1.25.0",
+        "core-v1.26.0",
+        "core-v1.27.0",
+        "core-v1.28.0",
+        "core-v1.29.0",
+        "core-v1.30.0",
+        "core-v1.31.0",
+        "core-v1.32.0",
+        "core-v1.33.0",
+        "core-v1.34.0",
+        "core-v1.35.0",
+        "core-v1.36.0",
+        "core-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "Deployment",
+      "scope": "namespaced",
+      "cohort_issue": 9,
+      "native_source_family": "apps",
+      "frozen_api_profiles": [
+        {
+          "api_version": "apps/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "apps-v1.20.0",
+        "apps-v1.21.0",
+        "apps-v1.22.0",
+        "apps-v1.23.0",
+        "apps-v1.24.0",
+        "apps-v1.25.0",
+        "apps-v1.26.0",
+        "apps-v1.27.0",
+        "apps-v1.28.0",
+        "apps-v1.29.0",
+        "apps-v1.30.0",
+        "apps-v1.31.0",
+        "apps-v1.32.0",
+        "apps-v1.33.0",
+        "apps-v1.34.0",
+        "apps-v1.35.0",
+        "apps-v1.36.0",
+        "apps-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "StatefulSet",
+      "scope": "namespaced",
+      "cohort_issue": 9,
+      "native_source_family": "apps",
+      "frozen_api_profiles": [
+        {
+          "api_version": "apps/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.26",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix"
+        },
+        {
+          "from": "1.27",
+          "through": "1.37",
+          "name_rule": "dns1123-label",
+          "generateName_rule": "native-dns1123-label-prefix"
+        }
+      ],
+      "evidence_source_ids": [
+        "apps-v1.20.0",
+        "apps-v1.21.0",
+        "apps-v1.22.0",
+        "apps-v1.23.0",
+        "apps-v1.24.0",
+        "apps-v1.25.0",
+        "apps-v1.26.0",
+        "apps-v1.27.0",
+        "apps-v1.28.0",
+        "apps-v1.29.0",
+        "apps-v1.30.0",
+        "apps-v1.31.0",
+        "apps-v1.32.0",
+        "apps-v1.33.0",
+        "apps-v1.34.0",
+        "apps-v1.35.0",
+        "apps-v1.36.0",
+        "apps-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "DaemonSet",
+      "scope": "namespaced",
+      "cohort_issue": 9,
+      "native_source_family": "apps",
+      "frozen_api_profiles": [
+        {
+          "api_version": "apps/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "apps-v1.20.0",
+        "apps-v1.21.0",
+        "apps-v1.22.0",
+        "apps-v1.23.0",
+        "apps-v1.24.0",
+        "apps-v1.25.0",
+        "apps-v1.26.0",
+        "apps-v1.27.0",
+        "apps-v1.28.0",
+        "apps-v1.29.0",
+        "apps-v1.30.0",
+        "apps-v1.31.0",
+        "apps-v1.32.0",
+        "apps-v1.33.0",
+        "apps-v1.34.0",
+        "apps-v1.35.0",
+        "apps-v1.36.0",
+        "apps-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "ReplicaSet",
+      "scope": "namespaced",
+      "cohort_issue": 9,
+      "native_source_family": "apps",
+      "frozen_api_profiles": [
+        {
+          "api_version": "apps/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "apps-v1.20.0",
+        "apps-v1.21.0",
+        "apps-v1.22.0",
+        "apps-v1.23.0",
+        "apps-v1.24.0",
+        "apps-v1.25.0",
+        "apps-v1.26.0",
+        "apps-v1.27.0",
+        "apps-v1.28.0",
+        "apps-v1.29.0",
+        "apps-v1.30.0",
+        "apps-v1.31.0",
+        "apps-v1.32.0",
+        "apps-v1.33.0",
+        "apps-v1.34.0",
+        "apps-v1.35.0",
+        "apps-v1.36.0",
+        "apps-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "ReplicationController",
+      "scope": "namespaced",
+      "cohort_issue": 9,
+      "native_source_family": "core",
+      "frozen_api_profiles": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.34",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix"
+        },
+        {
+          "from": "1.35",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "not-directly-checked-postgeneration-concrete-name-required"
+        }
+      ],
+      "evidence_source_ids": [
+        "core-v1.20.0",
+        "core-v1.21.0",
+        "core-v1.22.0",
+        "core-v1.23.0",
+        "core-v1.24.0",
+        "core-v1.25.0",
+        "core-v1.26.0",
+        "core-v1.27.0",
+        "core-v1.28.0",
+        "core-v1.29.0",
+        "core-v1.30.0",
+        "core-v1.31.0",
+        "core-v1.32.0",
+        "core-v1.33.0",
+        "core-v1.34.0",
+        "core-v1.35.0",
+        "core-v1.36.0",
+        "core-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "Job",
+      "scope": "namespaced",
+      "cohort_issue": 9,
+      "native_source_family": "batch",
+      "frozen_api_profiles": [
+        {
+          "api_version": "batch/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "batch-v1.20.0",
+        "batch-v1.21.0",
+        "batch-v1.22.0",
+        "batch-v1.23.0",
+        "batch-v1.24.0",
+        "batch-v1.25.0",
+        "batch-v1.26.0",
+        "batch-v1.27.0",
+        "batch-v1.28.0",
+        "batch-v1.29.0",
+        "batch-v1.30.0",
+        "batch-v1.31.0",
+        "batch-v1.32.0",
+        "batch-v1.33.0",
+        "batch-v1.34.0",
+        "batch-v1.35.0",
+        "batch-v1.36.0",
+        "batch-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "CronJob",
+      "scope": "namespaced",
+      "cohort_issue": 9,
+      "native_source_family": "batch",
+      "frozen_api_profiles": [
+        {
+          "api_version": "batch/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.21",
+              "through": "1.37"
+            }
+          ]
+        },
+        {
+          "api_version": "batch/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.24"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": 52
+        }
+      ],
+      "evidence_source_ids": [
+        "batch-v1.20.0",
+        "batch-v1.21.0",
+        "batch-v1.22.0",
+        "batch-v1.23.0",
+        "batch-v1.24.0",
+        "batch-v1.25.0",
+        "batch-v1.26.0",
+        "batch-v1.27.0",
+        "batch-v1.28.0",
+        "batch-v1.29.0",
+        "batch-v1.30.0",
+        "batch-v1.31.0",
+        "batch-v1.32.0",
+        "batch-v1.33.0",
+        "batch-v1.34.0",
+        "batch-v1.35.0",
+        "batch-v1.36.0",
+        "batch-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "Service",
+      "scope": "namespaced",
+      "cohort_issue": 10,
+      "native_source_family": "core",
+      "frozen_api_profiles": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1035-label-frozen-unrelaxed",
+          "generateName_rule": "native-dns1035-label-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "core-v1.20.0",
+        "core-v1.21.0",
+        "core-v1.22.0",
+        "core-v1.23.0",
+        "core-v1.24.0",
+        "core-v1.25.0",
+        "core-v1.26.0",
+        "core-v1.27.0",
+        "core-v1.28.0",
+        "core-v1.29.0",
+        "core-v1.30.0",
+        "core-v1.31.0",
+        "core-v1.32.0",
+        "core-v1.33.0",
+        "core-v1.34.0",
+        "core-v1.35.0",
+        "core-v1.36.0",
+        "core-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "Endpoints",
+      "scope": "namespaced",
+      "cohort_issue": 10,
+      "native_source_family": "core",
+      "frozen_api_profiles": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "core-v1.20.0",
+        "core-v1.21.0",
+        "core-v1.22.0",
+        "core-v1.23.0",
+        "core-v1.24.0",
+        "core-v1.25.0",
+        "core-v1.26.0",
+        "core-v1.27.0",
+        "core-v1.28.0",
+        "core-v1.29.0",
+        "core-v1.30.0",
+        "core-v1.31.0",
+        "core-v1.32.0",
+        "core-v1.33.0",
+        "core-v1.34.0",
+        "core-v1.35.0",
+        "core-v1.36.0",
+        "core-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "EndpointSlice",
+      "scope": "namespaced",
+      "cohort_issue": 10,
+      "native_source_family": "discovery",
+      "frozen_api_profiles": [
+        {
+          "api_version": "discovery.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.21",
+              "through": "1.37"
+            }
+          ]
+        },
+        {
+          "api_version": "discovery.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.24"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "discovery-v1.20.0",
+        "discovery-v1.21.0",
+        "discovery-v1.22.0",
+        "discovery-v1.23.0",
+        "discovery-v1.24.0",
+        "discovery-v1.25.0",
+        "discovery-v1.26.0",
+        "discovery-v1.27.0",
+        "discovery-v1.28.0",
+        "discovery-v1.29.0",
+        "discovery-v1.30.0",
+        "discovery-v1.31.0",
+        "discovery-v1.32.0",
+        "discovery-v1.33.0",
+        "discovery-v1.34.0",
+        "discovery-v1.35.0",
+        "discovery-v1.36.0",
+        "discovery-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "Ingress",
+      "scope": "namespaced",
+      "cohort_issue": 10,
+      "native_source_family": "networking",
+      "frozen_api_profiles": [
+        {
+          "api_version": "extensions/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.21"
+            }
+          ]
+        },
+        {
+          "api_version": "networking.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        },
+        {
+          "api_version": "networking.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.21"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "networking-v1.20.0",
+        "networking-v1.21.0",
+        "networking-v1.22.0",
+        "networking-v1.23.0",
+        "networking-v1.24.0",
+        "networking-v1.25.0",
+        "networking-v1.26.0",
+        "networking-v1.27.0",
+        "networking-v1.28.0",
+        "networking-v1.29.0",
+        "networking-v1.30.0",
+        "networking-v1.31.0",
+        "networking-v1.32.0",
+        "networking-v1.33.0",
+        "networking-v1.34.0",
+        "networking-v1.35.0",
+        "networking-v1.36.0",
+        "networking-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "IngressClass",
+      "scope": "cluster",
+      "cohort_issue": 10,
+      "native_source_family": "networking",
+      "frozen_api_profiles": [
+        {
+          "api_version": "networking.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        },
+        {
+          "api_version": "networking.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.21"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "networking-v1.20.0",
+        "networking-v1.21.0",
+        "networking-v1.22.0",
+        "networking-v1.23.0",
+        "networking-v1.24.0",
+        "networking-v1.25.0",
+        "networking-v1.26.0",
+        "networking-v1.27.0",
+        "networking-v1.28.0",
+        "networking-v1.29.0",
+        "networking-v1.30.0",
+        "networking-v1.31.0",
+        "networking-v1.32.0",
+        "networking-v1.33.0",
+        "networking-v1.34.0",
+        "networking-v1.35.0",
+        "networking-v1.36.0",
+        "networking-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "NetworkPolicy",
+      "scope": "namespaced",
+      "cohort_issue": 10,
+      "native_source_family": "networking",
+      "frozen_api_profiles": [
+        {
+          "api_version": "networking.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "networking-v1.20.0",
+        "networking-v1.21.0",
+        "networking-v1.22.0",
+        "networking-v1.23.0",
+        "networking-v1.24.0",
+        "networking-v1.25.0",
+        "networking-v1.26.0",
+        "networking-v1.27.0",
+        "networking-v1.28.0",
+        "networking-v1.29.0",
+        "networking-v1.30.0",
+        "networking-v1.31.0",
+        "networking-v1.32.0",
+        "networking-v1.33.0",
+        "networking-v1.34.0",
+        "networking-v1.35.0",
+        "networking-v1.36.0",
+        "networking-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "ConfigMap",
+      "scope": "namespaced",
+      "cohort_issue": 11,
+      "native_source_family": "core",
+      "frozen_api_profiles": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "core-v1.20.0",
+        "core-v1.21.0",
+        "core-v1.22.0",
+        "core-v1.23.0",
+        "core-v1.24.0",
+        "core-v1.25.0",
+        "core-v1.26.0",
+        "core-v1.27.0",
+        "core-v1.28.0",
+        "core-v1.29.0",
+        "core-v1.30.0",
+        "core-v1.31.0",
+        "core-v1.32.0",
+        "core-v1.33.0",
+        "core-v1.34.0",
+        "core-v1.35.0",
+        "core-v1.36.0",
+        "core-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "Secret",
+      "scope": "namespaced",
+      "cohort_issue": 11,
+      "native_source_family": "core",
+      "frozen_api_profiles": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "core-v1.20.0",
+        "core-v1.21.0",
+        "core-v1.22.0",
+        "core-v1.23.0",
+        "core-v1.24.0",
+        "core-v1.25.0",
+        "core-v1.26.0",
+        "core-v1.27.0",
+        "core-v1.28.0",
+        "core-v1.29.0",
+        "core-v1.30.0",
+        "core-v1.31.0",
+        "core-v1.32.0",
+        "core-v1.33.0",
+        "core-v1.34.0",
+        "core-v1.35.0",
+        "core-v1.36.0",
+        "core-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "PersistentVolumeClaim",
+      "scope": "namespaced",
+      "cohort_issue": 11,
+      "native_source_family": "core",
+      "frozen_api_profiles": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "core-v1.20.0",
+        "core-v1.21.0",
+        "core-v1.22.0",
+        "core-v1.23.0",
+        "core-v1.24.0",
+        "core-v1.25.0",
+        "core-v1.26.0",
+        "core-v1.27.0",
+        "core-v1.28.0",
+        "core-v1.29.0",
+        "core-v1.30.0",
+        "core-v1.31.0",
+        "core-v1.32.0",
+        "core-v1.33.0",
+        "core-v1.34.0",
+        "core-v1.35.0",
+        "core-v1.36.0",
+        "core-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "PersistentVolume",
+      "scope": "cluster",
+      "cohort_issue": 11,
+      "native_source_family": "core",
+      "frozen_api_profiles": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "core-v1.20.0",
+        "core-v1.21.0",
+        "core-v1.22.0",
+        "core-v1.23.0",
+        "core-v1.24.0",
+        "core-v1.25.0",
+        "core-v1.26.0",
+        "core-v1.27.0",
+        "core-v1.28.0",
+        "core-v1.29.0",
+        "core-v1.30.0",
+        "core-v1.31.0",
+        "core-v1.32.0",
+        "core-v1.33.0",
+        "core-v1.34.0",
+        "core-v1.35.0",
+        "core-v1.36.0",
+        "core-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "StorageClass",
+      "scope": "cluster",
+      "cohort_issue": 11,
+      "native_source_family": "storage",
+      "frozen_api_profiles": [
+        {
+          "api_version": "storage.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "storage-v1.20.0",
+        "storage-v1.21.0",
+        "storage-v1.22.0",
+        "storage-v1.23.0",
+        "storage-v1.24.0",
+        "storage-v1.25.0",
+        "storage-v1.26.0",
+        "storage-v1.27.0",
+        "storage-v1.28.0",
+        "storage-v1.29.0",
+        "storage-v1.30.0",
+        "storage-v1.31.0",
+        "storage-v1.32.0",
+        "storage-v1.33.0",
+        "storage-v1.34.0",
+        "storage-v1.35.0",
+        "storage-v1.36.0",
+        "storage-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "Namespace",
+      "scope": "cluster",
+      "cohort_issue": 12,
+      "native_source_family": "core",
+      "frozen_api_profiles": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-label",
+          "generateName_rule": "native-dns1123-label-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "core-v1.20.0",
+        "core-v1.21.0",
+        "core-v1.22.0",
+        "core-v1.23.0",
+        "core-v1.24.0",
+        "core-v1.25.0",
+        "core-v1.26.0",
+        "core-v1.27.0",
+        "core-v1.28.0",
+        "core-v1.29.0",
+        "core-v1.30.0",
+        "core-v1.31.0",
+        "core-v1.32.0",
+        "core-v1.33.0",
+        "core-v1.34.0",
+        "core-v1.35.0",
+        "core-v1.36.0",
+        "core-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "ServiceAccount",
+      "scope": "namespaced",
+      "cohort_issue": 12,
+      "native_source_family": "core",
+      "frozen_api_profiles": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "core-v1.20.0",
+        "core-v1.21.0",
+        "core-v1.22.0",
+        "core-v1.23.0",
+        "core-v1.24.0",
+        "core-v1.25.0",
+        "core-v1.26.0",
+        "core-v1.27.0",
+        "core-v1.28.0",
+        "core-v1.29.0",
+        "core-v1.30.0",
+        "core-v1.31.0",
+        "core-v1.32.0",
+        "core-v1.33.0",
+        "core-v1.34.0",
+        "core-v1.35.0",
+        "core-v1.36.0",
+        "core-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "Role",
+      "scope": "namespaced",
+      "cohort_issue": 12,
+      "native_source_family": "rbac",
+      "frozen_api_profiles": [
+        {
+          "api_version": "rbac.authorization.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "path-segment",
+          "generateName_rule": "full-path-segment-ignoring-prefix"
+        }
+      ],
+      "evidence_source_ids": [
+        "rbac-v1.20.0",
+        "rbac-v1.21.0",
+        "rbac-v1.22.0",
+        "rbac-v1.23.0",
+        "rbac-v1.24.0",
+        "rbac-v1.25.0",
+        "rbac-v1.26.0",
+        "rbac-v1.27.0",
+        "rbac-v1.28.0",
+        "rbac-v1.29.0",
+        "rbac-v1.30.0",
+        "rbac-v1.31.0",
+        "rbac-v1.32.0",
+        "rbac-v1.33.0",
+        "rbac-v1.34.0",
+        "rbac-v1.35.0",
+        "rbac-v1.36.0",
+        "rbac-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "RoleBinding",
+      "scope": "namespaced",
+      "cohort_issue": 12,
+      "native_source_family": "rbac",
+      "frozen_api_profiles": [
+        {
+          "api_version": "rbac.authorization.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "path-segment",
+          "generateName_rule": "full-path-segment-ignoring-prefix"
+        }
+      ],
+      "evidence_source_ids": [
+        "rbac-v1.20.0",
+        "rbac-v1.21.0",
+        "rbac-v1.22.0",
+        "rbac-v1.23.0",
+        "rbac-v1.24.0",
+        "rbac-v1.25.0",
+        "rbac-v1.26.0",
+        "rbac-v1.27.0",
+        "rbac-v1.28.0",
+        "rbac-v1.29.0",
+        "rbac-v1.30.0",
+        "rbac-v1.31.0",
+        "rbac-v1.32.0",
+        "rbac-v1.33.0",
+        "rbac-v1.34.0",
+        "rbac-v1.35.0",
+        "rbac-v1.36.0",
+        "rbac-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "ClusterRole",
+      "scope": "cluster",
+      "cohort_issue": 12,
+      "native_source_family": "rbac",
+      "frozen_api_profiles": [
+        {
+          "api_version": "rbac.authorization.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "path-segment",
+          "generateName_rule": "full-path-segment-ignoring-prefix"
+        }
+      ],
+      "evidence_source_ids": [
+        "rbac-v1.20.0",
+        "rbac-v1.21.0",
+        "rbac-v1.22.0",
+        "rbac-v1.23.0",
+        "rbac-v1.24.0",
+        "rbac-v1.25.0",
+        "rbac-v1.26.0",
+        "rbac-v1.27.0",
+        "rbac-v1.28.0",
+        "rbac-v1.29.0",
+        "rbac-v1.30.0",
+        "rbac-v1.31.0",
+        "rbac-v1.32.0",
+        "rbac-v1.33.0",
+        "rbac-v1.34.0",
+        "rbac-v1.35.0",
+        "rbac-v1.36.0",
+        "rbac-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "ClusterRoleBinding",
+      "scope": "cluster",
+      "cohort_issue": 12,
+      "native_source_family": "rbac",
+      "frozen_api_profiles": [
+        {
+          "api_version": "rbac.authorization.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "path-segment",
+          "generateName_rule": "full-path-segment-ignoring-prefix"
+        }
+      ],
+      "evidence_source_ids": [
+        "rbac-v1.20.0",
+        "rbac-v1.21.0",
+        "rbac-v1.22.0",
+        "rbac-v1.23.0",
+        "rbac-v1.24.0",
+        "rbac-v1.25.0",
+        "rbac-v1.26.0",
+        "rbac-v1.27.0",
+        "rbac-v1.28.0",
+        "rbac-v1.29.0",
+        "rbac-v1.30.0",
+        "rbac-v1.31.0",
+        "rbac-v1.32.0",
+        "rbac-v1.33.0",
+        "rbac-v1.34.0",
+        "rbac-v1.35.0",
+        "rbac-v1.36.0",
+        "rbac-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "HorizontalPodAutoscaler",
+      "scope": "namespaced",
+      "cohort_issue": 12,
+      "native_source_family": "autoscaling",
+      "frozen_api_profiles": [
+        {
+          "api_version": "autoscaling/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        },
+        {
+          "api_version": "autoscaling/v2",
+          "target_availability_ranges": [
+            {
+              "from": "1.23",
+              "through": "1.37"
+            }
+          ]
+        },
+        {
+          "api_version": "autoscaling/v2beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.24"
+            }
+          ]
+        },
+        {
+          "api_version": "autoscaling/v2beta2",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.25"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "autoscaling-v1.20.0",
+        "autoscaling-v1.21.0",
+        "autoscaling-v1.22.0",
+        "autoscaling-v1.23.0",
+        "autoscaling-v1.24.0",
+        "autoscaling-v1.25.0",
+        "autoscaling-v1.26.0",
+        "autoscaling-v1.27.0",
+        "autoscaling-v1.28.0",
+        "autoscaling-v1.29.0",
+        "autoscaling-v1.30.0",
+        "autoscaling-v1.31.0",
+        "autoscaling-v1.32.0",
+        "autoscaling-v1.33.0",
+        "autoscaling-v1.34.0",
+        "autoscaling-v1.35.0",
+        "autoscaling-v1.36.0",
+        "autoscaling-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "PodDisruptionBudget",
+      "scope": "namespaced",
+      "cohort_issue": 12,
+      "native_source_family": "policy",
+      "frozen_api_profiles": [
+        {
+          "api_version": "policy/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.21",
+              "through": "1.37"
+            }
+          ]
+        },
+        {
+          "api_version": "policy/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.24"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "path-segment",
+          "generateName_rule": "path-prefix"
+        }
+      ],
+      "evidence_source_ids": [
+        "policy-v1.20.0",
+        "policy-v1.21.0",
+        "policy-v1.22.0",
+        "policy-v1.23.0",
+        "policy-v1.24.0",
+        "policy-v1.25.0",
+        "policy-v1.26.0",
+        "policy-v1.27.0",
+        "policy-v1.28.0",
+        "policy-v1.29.0",
+        "policy-v1.30.0",
+        "policy-v1.31.0",
+        "policy-v1.32.0",
+        "policy-v1.33.0",
+        "policy-v1.34.0",
+        "policy-v1.35.0",
+        "policy-v1.36.0",
+        "policy-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "ResourceQuota",
+      "scope": "namespaced",
+      "cohort_issue": 12,
+      "native_source_family": "core",
+      "frozen_api_profiles": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "core-v1.20.0",
+        "core-v1.21.0",
+        "core-v1.22.0",
+        "core-v1.23.0",
+        "core-v1.24.0",
+        "core-v1.25.0",
+        "core-v1.26.0",
+        "core-v1.27.0",
+        "core-v1.28.0",
+        "core-v1.29.0",
+        "core-v1.30.0",
+        "core-v1.31.0",
+        "core-v1.32.0",
+        "core-v1.33.0",
+        "core-v1.34.0",
+        "core-v1.35.0",
+        "core-v1.36.0",
+        "core-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "LimitRange",
+      "scope": "namespaced",
+      "cohort_issue": 12,
+      "native_source_family": "core",
+      "frozen_api_profiles": [
+        {
+          "api_version": "v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "core-v1.20.0",
+        "core-v1.21.0",
+        "core-v1.22.0",
+        "core-v1.23.0",
+        "core-v1.24.0",
+        "core-v1.25.0",
+        "core-v1.26.0",
+        "core-v1.27.0",
+        "core-v1.28.0",
+        "core-v1.29.0",
+        "core-v1.30.0",
+        "core-v1.31.0",
+        "core-v1.32.0",
+        "core-v1.33.0",
+        "core-v1.34.0",
+        "core-v1.35.0",
+        "core-v1.36.0",
+        "core-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "PriorityClass",
+      "scope": "cluster",
+      "cohort_issue": 12,
+      "native_source_family": "scheduling",
+      "frozen_api_profiles": [
+        {
+          "api_version": "scheduling.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "scheduling-v1.20.0",
+        "scheduling-v1.21.0",
+        "scheduling-v1.22.0",
+        "scheduling-v1.23.0",
+        "scheduling-v1.24.0",
+        "scheduling-v1.25.0",
+        "scheduling-v1.26.0",
+        "scheduling-v1.27.0",
+        "scheduling-v1.28.0",
+        "scheduling-v1.29.0",
+        "scheduling-v1.30.0",
+        "scheduling-v1.31.0",
+        "scheduling-v1.32.0",
+        "scheduling-v1.33.0",
+        "scheduling-v1.34.0",
+        "scheduling-v1.35.0",
+        "scheduling-v1.36.0",
+        "scheduling-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "RuntimeClass",
+      "scope": "cluster",
+      "cohort_issue": 12,
+      "native_source_family": "node",
+      "frozen_api_profiles": [
+        {
+          "api_version": "node.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        },
+        {
+          "api_version": "node.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.24"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "node-v1.20.0",
+        "node-v1.21.0",
+        "node-v1.22.0",
+        "node-v1.23.0",
+        "node-v1.24.0",
+        "node-v1.25.0",
+        "node-v1.26.0",
+        "node-v1.27.0",
+        "node-v1.28.0",
+        "node-v1.29.0",
+        "node-v1.30.0",
+        "node-v1.31.0",
+        "node-v1.32.0",
+        "node-v1.33.0",
+        "node-v1.34.0",
+        "node-v1.35.0",
+        "node-v1.36.0",
+        "node-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "PodSecurityPolicy",
+      "scope": "cluster",
+      "cohort_issue": 12,
+      "native_source_family": "policy",
+      "frozen_api_profiles": [
+        {
+          "api_version": "policy/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.24"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "policy-v1.20.0",
+        "policy-v1.21.0",
+        "policy-v1.22.0",
+        "policy-v1.23.0",
+        "policy-v1.24.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24"
+      ]
+    },
+    {
+      "kind": "CustomResourceDefinition",
+      "scope": "cluster",
+      "cohort_issue": 13,
+      "native_source_family": "crd",
+      "frozen_api_profiles": [
+        {
+          "api_version": "apiextensions.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        },
+        {
+          "api_version": "apiextensions.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.21"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain-and-plural-dot-group",
+          "generateName_rule": "same-crd-exact-equality-plus-native-dns-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "crd-v1.20.0",
+        "crd-v1.21.0",
+        "crd-v1.22.0",
+        "crd-v1.23.0",
+        "crd-v1.24.0",
+        "crd-v1.25.0",
+        "crd-v1.26.0",
+        "crd-v1.27.0",
+        "crd-v1.28.0",
+        "crd-v1.29.0",
+        "crd-v1.30.0",
+        "crd-v1.31.0",
+        "crd-v1.32.0",
+        "crd-v1.33.0",
+        "crd-v1.34.0",
+        "crd-v1.35.0",
+        "crd-v1.36.0",
+        "crd-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "MutatingWebhookConfiguration",
+      "scope": "cluster",
+      "cohort_issue": 13,
+      "native_source_family": "admissionregistration",
+      "frozen_api_profiles": [
+        {
+          "api_version": "admissionregistration.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        },
+        {
+          "api_version": "admissionregistration.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.21"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "admissionregistration-v1.20.0",
+        "admissionregistration-v1.21.0",
+        "admissionregistration-v1.22.0",
+        "admissionregistration-v1.23.0",
+        "admissionregistration-v1.24.0",
+        "admissionregistration-v1.25.0",
+        "admissionregistration-v1.26.0",
+        "admissionregistration-v1.27.0",
+        "admissionregistration-v1.28.0",
+        "admissionregistration-v1.29.0",
+        "admissionregistration-v1.30.0",
+        "admissionregistration-v1.31.0",
+        "admissionregistration-v1.32.0",
+        "admissionregistration-v1.33.0",
+        "admissionregistration-v1.34.0",
+        "admissionregistration-v1.35.0",
+        "admissionregistration-v1.36.0",
+        "admissionregistration-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    },
+    {
+      "kind": "ValidatingWebhookConfiguration",
+      "scope": "cluster",
+      "cohort_issue": 13,
+      "native_source_family": "admissionregistration",
+      "frozen_api_profiles": [
+        {
+          "api_version": "admissionregistration.k8s.io/v1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.37"
+            }
+          ]
+        },
+        {
+          "api_version": "admissionregistration.k8s.io/v1beta1",
+          "target_availability_ranges": [
+            {
+              "from": "1.20",
+              "through": "1.21"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "from": "1.20",
+          "through": "1.37",
+          "name_rule": "dns1123-subdomain",
+          "generateName_rule": "native-dns-subdomain-prefix",
+          "creation_only_concrete_name_max_utf8_bytes": null
+        }
+      ],
+      "evidence_source_ids": [
+        "admissionregistration-v1.20.0",
+        "admissionregistration-v1.21.0",
+        "admissionregistration-v1.22.0",
+        "admissionregistration-v1.23.0",
+        "admissionregistration-v1.24.0",
+        "admissionregistration-v1.25.0",
+        "admissionregistration-v1.26.0",
+        "admissionregistration-v1.27.0",
+        "admissionregistration-v1.28.0",
+        "admissionregistration-v1.29.0",
+        "admissionregistration-v1.30.0",
+        "admissionregistration-v1.31.0",
+        "admissionregistration-v1.32.0",
+        "admissionregistration-v1.33.0",
+        "admissionregistration-v1.34.0",
+        "admissionregistration-v1.35.0",
+        "admissionregistration-v1.36.0",
+        "admissionregistration-v1.37.0"
+      ],
+      "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
+      "scope_expansion": false,
+      "frozen_kind_supported_target_minors": [
+        "1.20",
+        "1.21",
+        "1.22",
+        "1.23",
+        "1.24",
+        "1.25",
+        "1.26",
+        "1.27",
+        "1.28",
+        "1.29",
+        "1.30",
+        "1.31",
+        "1.32",
+        "1.33",
+        "1.34",
+        "1.35",
+        "1.36",
+        "1.37"
+      ]
+    }
+  ],
+  "all18_observations": [
+    {
+      "minor": "1.20",
+      "upstream_tag": "v1.20.0",
+      "commit": "af46c47ce925f4c4ad5cc8d1fca46c7b77d13b38",
+      "dns_prefix_lone_dash_guard": false,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-subdomain",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJob",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.21",
+      "upstream_tag": "v1.21.0",
+      "commit": "cb303e613a121a29364f75cc67d3d580833a7479",
+      "dns_prefix_lone_dash_guard": false,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-subdomain",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJob",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.22",
+      "upstream_tag": "v1.22.0",
+      "commit": "c2b5237ccd9c0f1d600d3072634ca66cefdf272f",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-subdomain",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJob",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.23",
+      "upstream_tag": "v1.23.0",
+      "commit": "ab69524f795c42094a6630298ff53f3c3ebab7f4",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-subdomain",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJob",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.24",
+      "upstream_tag": "v1.24.0",
+      "commit": "4ce5a8954017644c5420bae81d72b09b735c21f0",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-subdomain",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.25",
+      "upstream_tag": "v1.25.0",
+      "commit": "a866cbe2e5bbaa01cfd5e969aa3e033f3282a8a2",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-subdomain",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.26",
+      "upstream_tag": "v1.26.0",
+      "commit": "b46a3f887ca979b1a5d14fd39cb1af43e7e5d12d",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-subdomain",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.27",
+      "upstream_tag": "v1.27.0",
+      "commit": "1b4df30b3cdfeaba6024e81e559a6cd09a089d65",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-label",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.28",
+      "upstream_tag": "v1.28.0",
+      "commit": "855e7c48de7388eb330da0f8d9d2394ee818fb8d",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-label",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.29",
+      "upstream_tag": "v1.29.0",
+      "commit": "3f7a50f38688eb332e2a1b013678c6435d539ae6",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-label",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.30",
+      "upstream_tag": "v1.30.0",
+      "commit": "7c48c2bd72b9bf5c44d21d7338cc7bea77d0ad2a",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-label",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.31",
+      "upstream_tag": "v1.31.0",
+      "commit": "9edcffcde5595e8a5b1a35f88c421764e575afce",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-label",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.32",
+      "upstream_tag": "v1.32.0",
+      "commit": "70d3cc986aa8221cd1dfb1121852688902d3bf53",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-label",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.33",
+      "upstream_tag": "v1.33.0",
+      "commit": "60a317eadfcb839692a68eab88b2096f4d708f4f",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-label",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": false,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.34",
+      "upstream_tag": "v1.34.0",
+      "commit": "f28b4c9efbca5c5c0af716d9f2d5702667ee8a45",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-label",
+      "replicationcontroller_direct_generateName_check": true,
+      "service_relaxed_branch_present": true,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.35",
+      "upstream_tag": "v1.35.0",
+      "commit": "66452049f3d692768c39c797b21b793dce80314e",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-label",
+      "replicationcontroller_direct_generateName_check": false,
+      "service_relaxed_branch_present": true,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "path",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.36",
+      "upstream_tag": "v1.36.0",
+      "commit": "ecf6decece6a6de25a57aad9ba90b6ce580f6f78",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-label",
+      "replicationcontroller_direct_generateName_check": false,
+      "service_relaxed_branch_present": true,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "content",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    },
+    {
+      "minor": "1.37",
+      "upstream_tag": "v1.37.0",
+      "commit": "f54c212e3a2f75d674b717a9b29052b20b60aefc",
+      "dns_prefix_lone_dash_guard": true,
+      "dns_prefix_mask_semantics": "terminal dash substitutes final two UTF-8 bytes with ASCII a; original identity retained",
+      "statefulset_name_rule": "dns1123-label",
+      "replicationcontroller_direct_generateName_check": false,
+      "service_relaxed_branch_present": true,
+      "rbac_prefix_rule": "full-path-segment-ignores-prefix",
+      "rbac_helper": "content",
+      "pdb_specialized_validator_checks_metadata": false,
+      "pdb_rule": "generic REST full-path-segment and path-prefix",
+      "cronjob_create_function": "ValidateCronJobCreate",
+      "cronjob_create_concrete_name_max_utf8_bytes": 52,
+      "cronjob_update_same_cap": false,
+      "crd_rule": "dns1123-subdomain + exact plural.group for name and directly checked prefix"
+    }
+  ],
+  "owner_reference_contract": {
+    "name": "nonempty bounded private Unicode, no universal DNS restriction",
+    "target_kind_validation": "only exact supplied GVK/target/scope and separately evidenced binding",
+    "uid": "exact evidence when supplied; never fabricated",
+    "source": "objectmeta all18 named helper witnesses"
+  },
+  "no_profile": "identity acquisition and preservation only; target-dependent native validity unverified, no assumed latest/default target",
+  "documented_vs_observed_conflicts": [
+    "Current names documentation describes alphabetic start for RFC1123 labels; exact native helpers permit digits.",
+    "Current CronJob docs state52 without create/update distinction; native source applies cap only creation.",
+    "Generic prefix comments describe replacing final character; observed native operation replaces final two bytes with a."
+  ],
+  "evidence_limitations": [
+    "No apiserver/runtime/name generator executed.",
+    "Naming constraints alone never prove whole native resource validity.",
+    "No Update validation/old-object guarantees or generated-name identity/suffix behavior.",
+    "All rows intersect exact frozen API availability; unavailable APIs remain unavailable.",
+    "Unadmitted relaxed service gate remains outside scope even after native GA."
+  ],
+  "all18_alias_and_entrypoint_checks": {
+    "alias_checks": [
+      {
+        "minor": "1.20",
+        "source_id": "core-v1.20.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 215
+      },
+      {
+        "minor": "1.20",
+        "source_id": "core-v1.20.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 221
+      },
+      {
+        "minor": "1.20",
+        "source_id": "core-v1.20.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 226
+      },
+      {
+        "minor": "1.20",
+        "source_id": "core-v1.20.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 236
+      },
+      {
+        "minor": "1.20",
+        "source_id": "core-v1.20.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 241
+      },
+      {
+        "minor": "1.20",
+        "source_id": "core-v1.20.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 247
+      },
+      {
+        "minor": "1.20",
+        "source_id": "core-v1.20.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 252
+      },
+      {
+        "minor": "1.20",
+        "source_id": "core-v1.20.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 257
+      },
+      {
+        "minor": "1.20",
+        "source_id": "core-v1.20.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 262
+      },
+      {
+        "minor": "1.20",
+        "source_id": "core-v1.20.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 270
+      },
+      {
+        "minor": "1.20",
+        "source_id": "core-v1.20.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1630
+      },
+      {
+        "minor": "1.20",
+        "source_id": "core-v1.20.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 5250
+      },
+      {
+        "minor": "1.20",
+        "source_id": "apps-v1.20.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 382
+      },
+      {
+        "minor": "1.20",
+        "source_id": "apps-v1.20.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 379
+      },
+      {
+        "minor": "1.20",
+        "source_id": "apps-v1.20.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 587
+      },
+      {
+        "minor": "1.20",
+        "source_id": "discovery-v1.20.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 50
+      },
+      {
+        "minor": "1.20",
+        "source_id": "networking-v1.20.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 198
+      },
+      {
+        "minor": "1.20",
+        "source_id": "networking-v1.20.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 482
+      },
+      {
+        "minor": "1.20",
+        "source_id": "policy-v1.20.0",
+        "symbol": "ValidatePodSecurityPolicyName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 86
+      },
+      {
+        "minor": "1.21",
+        "source_id": "core-v1.21.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 229
+      },
+      {
+        "minor": "1.21",
+        "source_id": "core-v1.21.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 235
+      },
+      {
+        "minor": "1.21",
+        "source_id": "core-v1.21.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 240
+      },
+      {
+        "minor": "1.21",
+        "source_id": "core-v1.21.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 250
+      },
+      {
+        "minor": "1.21",
+        "source_id": "core-v1.21.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 255
+      },
+      {
+        "minor": "1.21",
+        "source_id": "core-v1.21.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 261
+      },
+      {
+        "minor": "1.21",
+        "source_id": "core-v1.21.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 266
+      },
+      {
+        "minor": "1.21",
+        "source_id": "core-v1.21.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 271
+      },
+      {
+        "minor": "1.21",
+        "source_id": "core-v1.21.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 276
+      },
+      {
+        "minor": "1.21",
+        "source_id": "core-v1.21.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 284
+      },
+      {
+        "minor": "1.21",
+        "source_id": "core-v1.21.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1644
+      },
+      {
+        "minor": "1.21",
+        "source_id": "core-v1.21.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 5288
+      },
+      {
+        "minor": "1.21",
+        "source_id": "apps-v1.21.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 399
+      },
+      {
+        "minor": "1.21",
+        "source_id": "apps-v1.21.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 396
+      },
+      {
+        "minor": "1.21",
+        "source_id": "apps-v1.21.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 604
+      },
+      {
+        "minor": "1.21",
+        "source_id": "discovery-v1.21.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 54
+      },
+      {
+        "minor": "1.21",
+        "source_id": "networking-v1.21.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 221
+      },
+      {
+        "minor": "1.21",
+        "source_id": "networking-v1.21.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 505
+      },
+      {
+        "minor": "1.21",
+        "source_id": "policy-v1.21.0",
+        "symbol": "ValidatePodSecurityPolicyName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 93
+      },
+      {
+        "minor": "1.22",
+        "source_id": "core-v1.22.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 228
+      },
+      {
+        "minor": "1.22",
+        "source_id": "core-v1.22.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 234
+      },
+      {
+        "minor": "1.22",
+        "source_id": "core-v1.22.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 239
+      },
+      {
+        "minor": "1.22",
+        "source_id": "core-v1.22.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 249
+      },
+      {
+        "minor": "1.22",
+        "source_id": "core-v1.22.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 254
+      },
+      {
+        "minor": "1.22",
+        "source_id": "core-v1.22.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 260
+      },
+      {
+        "minor": "1.22",
+        "source_id": "core-v1.22.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 265
+      },
+      {
+        "minor": "1.22",
+        "source_id": "core-v1.22.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 270
+      },
+      {
+        "minor": "1.22",
+        "source_id": "core-v1.22.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 275
+      },
+      {
+        "minor": "1.22",
+        "source_id": "core-v1.22.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 283
+      },
+      {
+        "minor": "1.22",
+        "source_id": "core-v1.22.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1650
+      },
+      {
+        "minor": "1.22",
+        "source_id": "core-v1.22.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 5359
+      },
+      {
+        "minor": "1.22",
+        "source_id": "apps-v1.22.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 423
+      },
+      {
+        "minor": "1.22",
+        "source_id": "apps-v1.22.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 420
+      },
+      {
+        "minor": "1.22",
+        "source_id": "apps-v1.22.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 628
+      },
+      {
+        "minor": "1.22",
+        "source_id": "discovery-v1.22.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 54
+      },
+      {
+        "minor": "1.22",
+        "source_id": "networking-v1.22.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 221
+      },
+      {
+        "minor": "1.22",
+        "source_id": "networking-v1.22.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 503
+      },
+      {
+        "minor": "1.22",
+        "source_id": "policy-v1.22.0",
+        "symbol": "ValidatePodSecurityPolicyName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 93
+      },
+      {
+        "minor": "1.23",
+        "source_id": "core-v1.23.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 242
+      },
+      {
+        "minor": "1.23",
+        "source_id": "core-v1.23.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 248
+      },
+      {
+        "minor": "1.23",
+        "source_id": "core-v1.23.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 253
+      },
+      {
+        "minor": "1.23",
+        "source_id": "core-v1.23.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 263
+      },
+      {
+        "minor": "1.23",
+        "source_id": "core-v1.23.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 268
+      },
+      {
+        "minor": "1.23",
+        "source_id": "core-v1.23.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 274
+      },
+      {
+        "minor": "1.23",
+        "source_id": "core-v1.23.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 279
+      },
+      {
+        "minor": "1.23",
+        "source_id": "core-v1.23.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 284
+      },
+      {
+        "minor": "1.23",
+        "source_id": "core-v1.23.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 289
+      },
+      {
+        "minor": "1.23",
+        "source_id": "core-v1.23.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 297
+      },
+      {
+        "minor": "1.23",
+        "source_id": "core-v1.23.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1667
+      },
+      {
+        "minor": "1.23",
+        "source_id": "core-v1.23.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 5615
+      },
+      {
+        "minor": "1.23",
+        "source_id": "apps-v1.23.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 447
+      },
+      {
+        "minor": "1.23",
+        "source_id": "apps-v1.23.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 444
+      },
+      {
+        "minor": "1.23",
+        "source_id": "apps-v1.23.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 652
+      },
+      {
+        "minor": "1.23",
+        "source_id": "discovery-v1.23.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 54
+      },
+      {
+        "minor": "1.23",
+        "source_id": "networking-v1.23.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 216
+      },
+      {
+        "minor": "1.23",
+        "source_id": "networking-v1.23.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 454
+      },
+      {
+        "minor": "1.23",
+        "source_id": "policy-v1.23.0",
+        "symbol": "ValidatePodSecurityPolicyName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 93
+      },
+      {
+        "minor": "1.24",
+        "source_id": "core-v1.24.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 241
+      },
+      {
+        "minor": "1.24",
+        "source_id": "core-v1.24.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 247
+      },
+      {
+        "minor": "1.24",
+        "source_id": "core-v1.24.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 252
+      },
+      {
+        "minor": "1.24",
+        "source_id": "core-v1.24.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 262
+      },
+      {
+        "minor": "1.24",
+        "source_id": "core-v1.24.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 267
+      },
+      {
+        "minor": "1.24",
+        "source_id": "core-v1.24.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 273
+      },
+      {
+        "minor": "1.24",
+        "source_id": "core-v1.24.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 278
+      },
+      {
+        "minor": "1.24",
+        "source_id": "core-v1.24.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 283
+      },
+      {
+        "minor": "1.24",
+        "source_id": "core-v1.24.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 288
+      },
+      {
+        "minor": "1.24",
+        "source_id": "core-v1.24.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 293
+      },
+      {
+        "minor": "1.24",
+        "source_id": "core-v1.24.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1663
+      },
+      {
+        "minor": "1.24",
+        "source_id": "core-v1.24.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 5609
+      },
+      {
+        "minor": "1.24",
+        "source_id": "apps-v1.24.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 465
+      },
+      {
+        "minor": "1.24",
+        "source_id": "apps-v1.24.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 462
+      },
+      {
+        "minor": "1.24",
+        "source_id": "apps-v1.24.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 670
+      },
+      {
+        "minor": "1.24",
+        "source_id": "discovery-v1.24.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 54
+      },
+      {
+        "minor": "1.24",
+        "source_id": "networking-v1.24.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 221
+      },
+      {
+        "minor": "1.24",
+        "source_id": "networking-v1.24.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 459
+      },
+      {
+        "minor": "1.24",
+        "source_id": "policy-v1.24.0",
+        "symbol": "ValidatePodSecurityPolicyName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 92
+      },
+      {
+        "minor": "1.25",
+        "source_id": "core-v1.25.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 240
+      },
+      {
+        "minor": "1.25",
+        "source_id": "core-v1.25.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 246
+      },
+      {
+        "minor": "1.25",
+        "source_id": "core-v1.25.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 251
+      },
+      {
+        "minor": "1.25",
+        "source_id": "core-v1.25.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 261
+      },
+      {
+        "minor": "1.25",
+        "source_id": "core-v1.25.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 266
+      },
+      {
+        "minor": "1.25",
+        "source_id": "core-v1.25.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 272
+      },
+      {
+        "minor": "1.25",
+        "source_id": "core-v1.25.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 277
+      },
+      {
+        "minor": "1.25",
+        "source_id": "core-v1.25.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 282
+      },
+      {
+        "minor": "1.25",
+        "source_id": "core-v1.25.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 287
+      },
+      {
+        "minor": "1.25",
+        "source_id": "core-v1.25.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 292
+      },
+      {
+        "minor": "1.25",
+        "source_id": "core-v1.25.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1656
+      },
+      {
+        "minor": "1.25",
+        "source_id": "core-v1.25.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 5689
+      },
+      {
+        "minor": "1.25",
+        "source_id": "apps-v1.25.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 441
+      },
+      {
+        "minor": "1.25",
+        "source_id": "apps-v1.25.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 438
+      },
+      {
+        "minor": "1.25",
+        "source_id": "apps-v1.25.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 646
+      },
+      {
+        "minor": "1.25",
+        "source_id": "discovery-v1.25.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 54
+      },
+      {
+        "minor": "1.25",
+        "source_id": "networking-v1.25.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 222
+      },
+      {
+        "minor": "1.25",
+        "source_id": "networking-v1.25.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 460
+      },
+      {
+        "minor": "1.26",
+        "source_id": "core-v1.26.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 240
+      },
+      {
+        "minor": "1.26",
+        "source_id": "core-v1.26.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 246
+      },
+      {
+        "minor": "1.26",
+        "source_id": "core-v1.26.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 251
+      },
+      {
+        "minor": "1.26",
+        "source_id": "core-v1.26.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 261
+      },
+      {
+        "minor": "1.26",
+        "source_id": "core-v1.26.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 266
+      },
+      {
+        "minor": "1.26",
+        "source_id": "core-v1.26.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 272
+      },
+      {
+        "minor": "1.26",
+        "source_id": "core-v1.26.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 277
+      },
+      {
+        "minor": "1.26",
+        "source_id": "core-v1.26.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 282
+      },
+      {
+        "minor": "1.26",
+        "source_id": "core-v1.26.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 287
+      },
+      {
+        "minor": "1.26",
+        "source_id": "core-v1.26.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 292
+      },
+      {
+        "minor": "1.26",
+        "source_id": "core-v1.26.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1656
+      },
+      {
+        "minor": "1.26",
+        "source_id": "core-v1.26.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 5846
+      },
+      {
+        "minor": "1.26",
+        "source_id": "apps-v1.26.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 458
+      },
+      {
+        "minor": "1.26",
+        "source_id": "apps-v1.26.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 455
+      },
+      {
+        "minor": "1.26",
+        "source_id": "apps-v1.26.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 664
+      },
+      {
+        "minor": "1.26",
+        "source_id": "discovery-v1.26.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 54
+      },
+      {
+        "minor": "1.26",
+        "source_id": "networking-v1.26.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 252
+      },
+      {
+        "minor": "1.26",
+        "source_id": "networking-v1.26.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 512
+      },
+      {
+        "minor": "1.27",
+        "source_id": "core-v1.27.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 244
+      },
+      {
+        "minor": "1.27",
+        "source_id": "core-v1.27.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 250
+      },
+      {
+        "minor": "1.27",
+        "source_id": "core-v1.27.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 255
+      },
+      {
+        "minor": "1.27",
+        "source_id": "core-v1.27.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 265
+      },
+      {
+        "minor": "1.27",
+        "source_id": "core-v1.27.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 270
+      },
+      {
+        "minor": "1.27",
+        "source_id": "core-v1.27.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 276
+      },
+      {
+        "minor": "1.27",
+        "source_id": "core-v1.27.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 281
+      },
+      {
+        "minor": "1.27",
+        "source_id": "core-v1.27.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 286
+      },
+      {
+        "minor": "1.27",
+        "source_id": "core-v1.27.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 291
+      },
+      {
+        "minor": "1.27",
+        "source_id": "core-v1.27.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 296
+      },
+      {
+        "minor": "1.27",
+        "source_id": "core-v1.27.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1661
+      },
+      {
+        "minor": "1.27",
+        "source_id": "core-v1.27.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 5996
+      },
+      {
+        "minor": "1.27",
+        "source_id": "apps-v1.27.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 452
+      },
+      {
+        "minor": "1.27",
+        "source_id": "apps-v1.27.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 449
+      },
+      {
+        "minor": "1.27",
+        "source_id": "apps-v1.27.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 658
+      },
+      {
+        "minor": "1.27",
+        "source_id": "discovery-v1.27.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 54
+      },
+      {
+        "minor": "1.27",
+        "source_id": "networking-v1.27.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 253
+      },
+      {
+        "minor": "1.27",
+        "source_id": "networking-v1.27.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 513
+      },
+      {
+        "minor": "1.28",
+        "source_id": "core-v1.28.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 244
+      },
+      {
+        "minor": "1.28",
+        "source_id": "core-v1.28.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 250
+      },
+      {
+        "minor": "1.28",
+        "source_id": "core-v1.28.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 255
+      },
+      {
+        "minor": "1.28",
+        "source_id": "core-v1.28.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 265
+      },
+      {
+        "minor": "1.28",
+        "source_id": "core-v1.28.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 270
+      },
+      {
+        "minor": "1.28",
+        "source_id": "core-v1.28.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 276
+      },
+      {
+        "minor": "1.28",
+        "source_id": "core-v1.28.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 281
+      },
+      {
+        "minor": "1.28",
+        "source_id": "core-v1.28.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 286
+      },
+      {
+        "minor": "1.28",
+        "source_id": "core-v1.28.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 291
+      },
+      {
+        "minor": "1.28",
+        "source_id": "core-v1.28.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 296
+      },
+      {
+        "minor": "1.28",
+        "source_id": "core-v1.28.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1662
+      },
+      {
+        "minor": "1.28",
+        "source_id": "core-v1.28.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 6228
+      },
+      {
+        "minor": "1.28",
+        "source_id": "apps-v1.28.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 456
+      },
+      {
+        "minor": "1.28",
+        "source_id": "apps-v1.28.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 453
+      },
+      {
+        "minor": "1.28",
+        "source_id": "apps-v1.28.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 667
+      },
+      {
+        "minor": "1.28",
+        "source_id": "discovery-v1.28.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 54
+      },
+      {
+        "minor": "1.28",
+        "source_id": "networking-v1.28.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 248
+      },
+      {
+        "minor": "1.28",
+        "source_id": "networking-v1.28.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 508
+      },
+      {
+        "minor": "1.29",
+        "source_id": "core-v1.29.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 245
+      },
+      {
+        "minor": "1.29",
+        "source_id": "core-v1.29.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 251
+      },
+      {
+        "minor": "1.29",
+        "source_id": "core-v1.29.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 256
+      },
+      {
+        "minor": "1.29",
+        "source_id": "core-v1.29.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 266
+      },
+      {
+        "minor": "1.29",
+        "source_id": "core-v1.29.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 271
+      },
+      {
+        "minor": "1.29",
+        "source_id": "core-v1.29.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 277
+      },
+      {
+        "minor": "1.29",
+        "source_id": "core-v1.29.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 282
+      },
+      {
+        "minor": "1.29",
+        "source_id": "core-v1.29.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 287
+      },
+      {
+        "minor": "1.29",
+        "source_id": "core-v1.29.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 292
+      },
+      {
+        "minor": "1.29",
+        "source_id": "core-v1.29.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 297
+      },
+      {
+        "minor": "1.29",
+        "source_id": "core-v1.29.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1737
+      },
+      {
+        "minor": "1.29",
+        "source_id": "core-v1.29.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 6429
+      },
+      {
+        "minor": "1.29",
+        "source_id": "apps-v1.29.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 456
+      },
+      {
+        "minor": "1.29",
+        "source_id": "apps-v1.29.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 453
+      },
+      {
+        "minor": "1.29",
+        "source_id": "apps-v1.29.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 667
+      },
+      {
+        "minor": "1.29",
+        "source_id": "discovery-v1.29.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 54
+      },
+      {
+        "minor": "1.29",
+        "source_id": "networking-v1.29.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 247
+      },
+      {
+        "minor": "1.29",
+        "source_id": "networking-v1.29.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 507
+      },
+      {
+        "minor": "1.30",
+        "source_id": "core-v1.30.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 245
+      },
+      {
+        "minor": "1.30",
+        "source_id": "core-v1.30.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 251
+      },
+      {
+        "minor": "1.30",
+        "source_id": "core-v1.30.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 256
+      },
+      {
+        "minor": "1.30",
+        "source_id": "core-v1.30.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 266
+      },
+      {
+        "minor": "1.30",
+        "source_id": "core-v1.30.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 271
+      },
+      {
+        "minor": "1.30",
+        "source_id": "core-v1.30.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 277
+      },
+      {
+        "minor": "1.30",
+        "source_id": "core-v1.30.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 282
+      },
+      {
+        "minor": "1.30",
+        "source_id": "core-v1.30.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 287
+      },
+      {
+        "minor": "1.30",
+        "source_id": "core-v1.30.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 292
+      },
+      {
+        "minor": "1.30",
+        "source_id": "core-v1.30.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 297
+      },
+      {
+        "minor": "1.30",
+        "source_id": "core-v1.30.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1765
+      },
+      {
+        "minor": "1.30",
+        "source_id": "core-v1.30.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 6637
+      },
+      {
+        "minor": "1.30",
+        "source_id": "apps-v1.30.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 456
+      },
+      {
+        "minor": "1.30",
+        "source_id": "apps-v1.30.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 453
+      },
+      {
+        "minor": "1.30",
+        "source_id": "apps-v1.30.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 667
+      },
+      {
+        "minor": "1.30",
+        "source_id": "discovery-v1.30.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 54
+      },
+      {
+        "minor": "1.30",
+        "source_id": "networking-v1.30.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 250
+      },
+      {
+        "minor": "1.30",
+        "source_id": "networking-v1.30.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 508
+      },
+      {
+        "minor": "1.31",
+        "source_id": "core-v1.31.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 245
+      },
+      {
+        "minor": "1.31",
+        "source_id": "core-v1.31.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 251
+      },
+      {
+        "minor": "1.31",
+        "source_id": "core-v1.31.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 256
+      },
+      {
+        "minor": "1.31",
+        "source_id": "core-v1.31.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 266
+      },
+      {
+        "minor": "1.31",
+        "source_id": "core-v1.31.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 271
+      },
+      {
+        "minor": "1.31",
+        "source_id": "core-v1.31.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 277
+      },
+      {
+        "minor": "1.31",
+        "source_id": "core-v1.31.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 282
+      },
+      {
+        "minor": "1.31",
+        "source_id": "core-v1.31.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 287
+      },
+      {
+        "minor": "1.31",
+        "source_id": "core-v1.31.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 292
+      },
+      {
+        "minor": "1.31",
+        "source_id": "core-v1.31.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 297
+      },
+      {
+        "minor": "1.31",
+        "source_id": "core-v1.31.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1773
+      },
+      {
+        "minor": "1.31",
+        "source_id": "core-v1.31.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 6621
+      },
+      {
+        "minor": "1.31",
+        "source_id": "apps-v1.31.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 465
+      },
+      {
+        "minor": "1.31",
+        "source_id": "apps-v1.31.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 462
+      },
+      {
+        "minor": "1.31",
+        "source_id": "apps-v1.31.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 671
+      },
+      {
+        "minor": "1.31",
+        "source_id": "discovery-v1.31.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 54
+      },
+      {
+        "minor": "1.31",
+        "source_id": "networking-v1.31.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 250
+      },
+      {
+        "minor": "1.31",
+        "source_id": "networking-v1.31.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 508
+      },
+      {
+        "minor": "1.32",
+        "source_id": "core-v1.32.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 257
+      },
+      {
+        "minor": "1.32",
+        "source_id": "core-v1.32.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 263
+      },
+      {
+        "minor": "1.32",
+        "source_id": "core-v1.32.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 268
+      },
+      {
+        "minor": "1.32",
+        "source_id": "core-v1.32.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 278
+      },
+      {
+        "minor": "1.32",
+        "source_id": "core-v1.32.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 283
+      },
+      {
+        "minor": "1.32",
+        "source_id": "core-v1.32.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 289
+      },
+      {
+        "minor": "1.32",
+        "source_id": "core-v1.32.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 294
+      },
+      {
+        "minor": "1.32",
+        "source_id": "core-v1.32.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 299
+      },
+      {
+        "minor": "1.32",
+        "source_id": "core-v1.32.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 304
+      },
+      {
+        "minor": "1.32",
+        "source_id": "core-v1.32.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 309
+      },
+      {
+        "minor": "1.32",
+        "source_id": "core-v1.32.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1784
+      },
+      {
+        "minor": "1.32",
+        "source_id": "core-v1.32.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 6863
+      },
+      {
+        "minor": "1.32",
+        "source_id": "apps-v1.32.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 465
+      },
+      {
+        "minor": "1.32",
+        "source_id": "apps-v1.32.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 462
+      },
+      {
+        "minor": "1.32",
+        "source_id": "apps-v1.32.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 671
+      },
+      {
+        "minor": "1.32",
+        "source_id": "discovery-v1.32.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 54
+      },
+      {
+        "minor": "1.32",
+        "source_id": "networking-v1.32.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 250
+      },
+      {
+        "minor": "1.32",
+        "source_id": "networking-v1.32.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 508
+      },
+      {
+        "minor": "1.33",
+        "source_id": "core-v1.33.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 257
+      },
+      {
+        "minor": "1.33",
+        "source_id": "core-v1.33.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 263
+      },
+      {
+        "minor": "1.33",
+        "source_id": "core-v1.33.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 268
+      },
+      {
+        "minor": "1.33",
+        "source_id": "core-v1.33.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 278
+      },
+      {
+        "minor": "1.33",
+        "source_id": "core-v1.33.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 283
+      },
+      {
+        "minor": "1.33",
+        "source_id": "core-v1.33.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 289
+      },
+      {
+        "minor": "1.33",
+        "source_id": "core-v1.33.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 294
+      },
+      {
+        "minor": "1.33",
+        "source_id": "core-v1.33.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 299
+      },
+      {
+        "minor": "1.33",
+        "source_id": "core-v1.33.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 304
+      },
+      {
+        "minor": "1.33",
+        "source_id": "core-v1.33.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 309
+      },
+      {
+        "minor": "1.33",
+        "source_id": "core-v1.33.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1795
+      },
+      {
+        "minor": "1.33",
+        "source_id": "core-v1.33.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 7046
+      },
+      {
+        "minor": "1.33",
+        "source_id": "apps-v1.33.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 482
+      },
+      {
+        "minor": "1.33",
+        "source_id": "apps-v1.33.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 479
+      },
+      {
+        "minor": "1.33",
+        "source_id": "apps-v1.33.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 691
+      },
+      {
+        "minor": "1.33",
+        "source_id": "discovery-v1.33.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 58
+      },
+      {
+        "minor": "1.33",
+        "source_id": "networking-v1.33.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 277
+      },
+      {
+        "minor": "1.33",
+        "source_id": "networking-v1.33.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 546
+      },
+      {
+        "minor": "1.34",
+        "source_id": "core-v1.34.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 259
+      },
+      {
+        "minor": "1.34",
+        "source_id": "core-v1.34.0",
+        "symbol": "ValidateReplicationControllerName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 265
+      },
+      {
+        "minor": "1.34",
+        "source_id": "core-v1.34.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 270
+      },
+      {
+        "minor": "1.34",
+        "source_id": "core-v1.34.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 280
+      },
+      {
+        "minor": "1.34",
+        "source_id": "core-v1.34.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 285
+      },
+      {
+        "minor": "1.34",
+        "source_id": "core-v1.34.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 291
+      },
+      {
+        "minor": "1.34",
+        "source_id": "core-v1.34.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 296
+      },
+      {
+        "minor": "1.34",
+        "source_id": "core-v1.34.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 301
+      },
+      {
+        "minor": "1.34",
+        "source_id": "core-v1.34.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 306
+      },
+      {
+        "minor": "1.34",
+        "source_id": "core-v1.34.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 311
+      },
+      {
+        "minor": "1.34",
+        "source_id": "core-v1.34.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1860
+      },
+      {
+        "minor": "1.34",
+        "source_id": "core-v1.34.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 7450
+      },
+      {
+        "minor": "1.34",
+        "source_id": "apps-v1.34.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 543
+      },
+      {
+        "minor": "1.34",
+        "source_id": "apps-v1.34.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 540
+      },
+      {
+        "minor": "1.34",
+        "source_id": "apps-v1.34.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 753
+      },
+      {
+        "minor": "1.34",
+        "source_id": "discovery-v1.34.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 58
+      },
+      {
+        "minor": "1.34",
+        "source_id": "networking-v1.34.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 279
+      },
+      {
+        "minor": "1.34",
+        "source_id": "networking-v1.34.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 557
+      },
+      {
+        "minor": "1.35",
+        "source_id": "core-v1.35.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 285
+      },
+      {
+        "minor": "1.35",
+        "source_id": "core-v1.35.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 290
+      },
+      {
+        "minor": "1.35",
+        "source_id": "core-v1.35.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 300
+      },
+      {
+        "minor": "1.35",
+        "source_id": "core-v1.35.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 305
+      },
+      {
+        "minor": "1.35",
+        "source_id": "core-v1.35.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 311
+      },
+      {
+        "minor": "1.35",
+        "source_id": "core-v1.35.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 316
+      },
+      {
+        "minor": "1.35",
+        "source_id": "core-v1.35.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 321
+      },
+      {
+        "minor": "1.35",
+        "source_id": "core-v1.35.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 326
+      },
+      {
+        "minor": "1.35",
+        "source_id": "core-v1.35.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 331
+      },
+      {
+        "minor": "1.35",
+        "source_id": "core-v1.35.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1934
+      },
+      {
+        "minor": "1.35",
+        "source_id": "core-v1.35.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 7755
+      },
+      {
+        "minor": "1.35",
+        "source_id": "apps-v1.35.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 543
+      },
+      {
+        "minor": "1.35",
+        "source_id": "apps-v1.35.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 540
+      },
+      {
+        "minor": "1.35",
+        "source_id": "apps-v1.35.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 753
+      },
+      {
+        "minor": "1.35",
+        "source_id": "discovery-v1.35.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 58
+      },
+      {
+        "minor": "1.35",
+        "source_id": "networking-v1.35.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 279
+      },
+      {
+        "minor": "1.35",
+        "source_id": "networking-v1.35.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 557
+      },
+      {
+        "minor": "1.36",
+        "source_id": "core-v1.36.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 286
+      },
+      {
+        "minor": "1.36",
+        "source_id": "core-v1.36.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 291
+      },
+      {
+        "minor": "1.36",
+        "source_id": "core-v1.36.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 301
+      },
+      {
+        "minor": "1.36",
+        "source_id": "core-v1.36.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 306
+      },
+      {
+        "minor": "1.36",
+        "source_id": "core-v1.36.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 312
+      },
+      {
+        "minor": "1.36",
+        "source_id": "core-v1.36.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 317
+      },
+      {
+        "minor": "1.36",
+        "source_id": "core-v1.36.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 322
+      },
+      {
+        "minor": "1.36",
+        "source_id": "core-v1.36.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 327
+      },
+      {
+        "minor": "1.36",
+        "source_id": "core-v1.36.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 332
+      },
+      {
+        "minor": "1.36",
+        "source_id": "core-v1.36.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1927
+      },
+      {
+        "minor": "1.36",
+        "source_id": "core-v1.36.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 7864
+      },
+      {
+        "minor": "1.36",
+        "source_id": "apps-v1.36.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 543
+      },
+      {
+        "minor": "1.36",
+        "source_id": "apps-v1.36.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 540
+      },
+      {
+        "minor": "1.36",
+        "source_id": "apps-v1.36.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 753
+      },
+      {
+        "minor": "1.36",
+        "source_id": "discovery-v1.36.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 58
+      },
+      {
+        "minor": "1.36",
+        "source_id": "networking-v1.36.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 279
+      },
+      {
+        "minor": "1.36",
+        "source_id": "networking-v1.36.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 557
+      },
+      {
+        "minor": "1.37",
+        "source_id": "core-v1.37.0",
+        "symbol": "ValidatePodName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 293
+      },
+      {
+        "minor": "1.37",
+        "source_id": "core-v1.37.0",
+        "symbol": "ValidateServiceName",
+        "resolved_alias": "NameIsDNS1035Label",
+        "line": 298
+      },
+      {
+        "minor": "1.37",
+        "source_id": "core-v1.37.0",
+        "symbol": "ValidateNamespaceName",
+        "resolved_alias": "ValidateNamespaceName",
+        "line": 308
+      },
+      {
+        "minor": "1.37",
+        "source_id": "core-v1.37.0",
+        "symbol": "ValidateLimitRangeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 313
+      },
+      {
+        "minor": "1.37",
+        "source_id": "core-v1.37.0",
+        "symbol": "ValidateResourceQuotaName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 319
+      },
+      {
+        "minor": "1.37",
+        "source_id": "core-v1.37.0",
+        "symbol": "ValidateSecretName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 324
+      },
+      {
+        "minor": "1.37",
+        "source_id": "core-v1.37.0",
+        "symbol": "ValidateServiceAccountName",
+        "resolved_alias": "ValidateServiceAccountName",
+        "line": 329
+      },
+      {
+        "minor": "1.37",
+        "source_id": "core-v1.37.0",
+        "symbol": "ValidateEndpointsName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 334
+      },
+      {
+        "minor": "1.37",
+        "source_id": "core-v1.37.0",
+        "symbol": "ValidateClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 339
+      },
+      {
+        "minor": "1.37",
+        "source_id": "core-v1.37.0",
+        "symbol": "ValidatePersistentVolumeName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 1961
+      },
+      {
+        "minor": "1.37",
+        "source_id": "core-v1.37.0",
+        "symbol": "ValidateConfigMapName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 8187
+      },
+      {
+        "minor": "1.37",
+        "source_id": "apps-v1.37.0",
+        "symbol": "ValidateDeploymentName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 538
+      },
+      {
+        "minor": "1.37",
+        "source_id": "apps-v1.37.0",
+        "symbol": "ValidateDaemonSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 535
+      },
+      {
+        "minor": "1.37",
+        "source_id": "apps-v1.37.0",
+        "symbol": "ValidateReplicaSetName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 748
+      },
+      {
+        "minor": "1.37",
+        "source_id": "discovery-v1.37.0",
+        "symbol": "ValidateEndpointSliceName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 57
+      },
+      {
+        "minor": "1.37",
+        "source_id": "networking-v1.37.0",
+        "symbol": "ValidateIngressName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 279
+      },
+      {
+        "minor": "1.37",
+        "source_id": "networking-v1.37.0",
+        "symbol": "ValidateIngressClassName",
+        "resolved_alias": "NameIsDNSSubdomain",
+        "line": 557
+      }
+    ],
+    "direct_metadata_call_assertions": "All18 Job/CronJob/HPA/PriorityClass/RuntimeClass/StorageClass/two webhook configuration roots and NetworkPolicy helper verified; closed table scopes/GVKs remain exact frozen ledger projection."
+  },
+  "existing_field_scope_check": {
+    "profiles_verified": 48,
+    "no_field_expansion": true,
+    "records": [
+      {
+        "kind": "Pod",
+        "api_version": "v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "Deployment",
+        "api_version": "apps/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "StatefulSet",
+        "api_version": "apps/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "DaemonSet",
+        "api_version": "apps/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "ReplicaSet",
+        "api_version": "apps/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "ReplicationController",
+        "api_version": "v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "Job",
+        "api_version": "batch/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "CronJob",
+        "api_version": "batch/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "CronJob",
+        "api_version": "batch/v1beta1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "Service",
+        "api_version": "v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "Endpoints",
+        "api_version": "v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "EndpointSlice",
+        "api_version": "discovery.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "EndpointSlice",
+        "api_version": "discovery.k8s.io/v1beta1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "Ingress",
+        "api_version": "extensions/v1beta1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "Ingress",
+        "api_version": "networking.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "Ingress",
+        "api_version": "networking.k8s.io/v1beta1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "IngressClass",
+        "api_version": "networking.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "IngressClass",
+        "api_version": "networking.k8s.io/v1beta1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "NetworkPolicy",
+        "api_version": "networking.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "ConfigMap",
+        "api_version": "v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "Secret",
+        "api_version": "v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "PersistentVolumeClaim",
+        "api_version": "v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "PersistentVolume",
+        "api_version": "v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "StorageClass",
+        "api_version": "storage.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "Namespace",
+        "api_version": "v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "ServiceAccount",
+        "api_version": "v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "Role",
+        "api_version": "rbac.authorization.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "RoleBinding",
+        "api_version": "rbac.authorization.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "ClusterRole",
+        "api_version": "rbac.authorization.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "ClusterRoleBinding",
+        "api_version": "rbac.authorization.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "HorizontalPodAutoscaler",
+        "api_version": "autoscaling/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "HorizontalPodAutoscaler",
+        "api_version": "autoscaling/v2",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "HorizontalPodAutoscaler",
+        "api_version": "autoscaling/v2beta1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "HorizontalPodAutoscaler",
+        "api_version": "autoscaling/v2beta2",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "PodDisruptionBudget",
+        "api_version": "policy/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "PodDisruptionBudget",
+        "api_version": "policy/v1beta1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "ResourceQuota",
+        "api_version": "v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "LimitRange",
+        "api_version": "v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "PriorityClass",
+        "api_version": "scheduling.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "RuntimeClass",
+        "api_version": "node.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "RuntimeClass",
+        "api_version": "node.k8s.io/v1beta1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "PodSecurityPolicy",
+        "api_version": "policy/v1beta1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "CustomResourceDefinition",
+        "api_version": "apiextensions.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "CustomResourceDefinition",
+        "api_version": "apiextensions.k8s.io/v1beta1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "MutatingWebhookConfiguration",
+        "api_version": "admissionregistration.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "MutatingWebhookConfiguration",
+        "api_version": "admissionregistration.k8s.io/v1beta1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "ValidatingWebhookConfiguration",
+        "api_version": "admissionregistration.k8s.io/v1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      },
+      {
+        "kind": "ValidatingWebhookConfiguration",
+        "api_version": "admissionregistration.k8s.io/v1beta1",
+        "already_selected_pointers": [
+          "/metadata/name",
+          "/metadata/generateName"
+        ]
+      }
+    ]
+  },
+  "immutable_research_source": {
+    "filename": "kubernetes-native-naming-table.json",
+    "sha256": "b9c297455eb95e6186f232875cf9111b797400193cea844cf3146d6cf4a5359e"
+  },
+  "native_conformance": "pending",
+  "issue": 36,
+  "historical_research_ledger": {
+    "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
+    "sha256": "747adc51d5646a1977fd1a6fa0d022414cdab72520d31470696aaf4e5b0d2c08"
+  },
+  "source_manifest": "schemas/capabilities/native-naming-source-manifest.json",
+  "independent_cases": "schemas/capabilities/native-naming-independent-cases.json",
+  "lookup_identity": {
+    "fields": [
+      "group",
+      "kind",
+      "scope",
+      "explicit_namespace_when_required",
+      "exact_concrete_name"
+    ],
+    "served_api_version_in_key": false,
+    "source_gvk_retained": true,
+    "generated_names_not_inferred": true,
+    "owner": "primary correction to immutable research"
+  },
+  "undeclared_gvk_naming": {
+    "outcome": "unverified",
+    "diagnostic": "native-naming-unverified",
+    "no_inferred_grammar": true,
+    "ordinary_target_evidence": "blocked",
+    "schema_checked_and_bound": "schema_relationship_only",
+    "narrow_exemptions": [
+      "current_descriptor_rechecked_supplied_custom_resource_version",
+      "external_operator_prerequisite"
+    ],
+    "source_preservation": "existing_privacy_and_opaque_policies"
+  }
+}

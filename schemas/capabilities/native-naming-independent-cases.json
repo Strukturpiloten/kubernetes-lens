@@ -1,0 +1,2174 @@
+{
+  "status": "primary-corrected independent expectations; not executed",
+  "source_contract": "docs/decisions/0013-native-naming-and-source-identity.md",
+  "machine_table": "schemas/capabilities/native-naming-contract.json",
+  "counts": {
+    "cases": 121,
+    "primary_total_cases": 125
+  },
+  "execution_requirements": [
+    "Exercise acquisition and source-free authoring separately.",
+    "Use exact target profile/GVK and supplied operation intent; no profile never selects latest.",
+    "Validate and generate twice, reparse, edit metadata and verify identity/reference cache synchronization.",
+    "Assert fixed safe paths/rule IDs/severity/evidence; no raw payloads in Debug/diagnostic/JSON/logs.",
+    "Retain unknown metadata/source evidence and default output/loss policy.",
+    "Do not run native servers/name generators/controllers or copy oracle test source."
+  ],
+  "cases": [
+    {
+      "id": "path-colon-role",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "system:example",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-private-spelling-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-unicode-role",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "Role \u03a9 \u7532",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-private-spelling-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-dot-role",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-dotdot-role",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-slash-role",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "a/b",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-percent-role",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "a%b",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-length300-role",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "x",
+        "count": 300,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-no-native-length-cap",
+      "extra": {
+        "caller_document_budget": "permits complete value; not universal253"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-colon-rolebinding",
+      "kind": "RoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "system:example",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-private-spelling-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-unicode-rolebinding",
+      "kind": "RoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "Role \u03a9 \u7532",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-private-spelling-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-dot-rolebinding",
+      "kind": "RoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-dotdot-rolebinding",
+      "kind": "RoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-slash-rolebinding",
+      "kind": "RoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "a/b",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-percent-rolebinding",
+      "kind": "RoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "a%b",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-length300-rolebinding",
+      "kind": "RoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "x",
+        "count": 300,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-no-native-length-cap",
+      "extra": {
+        "caller_document_budget": "permits complete value; not universal253"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-colon-clusterrole",
+      "kind": "ClusterRole",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "system:example",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-private-spelling-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-unicode-clusterrole",
+      "kind": "ClusterRole",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "Role \u03a9 \u7532",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-private-spelling-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-dot-clusterrole",
+      "kind": "ClusterRole",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-dotdot-clusterrole",
+      "kind": "ClusterRole",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-slash-clusterrole",
+      "kind": "ClusterRole",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "a/b",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-percent-clusterrole",
+      "kind": "ClusterRole",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "a%b",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-length300-clusterrole",
+      "kind": "ClusterRole",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "x",
+        "count": 300,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-no-native-length-cap",
+      "extra": {
+        "caller_document_budget": "permits complete value; not universal253"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-colon-clusterrolebinding",
+      "kind": "ClusterRoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "system:example",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-private-spelling-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-unicode-clusterrolebinding",
+      "kind": "ClusterRoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "Role \u03a9 \u7532",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-private-spelling-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-dot-clusterrolebinding",
+      "kind": "ClusterRoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-dotdot-clusterrolebinding",
+      "kind": "ClusterRoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-slash-clusterrolebinding",
+      "kind": "ClusterRoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "a/b",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-percent-clusterrolebinding",
+      "kind": "ClusterRoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "a%b",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-length300-clusterrolebinding",
+      "kind": "ClusterRoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "x",
+        "count": 300,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-no-native-length-cap",
+      "extra": {
+        "caller_document_budget": "permits complete value; not universal253"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-colon-poddisruptionbudget",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "system:example",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-private-spelling-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-unicode-poddisruptionbudget",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "Role \u03a9 \u7532",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-private-spelling-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-dot-poddisruptionbudget",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-dotdot-poddisruptionbudget",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-slash-poddisruptionbudget",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "a/b",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-invalid-percent-poddisruptionbudget",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "a%b",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "path-length300-poddisruptionbudget",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "x",
+        "count": 300,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-no-native-length-cap",
+      "extra": {
+        "caller_document_budget": "permits complete value; not universal253"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pdb-prefix-dot-1.20",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1beta1",
+      "target_minor": "1.20",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "rbac-prefix-dot-1.20",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.20",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pdb-prefix-dotdot-1.20",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1beta1",
+      "target_minor": "1.20",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "rbac-prefix-dotdot-1.20",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.20",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pdb-prefix-dot-1.21",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.21",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "rbac-prefix-dot-1.21",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.21",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pdb-prefix-dotdot-1.21",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.21",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "rbac-prefix-dotdot-1.21",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.21",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pdb-prefix-dot-1.35",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.35",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "rbac-prefix-dot-1.35",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.35",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pdb-prefix-dotdot-1.35",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.35",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "rbac-prefix-dotdot-1.35",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.35",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pdb-prefix-dot-1.36",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.36",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "rbac-prefix-dot-1.36",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.36",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pdb-prefix-dotdot-1.36",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.36",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "rbac-prefix-dotdot-1.36",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.36",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pdb-prefix-dot-1.37",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "rbac-prefix-dot-1.37",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pdb-prefix-dotdot-1.37",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "rbac-prefix-dotdot-1.37",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "..",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "statefulset-dot-1.26",
+      "kind": "StatefulSet",
+      "api_version": "apps/v1",
+      "target_minor": "1.26",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "db.example",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "statefulset-length64-1.26",
+      "kind": "StatefulSet",
+      "api_version": "apps/v1",
+      "target_minor": "1.26",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 64,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "statefulset-dot-1.27",
+      "kind": "StatefulSet",
+      "api_version": "apps/v1",
+      "target_minor": "1.27",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "db.example",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "statefulset-length64-1.27",
+      "kind": "StatefulSet",
+      "api_version": "apps/v1",
+      "target_minor": "1.27",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 64,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "statefulset-dot-1.37",
+      "kind": "StatefulSet",
+      "api_version": "apps/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "db.example",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "statefulset-length64-1.37",
+      "kind": "StatefulSet",
+      "api_version": "apps/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 64,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "statefulset-label63",
+      "kind": "StatefulSet",
+      "api_version": "apps/v1",
+      "target_minor": "1.27",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 63,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "dns1123-digit-start-namespace",
+      "kind": "Namespace",
+      "api_version": "v1",
+      "target_minor": "1.27",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "1name",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-native-source-doc-conflict-recorded",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "dns1123-digit-start-statefulset",
+      "kind": "StatefulSet",
+      "api_version": "apps/v1",
+      "target_minor": "1.27",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "1name",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-native-source-doc-conflict-recorded",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pod-name-invalid-empty-component",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "a..b",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pod-name-invalid-uppercase",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "A",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pod-name-invalid-unicode",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "\u00e9",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pod-name-invalid-underscore",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "a_",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pod-subdomain-component64",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 64,
+        "suffix": ".b",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied-no-invented-component63",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pod-subdomain253",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 253,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pod-subdomain254",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 254,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "dns-prefix-lone-dash-1.20",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.20",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "-",
+        "private": true
+      },
+      "expected": "historical-prefix-compatibility-unverified-no-panic",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "dns-prefix-lone-dash-1.21",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.21",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "-",
+        "private": true
+      },
+      "expected": "historical-prefix-compatibility-unverified-no-panic",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "dns-prefix-lone-dash-1.22",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.22",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "-",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "dns-prefix-lone-dash-1.37",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "-",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "dns-prefix-masked-uppercase",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "A-",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {
+        "identity_unchanged": true,
+        "comparison_only_mask": "no trimmed or normalized stored value"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "dns-prefix-masked-dot",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": ".-",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {
+        "identity_unchanged": true,
+        "comparison_only_mask": "no trimmed or normalized stored value"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "dns-prefix-repeated-dash",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "a---",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {
+        "identity_unchanged": true,
+        "comparison_only_mask": "no trimmed or normalized stored value"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "dns-prefix-multibyte-last-character",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "\u00e9-",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {
+        "identity_unchanged": true,
+        "comparison_only_mask": "no trimmed or normalized stored value"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "dns-prefix254",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 253,
+        "suffix": "-",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "namespace-prefix64",
+      "kind": "Namespace",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 63,
+        "suffix": "-",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "service-prefix-masked-digit",
+      "kind": "Service",
+      "api_version": "v1",
+      "target_minor": "1.20",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "1-",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-concrete-identity-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "service-digit-1.33",
+      "kind": "Service",
+      "api_version": "v1",
+      "target_minor": "1.33",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "1service",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {
+        "relaxed_gate_admitted": false
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "service-digit-1.34",
+      "kind": "Service",
+      "api_version": "v1",
+      "target_minor": "1.34",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "1service",
+        "private": true
+      },
+      "expected": "outside-frozen-naming-variant-not-universally-native-invalid",
+      "extra": {
+        "relaxed_gate_admitted": false
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "service-digit-1.35",
+      "kind": "Service",
+      "api_version": "v1",
+      "target_minor": "1.35",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "1service",
+        "private": true
+      },
+      "expected": "outside-frozen-naming-variant-not-universally-native-invalid",
+      "extra": {
+        "relaxed_gate_admitted": false
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "service-digit-1.36",
+      "kind": "Service",
+      "api_version": "v1",
+      "target_minor": "1.36",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "1service",
+        "private": true
+      },
+      "expected": "outside-frozen-naming-variant-not-universally-native-invalid",
+      "extra": {
+        "relaxed_gate_admitted": false
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "service-digit-1.37",
+      "kind": "Service",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "1service",
+        "private": true
+      },
+      "expected": "outside-frozen-naming-variant-not-universally-native-invalid",
+      "extra": {
+        "relaxed_gate_admitted": false
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "acquire-no-profile-pod",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": null,
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "Bad \u03a9 / %",
+        "private": true
+      },
+      "expected": "private-acquisition-preserves-string-native-state-unverified-target",
+      "extra": {
+        "no_target_fallback": true,
+        "no_unsupported_kind_fallback": true
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "acquire-no-profile-service",
+      "kind": "Service",
+      "api_version": "v1",
+      "target_minor": null,
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "Bad \u03a9 / %",
+        "private": true
+      },
+      "expected": "private-acquisition-preserves-string-native-state-unverified-target",
+      "extra": {
+        "no_target_fallback": true,
+        "no_unsupported_kind_fallback": true
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "acquire-no-profile-role",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": null,
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "Bad \u03a9 / %",
+        "private": true
+      },
+      "expected": "private-acquisition-preserves-string-native-state-unverified-target",
+      "extra": {
+        "no_target_fallback": true,
+        "no_unsupported_kind_fallback": true
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "replicationcontroller-prefix-1.34",
+      "kind": "ReplicationController",
+      "api_version": "v1",
+      "target_minor": "1.34",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "A/\u03a9",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "replicationcontroller-prefix-1.35",
+      "kind": "ReplicationController",
+      "api_version": "v1",
+      "target_minor": "1.35",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "A/\u03a9",
+        "private": true
+      },
+      "expected": "prefix-native-constraint-not-directly-checked-concrete-generation-context-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "replicationcontroller-prefix-1.37",
+      "kind": "ReplicationController",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "A/\u03a9",
+        "private": true
+      },
+      "expected": "prefix-native-constraint-not-directly-checked-concrete-generation-context-pending",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "cronjob-name52-unspecified",
+      "kind": "CronJob",
+      "api_version": "batch/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 52,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "cronjob-name52-create",
+      "kind": "CronJob",
+      "api_version": "batch/v1",
+      "target_minor": "1.37",
+      "intent": "Create",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 52,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "cronjob-name53-unspecified",
+      "kind": "CronJob",
+      "api_version": "batch/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 53,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "native-context-required-create-bound-unverified",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "cronjob-name53-create",
+      "kind": "CronJob",
+      "api_version": "batch/v1",
+      "target_minor": "1.37",
+      "intent": "Create",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 53,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "native-create-name-bound-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "cronjob-name63-unspecified",
+      "kind": "CronJob",
+      "api_version": "batch/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 63,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "native-context-required-create-bound-unverified",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "cronjob-name63-create",
+      "kind": "CronJob",
+      "api_version": "batch/v1",
+      "target_minor": "1.37",
+      "intent": "Create",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 63,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "native-create-name-bound-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "cronjob-beta-create53",
+      "kind": "CronJob",
+      "api_version": "batch/v1beta1",
+      "target_minor": "1.20",
+      "intent": "Create",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 53,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "native-create-name-bound-invalid-source-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "cronjob-beta-unavailable125",
+      "kind": "CronJob",
+      "api_version": "batch/v1beta1",
+      "target_minor": "1.25",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "daily",
+        "private": true
+      },
+      "expected": "api-unavailable-preserve-identity-do-not-run-guessed-name-policy",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "cronjob-generated-prefix53",
+      "kind": "CronJob",
+      "api_version": "batch/v1",
+      "target_minor": "1.37",
+      "intent": "Create",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "repeat-and-suffix",
+        "character": "a",
+        "count": 53,
+        "suffix": "",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-final-create-length-unverified",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "crd-name-exact",
+      "kind": "CustomResourceDefinition",
+      "api_version": "apiextensions.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "widgets.example.com",
+        "private": true
+      },
+      "expected": "named-constraint-satisfied",
+      "extra": {
+        "spec.names.plural": "widgets",
+        "spec.group": "example.com"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "crd-name-mismatch",
+      "kind": "CustomResourceDefinition",
+      "api_version": "apiextensions.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "widget.example.com",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {
+        "spec.names.plural": "widgets",
+        "spec.group": "example.com"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "crd-name-uppercase",
+      "kind": "CustomResourceDefinition",
+      "api_version": "apiextensions.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "Widgets.example.com",
+        "private": true
+      },
+      "expected": "native-name-constraint-invalid-source-retained",
+      "extra": {
+        "spec.names.plural": "widgets",
+        "spec.group": "example.com"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "crd-prefix-exact",
+      "kind": "CustomResourceDefinition",
+      "api_version": "apiextensions.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "widgets.example.com",
+        "private": true
+      },
+      "expected": "prefix-constraint-satisfied-no-generated-final-crd-identity",
+      "extra": {
+        "spec.names.plural": "widgets",
+        "spec.group": "example.com"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "crd-prefix-trailingdash",
+      "kind": "CustomResourceDefinition",
+      "api_version": "apiextensions.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "widgets.example.com-",
+        "private": true
+      },
+      "expected": "native-exact-plural-group-equality-invalid-source-retained",
+      "extra": {
+        "spec.names.plural": "widgets",
+        "spec.group": "example.com"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "owner-name-unicode",
+      "kind": "ConfigMap",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/ownerReferences/0/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "system:Owner \u03a9",
+        "private": true
+      },
+      "expected": "owner-nonempty-name-constraint-satisfied-target-specific-validity-separate",
+      "extra": {
+        "owner_kind": "Role",
+        "owner_apiVersion": "rbac.authorization.k8s.io/v1",
+        "owner_uid": "caller-supplied-exact-test-uid",
+        "no_dns_prefilter": true
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "owner-name-empty",
+      "kind": "ConfigMap",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/ownerReferences/0/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "",
+        "private": true
+      },
+      "expected": "missing-owner-identity-native-nonempty-constraint-invalid",
+      "extra": {
+        "owner_kind": "Role",
+        "owner_apiVersion": "rbac.authorization.k8s.io/v1",
+        "owner_uid": "caller-supplied-exact-test-uid",
+        "no_dns_prefilter": true
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "unicode-private-budget",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "\u7532\u7532",
+        "private": true
+      },
+      "expected": "limit-exceeded-no-truncation-native-rule-not-success",
+      "extra": {
+        "private_text_work_budget_bytes": 5,
+        "utf8_value_bytes": 6
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "namespace-invalid-separate",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "system:reader",
+        "private": true
+      },
+      "expected": "root-name-constraint-satisfied-namespace-field-invalid",
+      "extra": {
+        "metadata.namespace": "Team \u03a9",
+        "no_namespace_invention": true
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "generated-only-graph",
+      "kind": "ConfigMap",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/generateName",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "settings-",
+        "private": true
+      },
+      "expected": "pending-name-generation-no-concrete-reference-target",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "name-and-prefix-distinct",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "system:reader",
+        "private": true
+      },
+      "expected": "concrete-name-exact-prefix-separately-checked-no-substitution",
+      "extra": {
+        "metadata.generateName": "other-prefix",
+        "name_source_immutable": true
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "case-sensitive-duplicates",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "Role",
+        "private": true
+      },
+      "expected": "Role-and-role-are-distinct-supplied-identities",
+      "extra": {
+        "second_name": "role"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "unicode-no-normalization",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "\u00e9",
+        "private": true
+      },
+      "expected": "NFC-and-NFD-distinct-supplied-identities",
+      "extra": {
+        "second_name": "e\u0301",
+        "constructor_for_second": "actual e plus U+0301 combining acute"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "name-absent-without-prefix",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "absent",
+        "private": true
+      },
+      "expected": "missing-concrete-identity-context-outcome-preserve-known-kind",
+      "extra": {
+        "generateName": "absent"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "name-empty-without-prefix",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "empty",
+        "private": true
+      },
+      "expected": "missing-concrete-identity-context-outcome-preserve-known-kind",
+      "extra": {
+        "generateName": "absent"
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "name-null-retention",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "null",
+        "private": true
+      },
+      "expected": "explicit-null-field-outcome-private-source-evidence-not-unsupported-kind",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "name-wrong-type",
+      "kind": "Pod",
+      "api_version": "v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "integer",
+        "value": 17,
+        "private": true
+      },
+      "expected": "metadata-field-shape-invalid-source-retained-not-unsupported-kind",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "expected": "named-path-constraint-satisfied-private-control-spelling-no-whole-api-claim",
+      "extra": {
+        "normal_reports": "no raw name or control payload, fixed safe rule/path plus protected evidence",
+        "generation": "escape faithfully under protected output only"
+      },
+      "evidence_level": "future independent case expectation; not executed",
+      "id": "private-control-name-newline",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "Role\n\u03a9",
+        "private": true
+      }
+    },
+    {
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "expected": "named-path-constraint-satisfied-private-control-spelling-no-whole-api-claim",
+      "extra": {
+        "normal_reports": "no raw name or control payload, fixed safe rule/path plus protected evidence",
+        "generation": "escape faithfully under protected output only"
+      },
+      "evidence_level": "future independent case expectation; not executed",
+      "id": "private-control-name-nul",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "Role\u0000\u03a9",
+        "private": true
+      }
+    },
+    {
+      "id": "cronjob-beta-available122",
+      "kind": "CronJob",
+      "api_version": "batch/v1beta1",
+      "target_minor": "1.22",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "daily",
+        "private": true
+      },
+      "expected": "api-available-named-constraint-satisfied-source-spelling-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "cronjob-beta-available124",
+      "kind": "CronJob",
+      "api_version": "batch/v1beta1",
+      "target_minor": "1.24",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "daily",
+        "private": true
+      },
+      "expected": "api-available-named-constraint-satisfied-source-spelling-retained",
+      "extra": {},
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "pdb-served-api-version-collision124",
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1beta1",
+      "target_minor": "1.24",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "shared-budget",
+        "private": true
+      },
+      "expected": "same-group-kind-scope-namespace-name-collides-and-resolves-ambiguous-with-exact-api-provenance",
+      "extra": {
+        "second_api_version": "policy/v1",
+        "namespace": "ns",
+        "distinct_resource_ids": true
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    },
+    {
+      "id": "public-typed-identity-access-automatic-privacy",
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "target_minor": "1.37",
+      "intent": "Unspecified",
+      "field_path": "/metadata/name",
+      "protected_synthetic_value": {
+        "constructor": "literal",
+        "value": "PrivateUnicodeMarker:role\n\u03a9",
+        "private": true
+      },
+      "expected": "existing-public-typed-field-access-retains-exact-spelling-automatic-debug-findings-summaries-omit-marker-no-raw-serialize",
+      "extra": {
+        "preserve_existing_protected_graph_payloads": true,
+        "no_new_token_gate_for_public_fields": true
+      },
+      "evidence_level": "future independent case expectation; not executed"
+    }
+  ],
+  "source_research_sha256": "7c08288947fd3c21aa65f24661aea9c8bb64bfafcaaa97f30f9dd1b31687382d",
+  "primary_corrections": [
+    "CronJob beta unavailable1.25; positive1.22/1.24",
+    "collision keys exclude served APIversion",
+    "existing typed access versus automatic privacy boundary"
+  ],
+  "immutable_research_source": {
+    "filename": "kubernetes-native-identity-boundary-cases-primary.json",
+    "sha256": "e051bbde55a247549114589767799a83fcc51fddfa82207b06cd7f3915a1c9c4"
+  },
+  "native_conformance": "pending",
+  "issue": 36,
+  "primary_addendum_provenance": {
+    "filename": "kubernetes-native-identity-primary-addendum.md",
+    "sha256": "c670fd3b01fb4690e21eddb1b109cabca8b1edd969777da618556dd14f25d45a",
+    "repository_scope": "reviewed facts only; original research artifact not required for current validation"
+  }
+}

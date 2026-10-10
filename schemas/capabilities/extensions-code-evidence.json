@@ -4,7 +4,7 @@
   "issue": 13,
   "canonical_ledger": {
     "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
-    "sha256": "37e926f6e9d40fea1086808656864dc81ae98fc6799edfde7628e0571aac518a"
+    "sha256": "4d16a8ba154a8ce5a7c2e5d74768111c44154528a5600f8c6578fc01f397229c"
   },
   "roots": [
     {
@@ -89,13 +89,15 @@
   "field_selection_rule": "Exact frozen root fields plus reviewed dynamic CRD-schema admission; unsupported schema keywords and unknown fields remain findings, never generic admission.",
   "source_sha256": {
     "src/capability.rs": "dd9a69ee48aee45a5638fb38be7988c7c6d02ad0c176f697245ecf8a8a40ed40",
-    "src/generation.rs": "b4e5963e6a926f50ad290cbaf731caefde2878368052f190f9996fdd6d2d1366",
-    "src/graph.rs": "a8f0a202afdd6ba9f10d20bd43f4899de4f04a37063975aea23525184f5cda9f",
-    "src/model.rs": "f263ebfbafd45927081f1c094c705a6e5d5ab6b124a0f09d93b321fde85cbcd9",
+    "src/diagnostic.rs": "5ac5cab660f3bccee70057940dab03a671d676b4c18176d428bb9e0ef5e37f30",
+    "src/generation.rs": "9074d5a5c832fdb67e0d72e96e1d27e2c3379577da9906a79dd07f54f567c133",
+    "src/graph.rs": "cde872fb4ff06a993e17c3f48541a11a21b4be12385611c4567f61b6079d3405",
+    "src/model.rs": "e241166e68679275cfabddca496e08fad5bf708afa7525946217d97fc9a42561",
     "src/registry.rs": "5e03c877fbbb689c5122be45a1403f0bf4615e53a2d3ed043d7d8c363fcd2bab",
+    "src/resources/common/native_naming.rs": "7dae658af9aedaa84a878455e026f8bfb5a28ae292c4aa5bdf962efee53b0273",
     "src/resources/extensions.rs": "5aea65a697f2c8a7aafc7ad40cf0bf581ca6121acef6565e00167dcd738a377c",
     "src/resources/extensions/capabilities.rs": "d1a3de0591f1ff769c43dbfe3e888a90cfd8579d150001085b014c228b489e85",
-    "src/resources/extensions/custom_documents.rs": "8dd1694ae4de33181969a315206eb62f236a68b5c7e46bb6bd7c9f7c1cf6baf9",
+    "src/resources/extensions/custom_documents.rs": "5eb05b4ff2e4fdd9c16702328a2bd585723567410b5a3dd578fc673ca05c32bb",
     "src/resources/extensions/helpers.rs": "5f64260fa9f7d10b31a7a13e81bfde9c97f22c97e3de29711d3792b9ac209935",
     "src/resources/extensions/roots.rs": "2499cd69314ef20d76d49a3a3e5afd21763d70c4ef467c7b7fff3bafcfcffdf6",
     "src/resources/extensions/schema.rs": "13d575d30d960b0509689ada200ed7b0106b39fd9eae9e662bc86f26ee6ac8b4",
@@ -106,7 +108,8 @@
     "src/resources/mod.rs": "6ac20bfc6dd7331f444b24d157f913a29c394c7e18d45f3f784c7ec603cc014e",
     "src/value/protected_json.rs": "f04719257e5d29e957942639fbc6a770ba677f8f60528ec56d8e1d378fa68d9a",
     "tests/extensions.rs": "69366f20d42c9d816594805f1c0f03067b2a637fb051fccf238cef3ca61efec1",
-    "tests/extensions_final_corrections.rs": "c73fd1b63cd633ed89d851c6734769871c20d62ae1cb5479814d85514eb9c2fb"
+    "tests/extensions_final_corrections.rs": "c73fd1b63cd633ed89d851c6734769871c20d62ae1cb5479814d85514eb9c2fb",
+    "tests/native_naming.rs": "edb9bd2fea2f94781cd80152531a7d47b29e33efcd412dccc7ca0b1ee9bf91eb"
   },
   "independent_extension_tests": [
     "tests/extensions.rs",

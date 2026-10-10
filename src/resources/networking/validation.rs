@@ -310,9 +310,6 @@ pub(super) fn validate<T: Profile>(value: &T, ctx: &ValidationContext<'_>, out: 
     }
     match T::KIND {
         "Service" => {
-            if let Some(metadata) = tree.get("metadata") {
-                service_metadata(metadata, ctx, &root.child("metadata"), out);
-            }
             if let Some(spec) = tree.get("spec") {
                 service(spec, ctx, &root.child("spec"), out);
             }
@@ -368,44 +365,6 @@ pub(super) fn validate<T: Profile>(value: &T, ctx: &ValidationContext<'_>, out: 
         }
     }) {
         out.push(error);
-    }
-}
-/// Service-only prefix lexical precheck; no concrete generated name is constructed.
-pub(crate) fn service_generate_name_identity_envelope(prefix: &str) -> bool {
-    if prefix.len() > 1 && prefix.ends_with('-') {
-        prefix.get(..prefix.len() - 2).is_some_and(|value| {
-            value
-                .bytes()
-                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-                && value.as_bytes().first().is_none_or(u8::is_ascii_alphanumeric)
-        })
-    } else {
-        dns_subdomain(prefix)
-    }
-}
-fn service_metadata(node: &TreeNode, ctx: &ValidationContext<'_>, path: &FieldPath, out: &mut dyn FindingSink) {
-    backend_service_name(node, "name", ctx, path, out);
-    let Some(prefix) = text(node, "generateName") else {
-        return;
-    };
-    if prefix.len() > 1 && prefix.ends_with('-') {
-        // Check the witnessed native prefix callback's effective label without
-        // allocating or fabricating a generated concrete name.
-        let retained = prefix.get(..prefix.len() - 2);
-        if prefix.len() > 64 || !service_generate_name_identity_envelope(prefix) {
-            invalid(&path.child("generateName"), out);
-        } else if retained
-            .and_then(|value| value.as_bytes().first())
-            .is_some_and(u8::is_ascii_digit)
-        {
-            match ctx.target.kubernetes.minor() {
-                20..=33 => invalid(&path.child("generateName"), out),
-                34..=36 => context(&path.child("generateName"), out),
-                _ => (),
-            }
-        }
-    } else {
-        backend_service_name(node, "generateName", ctx, path, out);
     }
 }
 fn service(spec: &TreeNode, ctx: &ValidationContext<'_>, path: &FieldPath, out: &mut dyn FindingSink) {

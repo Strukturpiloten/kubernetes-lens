@@ -46,6 +46,8 @@ pub enum FindingCode {
     NativeFieldInvalid,
     /// A reviewed native rule needs operation, version, gate or defaulting context.
     NativeContextRequired,
+    /// Selected native naming compatibility is unverified for a historical prefix or undeclared rule.
+    NativeNamingUnverified,
     /// The target API is not served in the selected profile.
     UnavailableApi,
     /// The target field is not available.
@@ -106,6 +108,7 @@ impl FindingCode {
             Self::UnknownKind => "unknown-kind",
             Self::NativeFieldInvalid => "native-field-invalid",
             Self::NativeContextRequired => "native-context-required",
+            Self::NativeNamingUnverified => "native-naming-unverified",
             Self::UnavailableApi => "unavailable-api",
             Self::UnavailableField => "unavailable-field",
             Self::UnadmittedField => "unadmitted-field",
@@ -329,6 +332,9 @@ impl Finding {
     #[must_use]
     pub const fn remediation(&self) -> &'static str {
         match self.code {
+            FindingCode::NativeNamingUnverified => {
+                "Select reviewed naming evidence for the exact GVK and target, or retain explicit unverified handling. For a historical generated prefix, Create does not establish compatibility: replace or remove that prefix."
+            }
             FindingCode::CollectionFieldRemoved => {
                 "Preserve List wrappers to retain their metadata and unknown fields."
             }

@@ -480,6 +480,7 @@ impl<T: UnknownScopes> UnknownScopes for BTreeMap<String, T> {
 
 // One declaration and sealed codec per shared shape; workload import paths are aliases.
 mod native_helpers;
+pub(crate) mod native_naming;
 mod native_time;
 mod workload_specs;
 pub use native_helpers::*;
