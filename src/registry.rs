@@ -4,44 +4,117 @@ use crate::{
     diagnostic::{Finding, FindingCode, Phase},
     graph::ReferenceSink,
     model::{GroupVersionKind, ResourceScope},
-    source::{AuthoringLimits, SourceEvidence},
+    source::{AuthoringLimits, ParseLimits, SourceEvidence},
     syntax::{EncodingBudget, SyntaxBuilder, TreeNode, TreeValue},
 };
 use std::{any::Any, collections::BTreeMap};
 
 pub(crate) trait FindingSink {
     fn push(&mut self, finding: Finding);
+    fn exhausted(&self) -> bool {
+        false
+    }
 }
 impl FindingSink for Vec<Finding> {
     fn push(&mut self, finding: Finding) {
         Self::push(self, finding);
     }
 }
+impl FindingSink for crate::processing::ProcessingReport {
+    fn push(&mut self, finding: Finding) {
+        Self::push(self, finding);
+    }
+    fn exhausted(&self) -> bool {
+        self.failed()
+    }
+}
+pub(crate) struct ResourceFindingSink<'a> {
+    pub(crate) sink: &'a mut dyn FindingSink,
+    pub(crate) resource: crate::ResourceId,
+}
+impl FindingSink for ResourceFindingSink<'_> {
+    fn push(&mut self, finding: Finding) {
+        self.sink.push(finding.for_resource(self.resource));
+    }
+    fn exhausted(&self) -> bool {
+        self.sink.exhausted()
+    }
+}
 pub(crate) struct DecodeContext<'a> {
     pub(crate) gvk: &'a GroupVersionKind,
     pub(crate) scope: ResourceScope,
+    pub(crate) fields: FieldDecodeContext,
+}
+/// A phase-aware view of one operation, never a fresh budget for a child field.
+#[derive(Clone)]
+pub(crate) struct FieldDecodeContext {
+    pub(crate) limits: ParseLimits,
+    pub(crate) processing: crate::processing::NativeOperationBudget,
+    pub(crate) phase: Phase,
+}
+impl FieldDecodeContext {
+    pub(crate) fn new(limits: ParseLimits, processing: crate::processing::NativeOperationBudget, phase: Phase) -> Self {
+        Self {
+            limits,
+            processing,
+            phase,
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn standalone() -> Self {
+        let limits = ParseLimits::default();
+        Self::new(
+            limits,
+            crate::processing::NativeOperationBudget::new(limits.processing),
+            Phase::Decoding,
+        )
+    }
 }
 pub(crate) struct EncodeContext<'a> {
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Target-aware sealed encoding extension exercised by foundation codecs"
-        )
-    )]
     pub(crate) target: Option<&'a TargetProfile>,
     pub(crate) include_unknown: bool,
     pub(crate) budget: EncodingBudget,
+    pub(crate) limits: ParseLimits,
 }
 impl<'a> EncodeContext<'a> {
+    #[cfg(test)]
     pub(crate) fn new(target: Option<&'a TargetProfile>) -> Self {
         Self {
             target,
             include_unknown: false,
             budget: EncodingBudget::new(AuthoringLimits::default()),
+            limits: ParseLimits::default(),
         }
     }
+    pub(crate) fn in_operation(
+        target: Option<&'a TargetProfile>,
+        limits: ParseLimits,
+        processing: crate::processing::NativeOperationBudget,
+    ) -> Self {
+        Self {
+            target,
+            include_unknown: false,
+            budget: EncodingBudget::in_operation(
+                AuthoringLimits {
+                    parser: limits,
+                    ..AuthoringLimits::default()
+                },
+                processing,
+            ),
+            limits,
+        }
+    }
+    pub(crate) fn fields(&self, phase: Phase) -> FieldDecodeContext {
+        FieldDecodeContext::new(self.limits, self.budget.processing().clone(), phase)
+    }
+    pub(crate) fn owned_string(&self, value: String, path: &crate::FieldPath) -> Result<TreeNode, Finding> {
+        self.check_scalar(value.len())?;
+        self.budget.scalar(value.len(), path)?;
+        Ok(TreeNode::new(TreeValue::String(value)))
+    }
     pub(crate) fn string(&self, value: &str, path: &crate::FieldPath) -> Result<TreeNode, Finding> {
+        self.check_scalar(value.len())?;
+        self.budget.processing().payload(value.len(), self.budget.phase())?;
         self.budget.scalar(value.len(), path)?;
         Ok(TreeNode::string(value))
     }
@@ -81,19 +154,45 @@ impl<'a> EncodeContext<'a> {
         self.budget.check_len(len.saturating_add(1), path)
     }
     pub(crate) fn key(&self, key: &str, path: &crate::FieldPath) -> Result<String, Finding> {
+        self.check_scalar(key.len())?;
+        self.budget.processing().payload(key.len(), self.budget.phase())?;
         self.budget.scalar(key.len(), path)?;
         Ok(key.to_owned())
+    }
+    fn check_scalar(&self, bytes: usize) -> Result<(), Finding> {
+        if bytes > self.limits.max_scalar_bytes {
+            Err(self.budget.processing().fail(self.budget.phase()))
+        } else {
+            Ok(())
+        }
+    }
+    pub(crate) fn for_source(&self, limits: ParseLimits) -> EncodeContext<'a> {
+        EncodeContext {
+            target: self.target,
+            include_unknown: self.include_unknown,
+            budget: self.budget.clone(),
+            limits,
+        }
     }
 }
 pub(crate) struct ValidationContext<'a> {
     pub(crate) intent: crate::generation::NativeValidationIntent,
     pub(crate) target: &'a TargetProfile,
+    pub(crate) fields: FieldDecodeContext,
+}
+impl<'a> ValidationContext<'a> {
+    pub(crate) fn encoding(&self) -> EncodeContext<'a> {
+        let mut ctx =
+            EncodeContext::in_operation(Some(self.target), self.fields.limits, self.fields.processing.clone());
+        ctx.budget = ctx.budget.for_phase(self.fields.phase);
+        ctx
+    }
 }
 pub(crate) trait NativeResource: Any + Send + Sync {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
-    fn collect_references(&self, out: &mut dyn ReferenceSink);
-    fn collect_protected_paths(&self, out: &mut Vec<crate::diagnostic::FieldPath>);
+    fn collect_references(&self, ctx: &EncodeContext<'_>, out: &mut dyn ReferenceSink);
+    fn collect_protected_paths(&self, ctx: &EncodeContext<'_>, out: &mut Vec<crate::diagnostic::FieldPath>);
     fn collect_native_facts(&self, _ctx: &ProjectionContext<'_>, _out: &mut Vec<crate::graph::NativeFact>) {}
     fn collect_observation_paths(&self, _tree: &TreeNode, _out: &mut Vec<crate::source::ObservationPath>) {}
     fn validate(&self, ctx: &ValidationContext<'_>, out: &mut dyn FindingSink);
@@ -151,9 +250,6 @@ impl RegistryBuilder {
 fn invalid() -> Finding {
     Finding::error(FindingCode::InvalidRegistration, Phase::Decoding)
 }
-pub(crate) fn encode(resource: &dyn NativeResource, target: Option<&TargetProfile>) -> Result<TreeNode, Finding> {
-    encode_in(resource, &EncodeContext::new(target))
-}
 pub(crate) fn encode_in(resource: &dyn NativeResource, ctx: &EncodeContext<'_>) -> Result<TreeNode, Finding> {
     let mut out = SyntaxBuilder::new();
     resource.encode_known(ctx, &mut out)?;
@@ -163,7 +259,7 @@ pub(crate) fn encode_in(resource: &dyn NativeResource, ctx: &EncodeContext<'_>) 
     Ok(tree)
 }
 pub(crate) mod codec {
-    use super::EncodeContext;
+    use super::{EncodeContext, FieldDecodeContext};
     use crate::{
         diagnostic::{FieldPath, Finding, FindingCode, Phase},
         model::{Metadata, OwnerReference},
@@ -172,7 +268,7 @@ pub(crate) mod codec {
     };
     use std::collections::BTreeMap;
     pub(crate) trait FieldCodec: Sized {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding>;
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding>;
         fn encode(&self, ctx: &EncodeContext<'_>, path: &FieldPath) -> Result<TreeNode, Finding>;
     }
     fn invalid(path: &FieldPath) -> Finding {
@@ -184,6 +280,7 @@ pub(crate) mod codec {
     pub(crate) fn read_presence<T: FieldCodec>(
         node: &TreeNode,
         key: &str,
+        ctx: &FieldDecodeContext,
         path: &FieldPath,
     ) -> Result<Presence<T>, Finding> {
         object(node, path)?;
@@ -192,7 +289,7 @@ pub(crate) mod codec {
             Some(TreeNode {
                 value: TreeValue::Null, ..
             }) => Ok(Presence::Null),
-            Some(value) => T::decode(value, &path.child(key))
+            Some(value) => T::decode(value, ctx, &path.child(key))
                 .map(Presence::Value)
                 .map_err(|mut finding| {
                     if finding.source.is_none() {
@@ -243,7 +340,8 @@ pub(crate) mod codec {
         Ok(())
     }
     impl FieldCodec for String {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+            ctx.processing.work(1, ctx.phase)?;
             node.as_str().map(str::to_owned).ok_or_else(|| invalid(path))
         }
         fn encode(&self, ctx: &EncodeContext<'_>, path: &FieldPath) -> Result<TreeNode, Finding> {
@@ -251,7 +349,8 @@ pub(crate) mod codec {
         }
     }
     impl FieldCodec for bool {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+            ctx.processing.work(1, ctx.phase)?;
             if let TreeValue::Bool(value) = node.value {
                 Ok(value)
             } else {
@@ -263,7 +362,8 @@ pub(crate) mod codec {
         }
     }
     impl FieldCodec for i64 {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+            ctx.processing.work(1, ctx.phase)?;
             if let TreeValue::Number(value) = &node.value {
                 value.parse().map_err(|_| invalid(path))
             } else {
@@ -275,20 +375,22 @@ pub(crate) mod codec {
         }
     }
     impl FieldCodec for i32 {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
-            i32::try_from(i64::decode(node, path)?).map_err(|_| invalid(path))
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+            ctx.processing.work(1, ctx.phase)?;
+            i32::try_from(i64::decode(node, ctx, path)?).map_err(|_| invalid(path))
         }
         fn encode(&self, ctx: &EncodeContext<'_>, path: &FieldPath) -> Result<TreeNode, Finding> {
             ctx.integer(i64::from(*self), path)
         }
     }
     impl<T: FieldCodec> FieldCodec for Vec<T> {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+            ctx.processing.work(1, ctx.phase)?;
             node.as_sequence()
                 .ok_or_else(|| invalid(path))?
                 .iter()
                 .enumerate()
-                .map(|(index, node)| T::decode(node, &path.child(index.to_string())))
+                .map(|(index, node)| T::decode(node, ctx, &path.child(index.to_string())))
                 .collect()
         }
         fn encode(&self, ctx: &EncodeContext<'_>, path: &FieldPath) -> Result<TreeNode, Finding> {
@@ -301,10 +403,11 @@ pub(crate) mod codec {
         }
     }
     impl<T: FieldCodec> FieldCodec for BTreeMap<String, T> {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+            ctx.processing.work(1, ctx.phase)?;
             object(node, path)?
                 .iter()
-                .map(|(key, value)| Ok((key.clone(), T::decode(value, &path.child(key))?)))
+                .map(|(key, value)| Ok((key.clone(), T::decode(value, ctx, &path.child(key))?)))
                 .collect()
         }
         fn encode(&self, ctx: &EncodeContext<'_>, path: &FieldPath) -> Result<TreeNode, Finding> {
@@ -318,26 +421,35 @@ pub(crate) mod codec {
         }
     }
     impl<T: FieldCodec> FieldCodec for Protected<T> {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
-            T::decode(node, path).map(Self::new)
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+            ctx.processing.work(1, ctx.phase)?;
+            T::decode(node, ctx, path).map(Self::new)
         }
         fn encode(&self, ctx: &EncodeContext<'_>, path: &FieldPath) -> Result<TreeNode, Finding> {
             self.native_value().encode(ctx, path)
         }
     }
     impl FieldCodec for Quantity {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
-            Self::parse(node.as_str().ok_or_else(|| invalid(path))?).map_err(|finding| finding.at_path(path.clone()))
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+            ctx.processing.work(1, ctx.phase)?;
+            Self::parse_in(node.as_str().ok_or_else(|| invalid(path))?, ctx).map_err(|finding| {
+                if finding.code == FindingCode::LimitExceeded {
+                    finding
+                } else {
+                    finding.at_path(path.clone())
+                }
+            })
         }
         fn encode(&self, ctx: &EncodeContext<'_>, path: &FieldPath) -> Result<TreeNode, Finding> {
             ctx.string(self.native_lexeme(), path)
         }
     }
     impl FieldCodec for IntOrString {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+            ctx.processing.work(1, ctx.phase)?;
             match &node.value {
                 TreeValue::String(value) => Ok(Self::String(value.clone())),
-                TreeValue::Number(_) => i64::decode(node, path).map(Self::Int),
+                TreeValue::Number(_) => i64::decode(node, ctx, path).map(Self::Int),
                 _ => Err(invalid(path)),
             }
         }
@@ -368,18 +480,19 @@ pub(crate) mod codec {
         }
     }
     impl FieldCodec for Metadata {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+            ctx.processing.work(1, ctx.phase)?;
             object(node, path)?;
             Ok(Self {
-                name: read_presence(node, "name", path)?,
-                generate_name: read_presence(node, "generateName", path)?,
-                namespace: read_presence(node, "namespace", path)?,
-                labels: read_presence(node, "labels", path)?,
-                annotations: read_presence(node, "annotations", path)?,
-                finalizers: read_presence(node, "finalizers", path)?,
-                uid: read_presence(node, "uid", path)?,
-                resource_version: read_presence(node, "resourceVersion", path)?,
-                owner_references: read_presence(node, "ownerReferences", path)?,
+                name: read_presence(node, "name", ctx, path)?,
+                generate_name: read_presence(node, "generateName", ctx, path)?,
+                namespace: read_presence(node, "namespace", ctx, path)?,
+                labels: read_presence(node, "labels", ctx, path)?,
+                annotations: read_presence(node, "annotations", ctx, path)?,
+                finalizers: read_presence(node, "finalizers", ctx, path)?,
+                uid: read_presence(node, "uid", ctx, path)?,
+                resource_version: read_presence(node, "resourceVersion", ctx, path)?,
+                owner_references: read_presence(node, "ownerReferences", ctx, path)?,
                 unknown: UnknownFields::capture(
                     node,
                     &[
@@ -411,9 +524,15 @@ pub(crate) mod codec {
             ctx.object(entries, path)
         }
     }
-    fn required<T: FieldCodec>(node: &TreeNode, key: &str, path: &FieldPath) -> Result<T, Finding> {
+    fn required<T: FieldCodec>(
+        node: &TreeNode,
+        key: &str,
+        ctx: &FieldDecodeContext,
+        path: &FieldPath,
+    ) -> Result<T, Finding> {
         T::decode(
             node.get(key).ok_or_else(|| invalid(&path.child(key)))?,
+            ctx,
             &path.child(key),
         )
     }
@@ -429,15 +548,16 @@ pub(crate) mod codec {
         Ok(())
     }
     impl FieldCodec for OwnerReference {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+            ctx.processing.work(1, ctx.phase)?;
             object(node, path)?;
             Ok(Self {
-                api_version: required(node, "apiVersion", path)?,
-                kind: required(node, "kind", path)?,
-                name: required(node, "name", path)?,
-                uid: read_presence(node, "uid", path)?,
-                controller: read_presence(node, "controller", path)?,
-                block_owner_deletion: read_presence(node, "blockOwnerDeletion", path)?,
+                api_version: required(node, "apiVersion", ctx, path)?,
+                kind: required(node, "kind", ctx, path)?,
+                name: required(node, "name", ctx, path)?,
+                uid: read_presence(node, "uid", ctx, path)?,
+                controller: read_presence(node, "controller", ctx, path)?,
+                block_owner_deletion: read_presence(node, "blockOwnerDeletion", ctx, path)?,
                 unknown: UnknownFields::capture(
                     node,
                     &["apiVersion", "kind", "name", "uid", "controller", "blockOwnerDeletion"],
@@ -463,9 +583,10 @@ pub(crate) mod codec {
         }
     }
     impl FieldCodec for SelectorRequirement {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+            ctx.processing.work(1, ctx.phase)?;
             object(node, path)?;
-            let operator = match required::<String>(node, "operator", path)?.as_str() {
+            let operator = match required::<String>(node, "operator", ctx, path)?.as_str() {
                 "In" => SelectorOperator::In,
                 "NotIn" => SelectorOperator::NotIn,
                 "Exists" => SelectorOperator::Exists,
@@ -473,9 +594,9 @@ pub(crate) mod codec {
                 _ => return Err(invalid(&path.child("operator"))),
             };
             Ok(Self {
-                key: required(node, "key", path)?,
+                key: required(node, "key", ctx, path)?,
                 operator,
-                values: read_presence(node, "values", path)?,
+                values: read_presence(node, "values", ctx, path)?,
                 unknown: UnknownFields::capture(node, &["key", "operator", "values"]),
             })
         }
@@ -498,11 +619,12 @@ pub(crate) mod codec {
         }
     }
     impl FieldCodec for LabelSelector {
-        fn decode(node: &TreeNode, path: &FieldPath) -> Result<Self, Finding> {
+        fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
+            ctx.processing.work(1, ctx.phase)?;
             object(node, path)?;
             Ok(Self {
-                match_labels: read_presence(node, "matchLabels", path)?,
-                match_expressions: read_presence(node, "matchExpressions", path)?,
+                match_labels: read_presence(node, "matchLabels", ctx, path)?,
+                match_expressions: read_presence(node, "matchExpressions", ctx, path)?,
                 unknown: UnknownFields::capture(node, &["matchLabels", "matchExpressions"]),
             })
         }
@@ -530,11 +652,13 @@ pub(crate) struct ProjectionContext<'a> {
     pub(crate) source: &'a SourceEvidence,
     pub(crate) target: Option<&'a TargetProfile>,
     pub(crate) capability: &'a KindCapability,
+    pub(crate) fields: FieldDecodeContext,
     operations: std::cell::Cell<usize>,
-    findings: std::cell::RefCell<Vec<Finding>>,
+    findings: std::cell::RefCell<crate::processing::ProcessingReport>,
     contextual: Vec<Finding>,
 }
 impl<'a> ProjectionContext<'a> {
+    #[cfg(test)]
     pub(crate) fn new(
         tree: &'a TreeNode,
         gvk: &'a GroupVersionKind,
@@ -542,28 +666,60 @@ impl<'a> ProjectionContext<'a> {
         target: Option<&'a TargetProfile>,
         capability: &'a KindCapability,
     ) -> Self {
+        Self::new_in(
+            tree,
+            gvk,
+            source,
+            target,
+            capability,
+            crate::processing::NativeOperationBudget::new(source.limits().processing),
+        )
+    }
+    pub(crate) fn new_in(
+        tree: &'a TreeNode,
+        gvk: &'a GroupVersionKind,
+        source: &'a SourceEvidence,
+        target: Option<&'a TargetProfile>,
+        capability: &'a KindCapability,
+        processing: crate::processing::NativeOperationBudget,
+    ) -> Self {
+        let mut contextual = crate::processing::ProcessingReport::new(processing.clone(), Phase::Analysis);
+        let mut probe;
+        let target_for_fields = if let Some(target) = target {
+            target
+        } else {
+            probe = TargetProfile::documented_defaults(crate::capability::KubernetesVersion::MIN);
+            for gate in crate::capability::FeatureGateId::ALL {
+                probe
+                    .feature_gates
+                    .states
+                    .insert(*gate, crate::capability::FeatureGateState::Disabled);
+            }
+            &probe
+        };
+        crate::capability::source_field_findings(
+            tree,
+            gvk,
+            target_for_fields,
+            &processing,
+            Phase::Analysis,
+            &mut contextual,
+        );
         Self {
             tree,
             gvk,
             source,
             target,
             capability,
+            fields: FieldDecodeContext::new(*source.limits(), processing.clone(), Phase::Analysis),
             operations: std::cell::Cell::new(0),
-            findings: std::cell::RefCell::new(Vec::new()),
-            contextual: if let Some(target) = target {
-                crate::capability::source_field_findings(tree, gvk, target)
-            } else {
-                let mut probe = TargetProfile::documented_defaults(crate::capability::KubernetesVersion::MIN);
-                for gate in crate::capability::FeatureGateId::ALL {
-                    probe
-                        .feature_gates
-                        .states
-                        .insert(*gate, crate::capability::FeatureGateState::Disabled);
-                }
-                crate::capability::source_field_findings(tree, gvk, &probe)
-            },
+            findings: std::cell::RefCell::new(crate::processing::ProcessingReport::new(processing, Phase::Analysis)),
+            // Internal gating evidence is charged once in the same operation. The
+            // shared sticky state also reaches the outward report on exhaustion.
+            contextual: contextual.into_vec(),
         }
     }
+
     pub(crate) fn state<T>(
         &self,
         path: &crate::FieldPath,
@@ -669,13 +825,14 @@ impl<'a> ProjectionContext<'a> {
             out.push(fact);
         }
     }
-    fn tick(&self, path: &crate::FieldPath) -> bool {
-        let limit = crate::source::ParseLimits::default().max_nodes;
-        if self.operations.get() >= limit {
+    fn tick(&self, _path: &crate::FieldPath) -> bool {
+        let limit = self.fields.limits.max_nodes;
+        if self.fields.processing.work(1, Phase::Analysis).is_err() || self.operations.get() >= limit {
+            self.fields.processing.fail(Phase::Analysis);
             if self.findings.borrow().is_empty() {
                 self.findings
                     .borrow_mut()
-                    .push(Finding::error(FindingCode::LimitExceeded, Phase::Analysis).at_path(path.clone()));
+                    .push(Finding::error(FindingCode::LimitExceeded, Phase::Analysis));
             }
             false
         } else {
@@ -684,6 +841,11 @@ impl<'a> ProjectionContext<'a> {
         }
     }
     pub(crate) fn take_findings(&self) -> Vec<Finding> {
-        self.findings.take()
+        self.findings
+            .replace(crate::processing::ProcessingReport::new(
+                self.fields.processing.clone(),
+                Phase::Analysis,
+            ))
+            .into_vec()
     }
 }

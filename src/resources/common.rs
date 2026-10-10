@@ -24,10 +24,11 @@ macro_rules! native_object {
             }
         }
         impl $crate::registry::codec::FieldCodec for $name {
-            fn decode(node: &$crate::syntax::TreeNode, path: &$crate::diagnostic::FieldPath) -> Result<Self, $crate::diagnostic::Finding> {
+            fn decode(node: &$crate::syntax::TreeNode, ctx: &$crate::registry::FieldDecodeContext, path: &$crate::diagnostic::FieldPath) -> Result<Self, $crate::diagnostic::Finding> {
                 $crate::registry::codec::object(node, path)?;
+                ctx.processing.work(1, ctx.phase)?;
                 Ok(Self {
-                    $($field: $crate::registry::codec::read_presence(node, $wire, path)?,)*
+                    $($field: $crate::registry::codec::read_presence(node, $wire, ctx, path)?,)*
                     unknown: $crate::syntax::UnknownFields::capture(node, Self::NATIVE_FIELDS),
                 })
             }
@@ -271,6 +272,7 @@ no_unknown!(
     i32,
     i64,
     Quantity,
+    crate::value::NativeBytes,
     crate::value::IntOrString,
     LabelSelector,
     crate::value::SelectorRequirement,

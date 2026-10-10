@@ -937,6 +937,9 @@ struct GateCheck<'a> {
     target: &'a TargetProfile,
 }
 fn visit(node: &TreeNode, remaining: &[String], path: &FieldPath, check: &GateCheck<'_>, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
     let Some((first, rest)) = remaining.split_first() else {
         if check
             .values
@@ -963,10 +966,16 @@ fn visit(node: &TreeNode, remaining: &[String], path: &FieldPath, check: &GateCh
     if first == "*" {
         if let Some(list) = node.as_sequence() {
             for (i, n) in list.iter().enumerate() {
+                if out.exhausted() {
+                    return;
+                }
                 visit(n, rest, &path.child(i.to_string()), check, out);
             }
         } else if let Some(map) = node.as_mapping() {
             for (k, n) in map {
+                if out.exhausted() {
+                    return;
+                }
                 visit(n, rest, &path.child(k.clone()), check, out);
             }
         }

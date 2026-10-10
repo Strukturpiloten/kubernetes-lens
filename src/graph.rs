@@ -132,6 +132,9 @@ pub struct Reference {
     pub scope: ReferenceScope,
 }
 pub(crate) trait ReferenceSink {
+    fn exhausted(&self) -> bool {
+        false
+    }
     fn push(&mut self, reference: Reference);
 }
 impl ReferenceSink for Vec<Reference> {
@@ -210,11 +213,14 @@ pub enum Resolution {
 pub struct ReferenceContext {
     /// Separately declared caller namespace.
     pub default_namespace: Option<String>,
+    /// Optional ceilings that can only lower retained source ceilings.
+    pub processing: Option<crate::processing::NativeProcessingLimits>,
 }
 impl fmt::Debug for ReferenceContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ReferenceContext")
             .field("has_namespace", &self.default_namespace.is_some())
+            .field("processing", &self.processing)
             .finish()
     }
 }
@@ -236,6 +242,20 @@ pub struct ReferenceGraph {
     /// Safe missing/ambiguity/cycle findings.
     pub findings: Vec<Finding>,
     target: Option<std::sync::Arc<GraphTargetWitness>>,
+}
+struct WorkingGraph {
+    edges: Vec<ResolvedReference>,
+    findings: crate::processing::ProcessingReport,
+    target: Option<std::sync::Arc<GraphTargetWitness>>,
+}
+impl WorkingGraph {
+    fn finish(self) -> ReferenceGraph {
+        ReferenceGraph {
+            edges: self.edges,
+            findings: self.findings.into_vec(),
+            target: self.target,
+        }
+    }
 }
 impl ReferenceGraph {
     /// Complete explicit checked target retained even by an empty graph.
@@ -1081,17 +1101,20 @@ fn digest_block(block: &[u8], state: &mut [u32; 8]) {
 struct GraphBudget {
     remaining: std::cell::Cell<usize>,
     failed: std::cell::Cell<bool>,
+    processing: crate::processing::NativeOperationBudget,
 }
 impl GraphBudget {
-    fn new() -> Self {
+    fn new(processing: crate::processing::NativeOperationBudget) -> Self {
         Self {
+            processing,
             remaining: std::cell::Cell::new(crate::source::ParseLimits::default().max_events),
             failed: std::cell::Cell::new(false),
         }
     }
     fn take(&self, count: usize) -> bool {
-        if count > self.remaining.get() {
+        if self.failed.get() || self.processing.work(count, Phase::Analysis).is_err() || count > self.remaining.get() {
             self.failed.set(true);
+            self.processing.fail(Phase::Analysis);
             false
         } else {
             self.remaining.set(self.remaining.get() - count);
@@ -1105,6 +1128,9 @@ struct BoundedReferences<'a> {
     exhausted: bool,
 }
 impl ReferenceSink for BoundedReferences<'_> {
+    fn exhausted(&self) -> bool {
+        self.exhausted || self.budget.processing.exhausted()
+    }
     fn push(&mut self, reference: Reference) {
         if self.budget.take(1) {
             self.references.push(reference);
@@ -1204,15 +1230,18 @@ fn project_documents(
     target: Option<&crate::capability::TargetProfile>,
     collect: bool,
     collector: &mut BoundedReferences<'_>,
-    graph: &mut ReferenceGraph,
+    graph: &mut WorkingGraph,
 ) -> ProjectionBatch {
     let budget = collector.budget;
-    let construction = registry::EncodeContext::new(target);
+    let construction = resources.encoding(target, budget.processing.clone());
     let mut projections = BTreeMap::new();
     let mut identities = BTreeMap::new();
     let mut facts = BTreeMap::new();
     let mut failed = BTreeMap::new();
     for document in &resources.documents {
+        if graph.findings.failed() {
+            break;
+        }
         if !budget.take(tree_cost(&document.original)) {
             failed.insert(document.id, document.original_identity.clone());
             graph
@@ -1234,12 +1263,13 @@ fn project_documents(
         }
         identities.insert(document.id, projection.identity.clone());
         if let (Some(native), Some(capability)) = (&projection.resource, &document.capability) {
-            let ctx = registry::ProjectionContext::new(
+            let ctx = registry::ProjectionContext::new_in(
                 &projection.tree,
                 &projection.identity.gvk,
                 &document.evidence,
                 target,
                 capability,
+                budget.processing.clone(),
             );
             let mut emitted = Vec::new();
             native.collect_native_facts(&ctx, &mut emitted);
@@ -1277,14 +1307,14 @@ fn project_documents(
             } else {
                 collector.exhausted = true;
             }
-            graph.findings.extend(
+            graph.findings.append_charged(
                 ctx.take_findings()
                     .into_iter()
                     .map(|finding| finding.for_resource(document.id)),
             );
             if collect {
                 let start = collector.references.len();
-                native.collect_references(collector);
+                native.collect_references(&construction.for_source(*document.evidence.limits()), collector);
                 for reference in &mut collector.references[start..] {
                     reference.from = document.id;
                 }
@@ -1336,12 +1366,15 @@ fn collect_projected_owners(
     tree: &crate::syntax::TreeNode,
     id: ResourceId,
     collector: &mut BoundedReferences<'_>,
-    findings: &mut Vec<Finding>,
+    findings: &mut crate::processing::ProcessingReport,
 ) {
     let owner_path = FieldPath(vec!["metadata".into(), "ownerReferences".into()]);
     if let Some(owners) = tree.get_path(&owner_path) {
         if let Some(items) = owners.as_sequence() {
             for (index, owner) in items.iter().enumerate() {
+                if findings.failed() || !collector.budget.take(1) {
+                    break;
+                }
                 let path = owner_path.child(index.to_string());
                 match owner_reference(owner, path.clone(), id) {
                     Ok(reference) => collector.push(reference),
@@ -1367,7 +1400,11 @@ fn collect_projected_owners(
         }
     }
 }
-fn check_claim_collisions(index: &GraphIndex<'_>, references: &[Reference], findings: &mut Vec<Finding>) {
+fn check_claim_collisions(
+    index: &GraphIndex<'_>,
+    references: &[Reference],
+    findings: &mut crate::processing::ProcessingReport,
+) {
     let GraphIndex {
         resources,
         projections,
@@ -1381,6 +1418,9 @@ fn check_claim_collisions(index: &GraphIndex<'_>, references: &[Reference], find
     // Keys remain private and no owner equality or runtime existence is inferred.
     let mut claims = BTreeMap::<(String, String), Vec<(ResourceId, FieldPath)>>::new();
     for reference in references {
+        if findings.failed() {
+            break;
+        }
         let ReferenceTarget::GeneratedClaims {
             pattern:
                 ClaimPattern::PodEphemeral {
@@ -1398,6 +1438,7 @@ fn check_claim_collisions(index: &GraphIndex<'_>, references: &[Reference], find
             break;
         }
         if claim_admission(
+            budget,
             resources,
             projections,
             reference,
@@ -1482,12 +1523,15 @@ impl GraphIndex<'_> {
         }
     }
 }
-fn resolve_edges(index: &GraphIndex<'_>, references: Vec<Reference>, graph: &mut ReferenceGraph) {
+fn resolve_edges(index: &GraphIndex<'_>, references: Vec<Reference>, graph: &mut WorkingGraph) {
     let resources = index.resources;
     let projections = index.projections;
     let witness = index.witness;
     let budget = index.budget;
     for reference in references {
+        if graph.findings.failed() {
+            break;
+        }
         let mut evidence = contribution(
             budget,
             resources,
@@ -1553,6 +1597,9 @@ fn resolve_edges(index: &GraphIndex<'_>, references: Vec<Reference>, graph: &mut
                     .at_path(reference.path.clone()),
             );
         }
+        if graph.findings.failed() {
+            break;
+        }
         graph.edges.push(ResolvedReference {
             reference,
             resolution,
@@ -1567,13 +1614,17 @@ fn analyze(
     context: &ReferenceContext,
     target: Option<&crate::capability::TargetProfile>,
 ) -> ReferenceGraph {
-    let budget = GraphBudget::new();
+    let processing = resources.operation(context.processing);
+    let budget = GraphBudget::new(processing.clone());
     let witness = target.map(|target| std::sync::Arc::new(GraphTargetWitness::new(target)));
-    let mut graph = ReferenceGraph {
+    let mut graph = WorkingGraph {
         edges: Vec::new(),
-        findings: target.map_or_else(Vec::new, crate::capability::TargetProfile::findings),
+        findings: crate::processing::ProcessingReport::new(processing, Phase::Analysis),
         target: witness.clone(),
     };
+    graph
+        .findings
+        .extend(target.map_or_else(Vec::new, crate::capability::TargetProfile::findings));
     let mut collector = BoundedReferences {
         budget: &budget,
         references: Vec::new(),
@@ -1583,7 +1634,7 @@ fn analyze(
         graph
             .findings
             .push(Finding::error(FindingCode::LimitExceeded, Phase::Analysis));
-        return graph;
+        return graph.finish();
     }
     let mut ids = BTreeSet::new();
     for document in &resources.documents {
@@ -1591,7 +1642,7 @@ fn analyze(
             graph
                 .findings
                 .push(Finding::error(FindingCode::InvalidIdentity, Phase::Analysis).for_resource(document.id));
-            return graph;
+            return graph.finish();
         }
     }
     let ProjectionBatch {
@@ -1602,6 +1653,9 @@ fn analyze(
     } = project_documents(resources, target, supplied.is_none(), &mut collector, &mut graph);
     if let Some(refs) = supplied {
         for reference in refs {
+            if collector.exhausted() {
+                break;
+            }
             collector.push(reference.clone());
         }
     }
@@ -1641,7 +1695,7 @@ fn analyze(
             .findings
             .push(Finding::error(FindingCode::LimitExceeded, Phase::Analysis));
     }
-    graph
+    graph.finish()
 }
 fn recheck_keys(
     ctx: &registry::ProjectionContext<'_>,
@@ -1758,7 +1812,7 @@ fn recheck_ports(
     }
     state
 }
-fn find_cycles(identities: &BTreeMap<ResourceId, ResourceIdentity>, graph: &mut ReferenceGraph, budget: &GraphBudget) {
+fn find_cycles(identities: &BTreeMap<ResourceId, ResourceIdentity>, graph: &mut WorkingGraph, budget: &GraphBudget) {
     let mut adjacency = BTreeMap::<ResourceId, Vec<ResourceId>>::new();
     for edge in &graph.edges {
         if edge.reference.relation == RelationshipKind::Selector
@@ -1779,6 +1833,9 @@ fn find_cycles(identities: &BTreeMap<ResourceId, ResourceIdentity>, graph: &mut 
         }
     }
     for id in identities.keys() {
+        if graph.findings.failed() {
+            break;
+        }
         let mut pending = adjacency.get(id).cloned().unwrap_or_default();
         let mut visited = BTreeSet::new();
         while let Some(next) = pending.pop() {
@@ -2262,7 +2319,7 @@ impl GraphIndex<'_> {
         if !budget.take(resources.documents.len()) {
             return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
         }
-        if let Err(reason) = claim_admission(resources, projections, reference, pattern, witness) {
+        if let Err(reason) = claim_admission(budget, resources, projections, reference, pattern, witness) {
             return Resolution::Unsupported(reason);
         }
         let namespace = match selected_namespace(reference, identities, context) {
@@ -2561,12 +2618,13 @@ fn claim_owner(
     if projection.resource.is_none() {
         return ClaimOwnership::Unknown;
     }
-    let ctx = registry::ProjectionContext::new(
+    let ctx = registry::ProjectionContext::new_in(
         &projection.tree,
         &projection.identity.gvk,
         &document.evidence,
         witness.as_ref().map(|witness| witness.profile()),
         capability,
+        budget.processing.clone(),
     );
     let path = FieldPath(vec!["metadata".into(), "ownerReferences".into()]);
     if let Some(field) = contribution(
@@ -2672,10 +2730,12 @@ fn recheck_labels(
         }
         let source = match ctx.tree.get_path(&expected) {
             None => BTreeMap::new(),
-            Some(node) => match <BTreeMap<String, String> as registry::codec::FieldCodec>::decode(node, &expected) {
-                Ok(labels) => labels,
-                Err(_) => return FactState::Unknown(FactGap::IncompleteSuppliedEvidence),
-            },
+            Some(node) => {
+                match <BTreeMap<String, String> as registry::codec::FieldCodec>::decode(node, &ctx.fields, &expected) {
+                    Ok(labels) => labels,
+                    Err(_) => return FactState::Unknown(FactGap::IncompleteSuppliedEvidence),
+                }
+            }
         };
         if source
             .iter()
@@ -2697,18 +2757,20 @@ fn recheck_labels(
     ctx.state(&expected, state)
 }
 fn claim_pattern_paths(
+    fields: &registry::FieldDecodeContext,
     reference: &Reference,
     pattern: &ClaimPattern,
     projection: &crate::model::EffectiveProjection,
 ) -> Result<Vec<FieldPath>, SafeReason> {
     let mut paths = vec![reference.path.clone()];
     match pattern {
-        ClaimPattern::StatefulSet { .. } => recheck_stateful_claim(pattern, projection, &mut paths)?,
+        ClaimPattern::StatefulSet { .. } => recheck_stateful_claim(fields, pattern, projection, &mut paths)?,
         ClaimPattern::PodEphemeral { .. } => recheck_ephemeral_claim(reference, pattern, projection, &mut paths)?,
     }
     Ok(paths)
 }
 fn recheck_stateful_claim(
+    fields: &registry::FieldDecodeContext,
     pattern: &ClaimPattern,
     projection: &crate::model::EffectiveProjection,
     paths: &mut Vec<FieldPath>,
@@ -2750,7 +2812,7 @@ fn recheck_stateful_claim(
         let source = match projection.tree.get_path(&path) {
             None => Presence::Absent,
             Some(node) if node.value == crate::syntax::TreeValue::Null => Presence::Null,
-            Some(node) => match <i32 as registry::codec::FieldCodec>::decode(node, &path) {
+            Some(node) => match <i32 as registry::codec::FieldCodec>::decode(node, fields, &path) {
                 Ok(value) => Presence::Value(value),
                 Err(_) => return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence)),
             },
@@ -2843,6 +2905,7 @@ fn recheck_ephemeral_claim(
     Ok(())
 }
 fn claim_admission(
+    budget: &GraphBudget,
     resources: &ResourceSet,
     projections: &BTreeMap<ResourceId, crate::model::EffectiveProjection>,
     reference: &Reference,
@@ -2859,14 +2922,15 @@ fn claim_admission(
     if projection.resource.is_none() {
         return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
     }
-    let ctx = registry::ProjectionContext::new(
+    let ctx = registry::ProjectionContext::new_in(
         &projection.tree,
         &projection.identity.gvk,
         &document.evidence,
         witness.as_ref().map(|witness| witness.profile()),
         capability,
+        budget.processing.clone(),
     );
-    let paths = claim_pattern_paths(reference, pattern, projection)?;
+    let paths = claim_pattern_paths(&ctx.fields, reference, pattern, projection)?;
     for path in paths {
         if projection.tree.get_path(&path).is_none() {
             continue;

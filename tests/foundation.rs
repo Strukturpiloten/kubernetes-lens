@@ -358,6 +358,7 @@ fn supplied_graph_namespace_context_selectors_missing_external_and_cycles() -> T
     assert!(matches!(graph.edges[0].resolution, Resolution::Unsupported(_)));
     let context = ReferenceContext {
         default_namespace: Some("explicit".into()),
+        ..ReferenceContext::default()
     };
     let graph = resolve_supplied_references(&set, &refs, &context);
     assert_eq!(

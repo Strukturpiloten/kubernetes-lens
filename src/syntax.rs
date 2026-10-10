@@ -335,8 +335,9 @@ impl SyntaxBuilder {
 
 /// Shared construction accounting; cloning a context never resets its allowance.
 #[derive(Clone)]
-pub(crate) struct EncodingBudget(Rc<EncodingCounters>);
+pub(crate) struct EncodingBudget(Rc<EncodingCounters>, Phase);
 struct EncodingCounters {
+    processing: crate::processing::NativeOperationBudget,
     limits: crate::source::AuthoringLimits,
     nodes: Cell<usize>,
     events: Cell<usize>,
@@ -347,17 +348,41 @@ struct EncodingCounters {
     verified_events: Cell<usize>,
 }
 impl EncodingBudget {
+    #[cfg(test)]
     pub(crate) fn new(limits: crate::source::AuthoringLimits) -> Self {
-        Self(Rc::new(EncodingCounters {
+        Self::in_operation(
             limits,
-            nodes: Cell::new(0),
-            events: Cell::new(0),
-            bytes: Cell::new(0),
-            scalar_bytes: Cell::new(0),
-            verified_scalar_bytes: Cell::new(0),
-            verified_nodes: Cell::new(0),
-            verified_events: Cell::new(0),
-        }))
+            crate::processing::NativeOperationBudget::new(limits.parser.processing),
+        )
+    }
+    pub(crate) fn in_operation(
+        limits: crate::source::AuthoringLimits,
+        processing: crate::processing::NativeOperationBudget,
+    ) -> Self {
+        Self(
+            Rc::new(EncodingCounters {
+                processing,
+                limits,
+                nodes: Cell::new(0),
+                events: Cell::new(0),
+                bytes: Cell::new(0),
+                scalar_bytes: Cell::new(0),
+                verified_scalar_bytes: Cell::new(0),
+                verified_nodes: Cell::new(0),
+                verified_events: Cell::new(0),
+            }),
+            Phase::Generation,
+        )
+    }
+    pub(crate) fn for_phase(mut self, phase: Phase) -> Self {
+        self.1 = phase;
+        self
+    }
+    pub(crate) fn phase(&self) -> Phase {
+        self.1
+    }
+    pub(crate) fn processing(&self) -> &crate::processing::NativeOperationBudget {
+        &self.0.processing
     }
     pub(crate) fn check_len(&self, len: usize, path: &FieldPath) -> Result<(), Finding> {
         let limits = self.0.limits.parser;
@@ -370,6 +395,7 @@ impl EncodingBudget {
         Ok(())
     }
     pub(crate) fn scalar(&self, len: usize, path: &FieldPath) -> Result<(), Finding> {
+        self.processing().work(len, self.1)?;
         if len > self.0.limits.parser.max_scalar_bytes {
             return Err(encoding_limit(path));
         }
@@ -387,6 +413,7 @@ impl EncodingBudget {
         Ok(())
     }
     pub(crate) fn node(&self, path: &FieldPath) -> Result<(), Finding> {
+        self.processing().work(1, self.1)?;
         self.check_len(1, path)?;
         if path.0.len() > self.0.limits.parser.max_depth {
             return Err(encoding_limit(path));
@@ -406,10 +433,12 @@ impl EncodingBudget {
                 TreeValue::Bool(*value)
             }
             TreeValue::Number(value) => {
+                self.processing().payload(value.len(), self.1)?;
                 self.scalar(value.len(), path)?;
                 TreeValue::Number(value.clone())
             }
             TreeValue::String(value) => {
+                self.processing().payload(value.len(), self.1)?;
                 self.scalar(value.len(), path)?;
                 TreeValue::String(value.clone())
             }
@@ -428,6 +457,7 @@ impl EncodingBudget {
                 let mut out = Vec::with_capacity(entries.len());
                 for (key, value) in entries {
                     let child = path.child(key);
+                    self.processing().payload(key.len(), self.1)?;
                     self.scalar(key.len(), &child)?;
                     out.push((key.clone(), self.clone_node(value, &child)?));
                 }
@@ -441,7 +471,7 @@ impl EncodingBudget {
     }
     /// Verify the final shape independently of trusted codec accounting.
     pub(crate) fn verify(&self, node: &TreeNode) -> Result<(), Finding> {
-        let check = Self::new(self.0.limits);
+        let check = Self::in_operation(self.0.limits, self.processing().clone()).for_phase(self.1);
         check.0.nodes.set(self.0.verified_nodes.get());
         check.0.events.set(self.0.verified_events.get());
         check.0.scalar_bytes.set(self.0.verified_scalar_bytes.get());
@@ -505,6 +535,8 @@ impl EncodingBudget {
         {
             return Err(encoding_limit(path));
         }
+        self.processing().payload(bytes.len(), self.1)?;
+        self.processing().work(bytes.len(), self.1)?;
         out.extend_from_slice(bytes);
         Ok(())
     }

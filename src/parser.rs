@@ -18,6 +18,7 @@ pub struct ParsedInput {
     pub(crate) trees: Vec<TreeNode>,
     pub(crate) evidence: Arc<SourceEvidence>,
     pub(crate) limits: ParseLimits,
+    pub(crate) processing: crate::processing::NativeOperationBudget,
 }
 impl ParsedInput {
     /// Number of syntax documents, preserving YAML stream boundaries.
@@ -40,7 +41,8 @@ impl ParsedInput {
     /// # Errors
     /// Refuses malformed resource/List identity and duplicate supplied identities.
     pub fn flatten_resources(self) -> Result<crate::model::ResourceSet, Vec<Finding>> {
-        crate::model::ResourceSet::from_inputs(vec![self])
+        let processing = self.processing.clone();
+        crate::model::ResourceSet::with_registry_in(vec![self], &crate::resources::registry()?, processing)
     }
 }
 impl fmt::Debug for ParsedInput {
@@ -59,6 +61,32 @@ impl fmt::Debug for ParsedInput {
 /// unsupported scalar/merge semantics, or independent finite-budget exhaustion. Parser text is
 /// never included in errors; original bytes remain with the caller or private successful evidence.
 pub fn parse_source(input: SourceInput<'_>, limits: &ParseLimits) -> Result<ParsedInput, Vec<Finding>> {
+    parse_source_in(
+        input,
+        limits,
+        &crate::processing::NativeOperationBudget::new(limits.processing),
+    )
+}
+pub(crate) fn parse_source_in(
+    input: SourceInput<'_>,
+    limits: &ParseLimits,
+    processing: &crate::processing::NativeOperationBudget,
+) -> Result<ParsedInput, Vec<Finding>> {
+    let result = parse_in(input, limits, processing.clone());
+    result.map_err(|mut findings| {
+        processing.finish_report(&mut findings, Phase::Parsing);
+        findings
+    })
+}
+fn parse_in(
+    input: SourceInput<'_>,
+    limits: &ParseLimits,
+    processing: crate::processing::NativeOperationBudget,
+) -> Result<ParsedInput, Vec<Finding>> {
+    processing.work(1, Phase::Parsing).map_err(|finding| vec![finding])?;
+    processing
+        .work(input.bytes.len(), Phase::Parsing)
+        .map_err(|finding| vec![finding])?;
     if !limits.valid() || input.bytes.len() > limits.max_input_bytes {
         return Err(vec![limit()]);
     }
@@ -83,8 +111,9 @@ pub fn parse_source(input: SourceInput<'_>, limits: &ParseLimits) -> Result<Pars
     Ok(ParsedInput {
         documents: documents.into_iter().map(Arc::new).collect(),
         trees,
-        evidence: Arc::new(SourceEvidence::from_input(&input)),
+        evidence: Arc::new(SourceEvidence::from_input_with_limits(&input, *limits)),
         limits: *limits,
+        processing,
     })
 }
 fn malformed() -> Finding {

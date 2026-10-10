@@ -124,6 +124,8 @@ impl fmt::Debug for SourceInput<'_> {
 /// Finite independent parser budgets, checked before allocation/dereferencing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ParseLimits {
+    /// Shared native-processing ceilings; independent of the syntax limits below.
+    pub processing: crate::processing::NativeProcessingLimits,
     /// Maximum original source bytes.
     pub max_input_bytes: usize,
     /// Maximum YAML documents or one JSON root.
@@ -144,6 +146,7 @@ pub struct ParseLimits {
 impl Default for ParseLimits {
     fn default() -> Self {
         Self {
+            processing: crate::processing::NativeProcessingLimits::default(),
             max_input_bytes: 8 * 1024 * 1024,
             max_documents: 256,
             max_events: 1_000_000,
@@ -188,25 +191,39 @@ pub struct SourceEvidence {
     /// Caller-declared source version.
     pub source_version: Option<KubernetesVersion>,
     raw: Arc<[u8]>,
+    limits: ParseLimits,
 }
 impl SourceEvidence {
+    #[cfg(test)]
     pub(crate) fn from_input(input: &SourceInput<'_>) -> Self {
+        Self::from_input_with_limits(input, ParseLimits::default())
+    }
+    pub(crate) fn from_input_with_limits(input: &SourceInput<'_>, mut limits: ParseLimits) -> Self {
+        limits.processing = limits.processing.bounded();
         Self {
             id: input.id,
             format: input.format,
             origin: EvidenceOrigin::Supplied(input.origin),
             source_version: input.source_version,
             raw: Arc::from(input.bytes),
+            limits,
         }
     }
-    pub(crate) fn native_authored(id: SourceId, raw: Vec<u8>) -> Self {
+    pub(crate) fn native_authored_with_limits(id: SourceId, raw: Vec<u8>, mut limits: ParseLimits) -> Self {
+        limits.processing = limits.processing.bounded();
         Self {
             id,
             format: DocumentFormat::Json,
             origin: EvidenceOrigin::NativeAuthored,
             source_version: None,
             raw: Arc::from(raw),
+            limits,
         }
+    }
+    /// Effective retained ceilings; later operations cannot raise native processing limits.
+    #[must_use]
+    pub const fn limits(&self) -> &ParseLimits {
+        &self.limits
     }
     /// Reveal immutable original bytes only after explicit authorization.
     #[must_use]

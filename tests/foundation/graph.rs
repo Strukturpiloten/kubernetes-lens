@@ -59,7 +59,8 @@ fn labels(ctx: &registry::ProjectionContext<'_>, base: &FieldPath) -> FactState<
     let path = base.child("metadata").child("labels");
     let values = match ctx.tree.get_path(&path) {
         None => BTreeMap::new(),
-        Some(node) => match <BTreeMap<String, String> as registry::codec::FieldCodec>::decode(node, &path) {
+        Some(node) => match <BTreeMap<String, String> as registry::codec::FieldCodec>::decode(node, &ctx.fields, &path)
+        {
             Ok(values) => values,
             Err(_) => return FactState::Unknown(FactGap::IncompleteSuppliedEvidence),
         },
@@ -79,8 +80,8 @@ impl NativeResource for Fixture {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
-    fn collect_references(&self, _: &mut dyn ReferenceSink) {}
-    fn collect_protected_paths(&self, out: &mut Vec<FieldPath>) {
+    fn collect_references(&self, _: &EncodeContext<'_>, _: &mut dyn ReferenceSink) {}
+    fn collect_protected_paths(&self, _: &EncodeContext<'_>, out: &mut Vec<FieldPath>) {
         out.push(path("/spec/private"));
     }
     fn validate(&self, _: &ValidationContext<'_>, _: &mut dyn FindingSink) {}
@@ -273,7 +274,7 @@ fn emit_claim_facts(ctx: &registry::ProjectionContext<'_>, out: &mut Vec<NativeF
 fn decode(
     tree: &TreeNode,
     source: &SourceEvidence,
-    _: &DecodeContext<'_>,
+    ctx: &DecodeContext<'_>,
 ) -> Result<Box<dyn NativeResource>, Vec<Finding>> {
     for location in [
         "/metadata/labels",
@@ -284,7 +285,7 @@ fn decode(
     ] {
         if let Some(node) = tree.get_path(&path(location)) {
             if node.value != TreeValue::Null {
-                <BTreeMap<String, String> as registry::codec::FieldCodec>::decode(node, &path(location))
+                <BTreeMap<String, String> as registry::codec::FieldCodec>::decode(node, &ctx.fields, &path(location))
                     .map_err(|finding| vec![finding])?;
             }
         }

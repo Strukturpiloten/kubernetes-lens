@@ -6,6 +6,9 @@ use crate::{
     registry::FindingSink,
 };
 fn invalid(path: &FieldPath, out: &mut dyn FindingSink) {
+    if out.exhausted() {
+        return;
+    }
     out.push(Finding::error(FindingCode::NativeFieldInvalid, Phase::Validation).at_path(path.clone()));
 }
 /// Validate complete inline-zone and body syntax before any operation-dependent

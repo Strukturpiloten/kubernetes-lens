@@ -3,6 +3,7 @@ use crate::{
     capability::{FeatureGateState, FieldAdmission, FieldCapability, MergeStrategy, TargetProfile, declaration},
     diagnostic::{FieldPath, Finding, FindingCode, Phase, ResourceId, Severity, WrapperSubject, has_errors},
     model::{FieldEdit, ResourceSet},
+    processing::{NativeOperationBudget, NativeProcessingLimits, ProcessingReport},
     registry::ValidationContext,
     syntax::{TreeNode, TreeValue},
 };
@@ -73,6 +74,8 @@ pub enum CollectionOutput {
 /// Explicit private-output, admission, and intent policies.
 #[derive(Clone, Debug)]
 pub struct GenerationOptions {
+    /// Optional operation ceiling; it can only lower retained/default processing limits.
+    pub processing: Option<NativeProcessingLimits>,
     /// Default denies private values.
     pub protected_output: ProtectedOutput,
     /// Default blocks opaque availability.
@@ -89,6 +92,7 @@ pub struct GenerationOptions {
 impl Default for GenerationOptions {
     fn default() -> Self {
         Self {
+            processing: None,
             protected_output: ProtectedOutput::Deny,
             opaque_fields: OpaqueFieldPolicy::Block,
             json_shape: JsonShape::KubernetesList,
@@ -140,10 +144,31 @@ impl fmt::Debug for GeneratedArtifact {
             .finish_non_exhaustive()
     }
 }
-fn validate_wrapper(list: &crate::model::ListDocument, target: &TargetProfile, findings: &mut Vec<Finding>) {
+fn validate_wrapper(list: &crate::model::ListDocument, target: &TargetProfile, findings: &mut ProcessingReport) {
+    let processing = findings.processing().clone();
+    if findings.failed() || processing.work(1, Phase::Validation).is_err() {
+        return;
+    }
+    let root_lookup_work = list
+        .original
+        .as_mapping()
+        .map_or(Some(0), |entries| entries.len().checked_mul(5));
+    let Some(root_lookup_work) = root_lookup_work else {
+        processing.fail(Phase::Validation);
+        return;
+    };
+    if processing.work(root_lookup_work, Phase::Validation).is_err() {
+        return;
+    }
     if let Some(metadata) = list.original.get("metadata") {
         if let Some(entries) = metadata.as_mapping() {
             for (key, node) in entries {
+                if findings.failed()
+                    || processing.work(1, Phase::Validation).is_err()
+                    || processing.work(key.len(), Phase::Validation).is_err()
+                {
+                    return;
+                }
                 let valid = match key.as_str() {
                     "resourceVersion" | "selfLink" | "continue" => {
                         matches!(node.value, TreeValue::String(_) | TreeValue::Null)
@@ -162,6 +187,9 @@ fn validate_wrapper(list: &crate::model::ListDocument, target: &TargetProfile, f
                         FieldPath(vec!["metadata".into(), key.clone()]),
                         true,
                     ));
+                    if findings.failed() {
+                        return;
+                    }
                 }
             }
         } else {
@@ -174,6 +202,15 @@ fn validate_wrapper(list: &crate::model::ListDocument, target: &TargetProfile, f
             ));
         }
     }
+    if findings.failed() {
+        return;
+    }
+    for name in ["apiVersion", "kind"] {
+        let bytes = list.original.get(name).and_then(TreeNode::as_str).map_or(0, str::len);
+        if processing.payload(bytes, Phase::Validation).is_err() {
+            return;
+        }
+    }
     let Ok(mut gvk) = crate::model::tree_gvk(&list.original) else {
         return;
     };
@@ -181,6 +218,9 @@ fn validate_wrapper(list: &crate::model::ListDocument, target: &TargetProfile, f
         return;
     }
     if let Some(kind) = gvk.kind.strip_suffix("List") {
+        if processing.payload(kind.len(), Phase::Validation).is_err() {
+            return;
+        }
         gvk.kind = kind.to_owned();
     }
     if declaration(&gvk).is_some_and(|decl| !(decl.first..=decl.last).contains(&target.kubernetes.minor()))
@@ -194,24 +234,13 @@ fn validate_wrapper(list: &crate::model::ListDocument, target: &TargetProfile, f
             true,
         ));
     }
-    findings.extend(
-        crate::capability::source_field_findings(&list.original, &gvk, target)
-            .into_iter()
-            .map(|mut finding| {
-                finding.wrapper = Some(WrapperSubject {
-                    source: list.source,
-                    list: list.id,
-                });
-                if finding.source.is_none() {
-                    finding.source = finding
-                        .path
-                        .as_ref()
-                        .and_then(|path| list.original.get_path(path))
-                        .and_then(|node| node.start)
-                        .or(list.original.start);
-                }
-                finding
-            }),
+    crate::capability::source_field_findings(
+        &list.original,
+        &gvk,
+        target,
+        &processing,
+        Phase::Validation,
+        &mut WrapperFindingSink { list, findings },
     );
 }
 /// Validate current resources and every retained List against the explicit target.
@@ -227,13 +256,46 @@ pub fn validate_for_target_with_intent(
     target: &TargetProfile,
     intent: NativeValidationIntent,
 ) -> Vec<Finding> {
-    let mut findings = target.findings();
-    findings.extend(resources.identity_findings());
+    validate_in(resources, target, intent, resources.operation(None))
+}
+/// Validate under an explicitly lower operation ceiling without changing native source evidence.
+/// # Errors
+/// Violations and limits are returned as structured findings, never server-validation claims.
+#[must_use]
+pub fn validate_for_target_with_limits(
+    resources: &ResourceSet,
+    target: &TargetProfile,
+    intent: NativeValidationIntent,
+    limits: &NativeProcessingLimits,
+) -> Vec<Finding> {
+    validate_in(resources, target, intent, resources.operation(Some(*limits)))
+}
+pub(crate) fn validate_in(
+    resources: &ResourceSet,
+    target: &TargetProfile,
+    intent: NativeValidationIntent,
+    processing: NativeOperationBudget,
+) -> Vec<Finding> {
+    let construction = resources.encoding(Some(target), processing.clone());
+    let construction = crate::registry::EncodeContext {
+        budget: construction.budget.for_phase(Phase::Validation),
+        ..construction
+    };
+    let mut findings = ProcessingReport::new(processing, Phase::Validation);
+    findings.extend(target.findings());
+    resources.identity_findings_into(false, Some(&construction), &mut findings);
     for list in &resources.lists {
+        if findings.failed() {
+            break;
+        }
         validate_wrapper(list, target, &mut findings);
     }
     for document in &resources.documents {
-        let tree = match document.current_tree(Some(target)) {
+        if findings.failed() {
+            break;
+        }
+        let context = construction.for_source(*document.evidence.limits());
+        let tree = match document.current_tree_in(Some(target), Some(&context)) {
             Ok(tree) => tree,
             Err(error) => {
                 if error.code == FindingCode::MergeConflict {
@@ -247,27 +309,20 @@ pub fn validate_for_target_with_intent(
                 continue;
             }
         };
-        let identity = match crate::model::identity(&tree, document.original_identity.scope) {
+        let identity = match crate::model::identity_in(
+            &tree,
+            document.original_identity.scope,
+            findings.processing(),
+            Phase::Validation,
+        ) {
             Ok(identity) => identity,
             Err(error) => {
                 findings.push(error.for_resource(document.id));
                 continue;
             }
         };
-        if let Some(decl) = declaration(&identity.gvk) {
-            if !(decl.first..=decl.last).contains(&target.kubernetes.minor()) {
-                findings.push(Finding::error(FindingCode::UnavailableApi, Phase::Validation).for_resource(document.id));
-            }
-        } else if crate::capability::builtin_scope(&identity.gvk).is_some() {
-            findings.push(Finding::error(FindingCode::UnavailableApi, Phase::Validation).for_resource(document.id));
-        } else if identity.scope == crate::model::ResourceScope::Unknown {
-            findings.push(Finding::warning(FindingCode::ScopeUnknown, Phase::Validation).for_resource(document.id));
-        }
-        findings.extend(
-            crate::capability::source_field_findings(&tree, &identity.gvk, target)
-                .into_iter()
-                .map(|f| f.for_resource(document.id)),
-        );
+        validate_api(&identity, document.id, target, &mut findings);
+        validate_source_fields(&tree, &identity.gvk, document.id, target, &mut findings);
         if let Some(capability) = &document.capability {
             if target.kubernetes < capability.api_since
                 || capability
@@ -277,6 +332,9 @@ pub fn validate_for_target_with_intent(
                 findings.push(Finding::error(FindingCode::UnavailableApi, Phase::Validation).for_resource(document.id));
             }
             for field in capability.fields {
+                if findings.failed() {
+                    break;
+                }
                 if field_nodes(&tree, field.path).is_empty() {
                     continue;
                 }
@@ -313,9 +371,46 @@ pub fn validate_for_target_with_intent(
                 .for_resource(document.id),
             );
         }
-        validate_native(document, &tree, &identity, target, intent, &mut findings);
+        validate_native(document, &tree, &identity, target, intent, &context, &mut findings);
     }
-    findings
+    findings.into_vec()
+}
+fn validate_source_fields(
+    tree: &TreeNode,
+    gvk: &crate::model::GroupVersionKind,
+    resource: ResourceId,
+    target: &TargetProfile,
+    findings: &mut ProcessingReport,
+) {
+    let processing = findings.processing().clone();
+    crate::capability::source_field_findings(
+        tree,
+        gvk,
+        target,
+        &processing,
+        Phase::Validation,
+        &mut crate::registry::ResourceFindingSink {
+            sink: findings,
+            resource,
+        },
+    );
+}
+
+fn validate_api(
+    identity: &crate::model::ResourceIdentity,
+    id: ResourceId,
+    target: &TargetProfile,
+    findings: &mut ProcessingReport,
+) {
+    if let Some(decl) = declaration(&identity.gvk) {
+        if !(decl.first..=decl.last).contains(&target.kubernetes.minor()) {
+            findings.push(Finding::error(FindingCode::UnavailableApi, Phase::Validation).for_resource(id));
+        }
+    } else if crate::capability::builtin_scope(&identity.gvk).is_some() {
+        findings.push(Finding::error(FindingCode::UnavailableApi, Phase::Validation).for_resource(id));
+    } else if identity.scope == crate::model::ResourceScope::Unknown {
+        findings.push(Finding::warning(FindingCode::ScopeUnknown, Phase::Validation).for_resource(id));
+    }
 }
 fn validate_native(
     document: &crate::model::ResourceDocument,
@@ -323,8 +418,12 @@ fn validate_native(
     identity: &crate::model::ResourceIdentity,
     target: &TargetProfile,
     intent: NativeValidationIntent,
-    findings: &mut Vec<Finding>,
+    context: &crate::registry::EncodeContext<'_>,
+    findings: &mut ProcessingReport,
 ) {
+    if findings.failed() {
+        return;
+    }
     if let Some(decode) = document.decode {
         match decode(
             tree,
@@ -332,16 +431,64 @@ fn validate_native(
             &crate::registry::DecodeContext {
                 gvk: &identity.gvk,
                 scope: identity.scope,
+                fields: context.fields(Phase::Validation),
             },
         ) {
             Ok(resource) => {
-                let mut native = Vec::new();
-                resource.validate(&ValidationContext { intent, target }, &mut native);
-                findings.extend(native.into_iter().map(|finding| finding.for_resource(document.id)));
+                let mut sink = crate::registry::ResourceFindingSink {
+                    sink: findings,
+                    resource: document.id,
+                };
+                resource.validate(
+                    &ValidationContext {
+                        intent,
+                        target,
+                        fields: context.fields(Phase::Validation),
+                    },
+                    &mut sink,
+                );
             }
             Err(errors) => findings.extend(errors.into_iter().map(|finding| finding.for_resource(document.id))),
         }
     }
+}
+fn bounded_json(node: &TreeNode, out: &mut String, processing: &NativeOperationBudget) -> Result<(), Finding> {
+    fn bound(node: &TreeNode, processing: &NativeOperationBudget) -> Result<usize, Finding> {
+        processing.work(1, Phase::Generation)?;
+        let fail = || processing.fail(Phase::Generation);
+        match &node.value {
+            TreeValue::String(value) => value
+                .len()
+                .checked_mul(6)
+                .and_then(|bytes| bytes.checked_add(2))
+                .ok_or_else(fail),
+            TreeValue::Number(value) => Ok(value.len()),
+            TreeValue::Mapping(entries) => entries.iter().try_fold(2usize, |total, (key, node)| {
+                let key = key
+                    .len()
+                    .checked_mul(6)
+                    .and_then(|bytes| bytes.checked_add(4))
+                    .ok_or_else(fail)?;
+                total
+                    .checked_add(key)
+                    .and_then(|total| total.checked_add(bound(node, processing).ok()?))
+                    .ok_or_else(fail)
+            }),
+            TreeValue::Sequence(items) => items.iter().try_fold(2usize, |total, node| {
+                total
+                    .checked_add(1)
+                    .and_then(|total| total.checked_add(bound(node, processing).ok()?))
+                    .ok_or_else(fail)
+            }),
+            _ => Ok(5),
+        }
+    }
+    let upper = bound(node, processing)?;
+    let payload = upper.checked_mul(2).ok_or_else(|| processing.fail(Phase::Generation))?;
+    processing.payload(payload, Phase::Generation)?;
+    processing.work(upper, Phase::Generation)?;
+    out.reserve_exact(upper);
+    json(node, out)
 }
 pub(crate) fn field_nodes<'a>(tree: &'a TreeNode, pointer: &str) -> Vec<&'a TreeNode> {
     let Ok(path) = FieldPath::parse(pointer) else {
@@ -374,10 +521,20 @@ pub fn generate(
     format: OutputFormat,
     options: &GenerationOptions,
 ) -> Result<GeneratedArtifact, Vec<Finding>> {
-    let mut findings = validate_for_target_with_intent(resources, target, options.validation_intent);
+    let processing = resources.operation(options.processing);
+    let construction = resources.encoding(Some(target), processing.clone());
+    let mut findings = ProcessingReport::from_report(
+        validate_in(resources, target, options.validation_intent, processing.clone()),
+        processing.clone(),
+        Phase::Generation,
+    );
     let mut trees = BTreeMap::new();
     for doc in &resources.documents {
-        let projection = match doc.project(Some(target)) {
+        if findings.failed() {
+            break;
+        }
+        let context = construction.for_source(*doc.evidence.limits());
+        let projection = match doc.project_in(Some(target), Some(&context)) {
             Ok(projection) => projection,
             Err(errors) => {
                 findings.extend(errors);
@@ -396,7 +553,7 @@ pub fn generate(
         }
         let mut protected_paths = Vec::new();
         if let Some(resource) = &projection.resource {
-            resource.collect_protected_paths(&mut protected_paths);
+            resource.collect_protected_paths(&context, &mut protected_paths);
         }
         let codec_protected = protected_paths
             .iter()
@@ -417,89 +574,146 @@ pub fn generate(
         }
         trees.insert(doc.id, tree);
     }
-    let wrappers = prepare_wrappers(resources, options, &mut findings);
-    if has_errors(&findings) {
-        return Err(findings);
+    let wrappers = prepare_wrappers(resources, options, &processing, &mut findings);
+    if findings.failed() || has_errors(&findings) {
+        return Err(findings.into_vec());
+    }
+    let roots = match output_roots(resources, options.collections, &mut trees, &wrappers, &processing) {
+        Ok(roots) => roots,
+        Err(finding) => {
+            findings.push(finding);
+            return Err(findings.into_vec());
+        }
+    };
+    let bytes = match serialize_roots(roots, format, options.json_shape, &processing) {
+        Ok(bytes) => bytes,
+        Err(finding) => {
+            findings.push(finding);
+            return Err(findings.into_vec());
+        }
+    };
+    if let Err(finding) = processing.payload(bytes.len(), Phase::Generation) {
+        findings.push(finding);
+        return Err(findings.into_vec());
+    }
+    Ok(GeneratedArtifact {
+        format,
+        bytes: Arc::from(bytes.into_bytes()),
+        findings: findings.into_vec(),
+    })
+}
+fn output_roots(
+    resources: &ResourceSet,
+    collections: CollectionOutput,
+    trees: &mut BTreeMap<ResourceId, TreeNode>,
+    wrappers: &BTreeMap<crate::model::ListId, TreeNode>,
+    processing: &NativeOperationBudget,
+) -> Result<Vec<TreeNode>, Finding> {
+    processing.payload_array::<&crate::model::ResourceDocument>(resources.documents.len(), Phase::Generation)?;
+    for tree in trees.values() {
+        crate::model::charge_identity(tree, processing, Phase::Generation)?;
     }
     let mut ordered: Vec<_> = resources.documents.iter().collect();
-    ordered.sort_by_key(|doc| {
+    ordered.sort_by_cached_key(|doc| {
         trees
             .get(&doc.id)
             .and_then(|tree| crate::model::identity(tree, doc.original_identity.scope).ok())
             .map(|identity| (identity.gvk, identity.scope, identity.namespace, identity.name, doc.id))
     });
+    let root_count = resources
+        .documents
+        .len()
+        .checked_add(resources.lists.len())
+        .ok_or_else(|| processing.fail(Phase::Generation))?;
+    processing.payload_array::<TreeNode>(root_count, Phase::Generation)?;
     let mut roots = Vec::new();
-    if options.collections == CollectionOutput::PreserveWrappers {
+    if collections == CollectionOutput::PreserveWrappers {
         for list in resources.lists.iter().filter(|list| list.collection.is_none()) {
-            roots.push(rewrap(resources, list.id, &trees, &wrappers).map_err(|e| vec![e])?);
+            roots.push(rewrap(resources, list.id, trees, wrappers, processing)?);
         }
         roots.extend(
             ordered
                 .iter()
                 .filter(|doc| doc.collection.is_none())
-                .filter_map(|doc| trees.get(&doc.id).cloned()),
+                .filter_map(|doc| trees.remove(&doc.id)),
         );
     } else {
-        roots.extend(ordered.iter().filter_map(|doc| trees.get(&doc.id).cloned()));
+        roots.extend(ordered.iter().filter_map(|doc| trees.remove(&doc.id)));
     }
+    Ok(roots)
+}
+
+fn serialize_roots(
+    mut roots: Vec<TreeNode>,
+    format: OutputFormat,
+    shape: JsonShape,
+    processing: &NativeOperationBudget,
+) -> Result<String, Finding> {
     let mut bytes = String::new();
     match format {
         OutputFormat::Json => {
-            let root = match options.json_shape {
+            let root = match shape {
                 JsonShape::SingleResource => {
                     if roots.len() != 1 {
-                        return Err(vec![Finding::error(FindingCode::MalformedDocument, Phase::Generation)]);
+                        return Err(Finding::error(FindingCode::MalformedDocument, Phase::Generation));
                     }
                     roots.remove(0)
                 }
                 JsonShape::KubernetesList => list_tree(roots),
             };
-            json(&root, &mut bytes).map_err(|e| vec![e])?;
-            bytes.push('\n');
+            bounded_json(&root, &mut bytes, processing)?;
+            append_output(&mut bytes, "\n", processing)?;
         }
         OutputFormat::Yaml => {
             for root in roots {
-                bytes.push_str("---\n");
-                json(&root, &mut bytes).map_err(|e| vec![e])?;
-                bytes.push('\n');
+                append_output(&mut bytes, "---\n", processing)?;
+                bounded_json(&root, &mut bytes, processing)?;
+                append_output(&mut bytes, "\n", processing)?;
             }
         }
     }
-    Ok(GeneratedArtifact {
-        format,
-        bytes: Arc::from(bytes.into_bytes()),
-        findings,
-    })
+    Ok(bytes)
+}
+fn append_output(out: &mut String, text: &str, processing: &NativeOperationBudget) -> Result<(), Finding> {
+    processing.payload(text.len(), Phase::Generation)?;
+    processing.work(text.len(), Phase::Generation)?;
+    out.reserve_exact(text.len());
+    out.push_str(text);
+    Ok(())
 }
 fn prepare_wrappers(
     resources: &ResourceSet,
     options: &GenerationOptions,
-    findings: &mut Vec<Finding>,
+    processing: &NativeOperationBudget,
+    findings: &mut ProcessingReport,
 ) -> BTreeMap<crate::model::ListId, TreeNode> {
     let mut wrappers = BTreeMap::new();
     for list in &resources.lists {
-        let mut tree = list.original.clone();
-        let unknown = wrapper_unknown_paths(&tree);
-        for path in &unknown {
-            findings.push(wrapper_finding(
-                list,
-                FindingCode::UnadmittedField,
-                Phase::Validation,
-                path.clone(),
-                false,
-            ));
+        if findings.failed() {
+            break;
         }
-        if options.opaque_fields == OpaqueFieldPolicy::Block && !unknown.is_empty() {
-            findings.push(wrapper_finding(
-                list,
-                FindingCode::OpaqueOutputDenied,
-                Phase::Generation,
-                unknown[0].clone(),
-                true,
-            ));
+        if let Err(finding) = processing.tree_copy(&list.original, Phase::Generation) {
+            findings.push(finding);
+            break;
+        }
+        let mut tree = list.original.clone();
+        let unknown = wrapper_unknown_paths(&tree, list, processing, findings);
+        if findings.failed() {
+            break;
+        }
+        if options.opaque_fields == OpaqueFieldPolicy::Block {
+            if let Some(path) = &unknown {
+                findings.push(wrapper_finding(
+                    list,
+                    FindingCode::OpaqueOutputDenied,
+                    Phase::Generation,
+                    path.clone(),
+                    true,
+                ));
+            }
         }
         if options.protected_output == ProtectedOutput::Deny
-            && (!unknown.is_empty()
+            && (unknown.is_some()
                 || tree
                     .get("metadata")
                     .and_then(|metadata| metadata.get("continue"))
@@ -525,7 +739,7 @@ fn prepare_wrappers(
         if options.intent == OutputIntent::AuthoredIntent {
             let begin = findings.len();
             strip_wrapper_observed(&mut tree, findings);
-            for finding in &mut findings[begin..] {
+            for finding in &mut findings.entries_mut()[begin..] {
                 finding.wrapper = Some(WrapperSubject {
                     source: list.source,
                     list: list.id,
@@ -568,27 +782,42 @@ fn rewrap(
     id: crate::model::ListId,
     trees: &BTreeMap<ResourceId, TreeNode>,
     wrappers: &BTreeMap<crate::model::ListId, TreeNode>,
+    processing: &NativeOperationBudget,
 ) -> Result<TreeNode, Finding> {
+    processing.work(resources.lists.len(), Phase::Generation)?;
     let list = resources.lists.iter().find(|list| list.id == id).ok_or_else(conflict)?;
     let result = (|| {
-        let mut wrapper = wrappers.get(&id).cloned().ok_or_else(conflict)?;
+        let original = wrappers.get(&id).ok_or_else(conflict)?;
+        processing.tree_copy(original, Phase::Generation)?;
+        let mut wrapper = original.clone();
         let Some(items) = wrapper.get("items").and_then(TreeNode::as_sequence) else {
             return Err(conflict());
         };
         let mut current = Vec::new();
         for index in 0..items.len() {
+            processing.work(
+                resources
+                    .lists
+                    .len()
+                    .checked_add(resources.documents.len())
+                    .and_then(|n| n.checked_add(1))
+                    .ok_or_else(|| processing.fail(Phase::Generation))?,
+                Phase::Generation,
+            )?;
             if let Some(nested) = resources.lists.iter().find(|l| {
                 l.collection
                     .as_ref()
                     .is_some_and(|path| path.items.last() == Some(&(id, index)))
             }) {
-                current.push(rewrap(resources, nested.id, trees, wrappers)?);
+                current.push(rewrap(resources, nested.id, trees, wrappers, processing)?);
             } else if let Some(doc) = resources.documents.iter().find(|d| {
                 d.collection
                     .as_ref()
                     .is_some_and(|path| path.items.last() == Some(&(id, index)))
             }) {
-                current.push(trees.get(&doc.id).cloned().ok_or_else(conflict)?);
+                let tree = trees.get(&doc.id).ok_or_else(conflict)?;
+                processing.tree_copy(tree, Phase::Generation)?;
+                current.push(tree.clone());
             } else {
                 return Err(conflict());
             }
@@ -597,6 +826,9 @@ fn rewrap(
         Ok(wrapper)
     })();
     result.map_err(|mut finding: Finding| {
+        if finding.code == FindingCode::LimitExceeded {
+            return finding;
+        }
         if finding.wrapper.is_none() {
             finding = finding.for_wrapper(WrapperSubject {
                 source: list.source,
@@ -609,34 +841,90 @@ fn rewrap(
         finding
     })
 }
-fn strip_wrapper_observed(tree: &mut TreeNode, findings: &mut Vec<Finding>) {
+fn strip_wrapper_observed(tree: &mut TreeNode, findings: &mut ProcessingReport) {
     strip_observation_paths(tree, None, &crate::source::list_observation_paths(), findings);
 }
-fn wrapper_unknown_paths(tree: &TreeNode) -> Vec<FieldPath> {
-    let mut paths = Vec::new();
+/// Enumerate warnings lazily; retain only the first path needed by output policies.
+fn wrapper_unknown_paths(
+    tree: &TreeNode,
+    list: &crate::model::ListDocument,
+    processing: &NativeOperationBudget,
+    findings: &mut ProcessingReport,
+) -> Option<FieldPath> {
+    let mut first = None;
+    let mut warn = |path: FieldPath, node: &TreeNode| {
+        if first.is_none() {
+            first = Some(path.clone());
+        }
+        let mut finding = Finding::warning(FindingCode::UnadmittedField, Phase::Validation).at_path(path);
+        finding.source = node.start.or(list.original.start);
+        finding.wrapper = Some(WrapperSubject {
+            source: list.source,
+            list: list.id,
+        });
+        findings.push(finding);
+        !findings.failed()
+    };
     if let Some(entries) = tree.as_mapping() {
         for (key, value) in entries {
-            let path = FieldPath(vec![key.clone()]);
+            if processing.work(1, Phase::Generation).is_err() {
+                break;
+            }
             if key == "metadata" {
                 if let Some(metadata) = value.as_mapping() {
-                    for (name, _) in metadata {
+                    for (name, node) in metadata {
+                        if processing.work(1, Phase::Generation).is_err() {
+                            return first;
+                        }
                         if !matches!(
                             name.as_str(),
                             "resourceVersion" | "selfLink" | "continue" | "remainingItemCount"
-                        ) {
-                            paths.push(path.child(name));
+                        ) && !warn(FieldPath(vec![key.clone(), name.clone()]), node)
+                        {
+                            return first;
                         }
                     }
-                } else {
-                    paths.push(path);
+                } else if !warn(FieldPath(vec![key.clone()]), value) {
+                    break;
                 }
-            } else if !matches!(key.as_str(), "apiVersion" | "kind" | "items") {
-                paths.push(path);
+            } else if !matches!(key.as_str(), "apiVersion" | "kind" | "items")
+                && !warn(FieldPath(vec![key.clone()]), value)
+            {
+                break;
             }
         }
     }
-    paths
+    first
 }
+struct WrapperFindingSink<'a> {
+    list: &'a crate::model::ListDocument,
+    findings: &'a mut ProcessingReport,
+}
+impl crate::registry::FindingSink for WrapperFindingSink<'_> {
+    fn push(&mut self, mut finding: Finding) {
+        // Emergency findings remain pathless and value-free. Attribution is attached
+        // before the report sink preflights ordinary finding retention.
+        if finding.code != FindingCode::LimitExceeded {
+            finding.wrapper = Some(WrapperSubject {
+                source: self.list.source,
+                list: self.list.id,
+            });
+            if finding.source.is_none() {
+                finding.source = finding
+                    .path
+                    .as_ref()
+                    .and_then(|path| self.list.original.get_path(path))
+                    .and_then(|node| node.start)
+                    .or(self.list.original.start);
+            }
+        }
+        self.findings.push(finding);
+    }
+    fn exhausted(&self) -> bool {
+        self.findings.failed()
+    }
+}
+
 fn wrapper_finding(
     list: &crate::model::ListDocument,
     code: FindingCode,
@@ -678,7 +966,7 @@ fn strip_observation_paths(
     tree: &mut TreeNode,
     id: Option<ResourceId>,
     observations: &[crate::source::ObservationPath],
-    findings: &mut Vec<Finding>,
+    findings: &mut ProcessingReport,
 ) {
     let mut paths = observations
         .iter()
@@ -699,7 +987,7 @@ fn strip_observation_paths(
         match apply_edit(tree, &FieldEdit::Remove { path: path.clone() }) {
             Ok(()) => {
                 // Retain source validation findings, but stripped opaque observations no longer block output.
-                for finding in findings.iter_mut().filter(|finding| {
+                for finding in findings.entries_mut().iter_mut().filter(|finding| {
                     finding.resource == id
                         && finding.code == FindingCode::UnadmittedField
                         && finding
@@ -761,20 +1049,95 @@ fn strategy(path: &FieldPath, fields: &[FieldCapability]) -> MergeStrategy {
         })
         .map_or(MergeStrategy::AtomicList, |f| f.merge)
 }
-fn unknown_descendants(raw: &TreeNode, known: &TreeNode) -> bool {
+fn unknown_descendants(raw: &TreeNode, known: &TreeNode, context: BudgetedMergeContext<'_>) -> Result<bool, Finding> {
+    context.tick()?;
     match (&raw.value, &known.value) {
-        (TreeValue::Mapping(raw), TreeValue::Mapping(known)) => raw.iter().any(|(key, value)| {
-            known
-                .iter()
-                .find(|(k, _)| k == key)
-                .is_none_or(|(_, known)| unknown_descendants(value, known))
-        }),
-        (TreeValue::Sequence(raw), TreeValue::Sequence(known)) => {
-            raw.len() != known.len() || raw.iter().zip(known).any(|(r, k)| unknown_descendants(r, k))
+        (TreeValue::Mapping(raw), TreeValue::Mapping(_)) => {
+            for (key, value) in raw {
+                context.tick()?;
+                let Some(known) = context.get(known, key)? else {
+                    return Ok(true);
+                };
+                if unknown_descendants(value, known, context)? {
+                    return Ok(true);
+                }
+            }
         }
-        _ => false,
+        (TreeValue::Sequence(raw), TreeValue::Sequence(known)) => {
+            if raw.len() != known.len() {
+                return Ok(true);
+            }
+            for (raw, known) in raw.iter().zip(known) {
+                if unknown_descendants(raw, known, context)? {
+                    return Ok(true);
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(false)
+}
+/// Compare borrowed trees without constructing the uncharged mapping index used by `semantic_eq`.
+pub(crate) fn merge_semantic_eq(
+    left: &TreeNode,
+    right: &TreeNode,
+    context: BudgetedMergeContext<'_>,
+) -> Result<bool, Finding> {
+    context.tick()?;
+    match (&left.value, &right.value) {
+        (TreeValue::Mapping(left), TreeValue::Mapping(right)) => {
+            if left.len() != right.len() {
+                return Ok(false);
+            }
+            for (key, value) in left {
+                let mut found = None;
+                // semantic_eq's BTreeMap keeps the last duplicate mapping key.
+                for (name, other) in right.iter().rev() {
+                    context
+                        .processing
+                        .work(name.len().saturating_add(key.len()), context.phase)?;
+                    context.tick()?;
+                    if name == key {
+                        found = Some(other);
+                        break;
+                    }
+                }
+                let Some(other) = found else {
+                    return Ok(false);
+                };
+                if !merge_semantic_eq(value, other, context)? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        (TreeValue::Sequence(left), TreeValue::Sequence(right)) => {
+            if left.len() != right.len() {
+                return Ok(false);
+            }
+            for (left, right) in left.iter().zip(right) {
+                if !merge_semantic_eq(left, right, context)? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        (TreeValue::Tagged(left_tag, left), TreeValue::Tagged(right_tag, right)) => {
+            context
+                .processing
+                .work(left_tag.len().saturating_add(right_tag.len()), context.phase)?;
+            Ok(left_tag == right_tag && merge_semantic_eq(left, right, context)?)
+        }
+        (TreeValue::String(left), TreeValue::String(right)) | (TreeValue::Number(left), TreeValue::Number(right)) => {
+            context
+                .processing
+                .work(left.len().saturating_add(right.len()), context.phase)?;
+            Ok(left == right)
+        }
+        _ => Ok(left.value == right.value),
     }
 }
+
 fn merge_delta_inner(
     raw: &TreeNode,
     before: &TreeNode,
@@ -782,11 +1145,10 @@ fn merge_delta_inner(
     path: &FieldPath,
     fields: &[FieldCapability],
     resolutions: &[FieldEdit],
-    context: MergeContext<'_>,
+    context: BudgetedMergeContext<'_>,
 ) -> Result<TreeNode, Finding> {
-    let gvk = context.gvk;
-    let target = context.target;
-    if before.semantic_eq(after)
+    context.tick()?;
+    if merge_semantic_eq(before, after, context)?
         || resolutions.iter().any(|edit| {
             let edited = match edit {
                 FieldEdit::Set { path, .. } | FieldEdit::Remove { path } => path,
@@ -794,68 +1156,37 @@ fn merge_delta_inner(
             edited.0.len() <= path.0.len() && path.0.starts_with(&edited.0)
         })
     {
-        return Ok(raw.clone());
+        return context.copy(raw);
     }
     match (&before.value, &after.value, &raw.value) {
-        (TreeValue::Mapping(before), TreeValue::Mapping(after), TreeValue::Mapping(_)) => {
-            let mut out = raw.clone();
-            for (key, old) in before {
-                if let Some((_, new)) = after.iter().find(|(k, _)| k == key) {
-                    let original = raw.get(key).unwrap_or(old);
-                    set_child(
-                        &mut out,
-                        key,
-                        Some(merge_delta_inner(
-                            original,
-                            old,
-                            new,
-                            &path.child(key),
-                            fields,
-                            resolutions,
-                            context,
-                        )?),
-                    )?;
-                } else {
-                    let child = path.child(key);
-                    let explicit = resolutions.iter().any(|edit| {
-                        let edit = match edit {
-                            FieldEdit::Set { path, .. } | FieldEdit::Remove { path } => path,
-                        };
-                        child.0.starts_with(&edit.0)
-                    });
-                    if raw.get(key).is_some_and(|raw| unknown_descendants(raw, old)) && !explicit {
-                        return Err(conflict().at_path(child));
-                    }
-                    set_child(&mut out, key, None)?;
-                }
-            }
-            for (key, new) in after {
-                if !before.iter().any(|(k, _)| k == key) {
-                    set_child(&mut out, key, Some(new.clone()))?;
-                }
-            }
-            Ok(out)
+        (TreeValue::Mapping(_), TreeValue::Mapping(_), TreeValue::Mapping(_)) => {
+            merge_mapping(raw, before, after, path, fields, resolutions, context)
         }
         (TreeValue::Sequence(before_items), TreeValue::Sequence(after_items), TreeValue::Sequence(raw_items)) => {
             if let MergeStrategy::MapList { keys } = strategy(path, fields) {
                 if keys.is_empty() {
                     return Err(conflict().at_path(path.clone()));
                 }
-                let old = keyed(before_items, keys, path, gvk, target)?;
-                let raw = keyed(raw_items, keys, path, gvk, target)?;
-                let new = keyed(after_items, keys, path, gvk, target)?;
+                let old = keyed(before_items, keys, path, context)?;
+                let raw = keyed(raw_items, keys, path, context)?;
+                let new = keyed(after_items, keys, path, context)?;
                 for (key, previous) in &old {
-                    if !new.contains_key(key)
-                        && raw
-                            .get(key)
-                            .is_some_and(|original| unknown_descendants(original, previous))
-                    {
-                        return Err(conflict().at_path(path.clone()));
+                    context.tick()?;
+                    if !new.contains_key(key) {
+                        if let Some(original) = raw.get(key) {
+                            if unknown_descendants(original, previous, context)? {
+                                return Err(conflict().at_path(path.clone()));
+                            }
+                        }
                     }
                 }
+                context
+                    .processing
+                    .payload_array::<TreeNode>(after_items.len(), context.phase)?;
                 let mut out = Vec::new();
                 for (index, node) in after_items.iter().enumerate() {
-                    let key = list_key(node, keys, path, gvk, target)?;
+                    context.tick()?;
+                    let key = list_key(node, keys, path, context)?;
                     if let (Some(before), Some(original)) = (old.get(&key), raw.get(&key)) {
                         out.push(merge_delta_inner(
                             original,
@@ -867,33 +1198,88 @@ fn merge_delta_inner(
                             context,
                         )?);
                     } else {
-                        out.push(node.clone());
+                        out.push(context.copy(node)?);
                     }
                 }
                 // Validation of duplicate keys above is independent of reordering/removal.
-                let _ = keyed(&out, keys, path, gvk, target)?;
+                let _ = keyed(&out, keys, path, context)?;
                 Ok(TreeNode {
                     value: TreeValue::Sequence(out),
                     start: raw_items.first().and_then(|n| n.start),
                 })
-            } else if unknown_descendants(raw, before) {
+            } else if unknown_descendants(raw, before, context)? {
                 Err(conflict().at_path(path.clone()))
             } else {
-                Ok(after.clone())
+                context.copy(after)
             }
         }
-        _ if unknown_descendants(raw, before) => Err(conflict().at_path(path.clone())),
-        _ => Ok(after.clone()),
+        _ if unknown_descendants(raw, before, context)? => Err(conflict().at_path(path.clone())),
+        _ => context.copy(after),
     }
 }
+fn merge_mapping(
+    raw: &TreeNode,
+    before: &TreeNode,
+    after: &TreeNode,
+    path: &FieldPath,
+    fields: &[FieldCapability],
+    resolutions: &[FieldEdit],
+    context: BudgetedMergeContext<'_>,
+) -> Result<TreeNode, Finding> {
+    let (Some(before_entries), Some(after_entries)) = (before.as_mapping(), after.as_mapping()) else {
+        return Err(conflict());
+    };
+    let mut out = context.copy(raw)?;
+    for (key, old) in before_entries {
+        context.tick()?;
+        if let Some(new) = context.get(after, key)? {
+            let original = context.get(raw, key)?.unwrap_or(old);
+            context.set_child(
+                &mut out,
+                key,
+                Some(merge_delta_inner(
+                    original,
+                    old,
+                    new,
+                    &path.child(key),
+                    fields,
+                    resolutions,
+                    context,
+                )?),
+            )?;
+        } else {
+            let child = path.child(key);
+            let explicit = resolutions.iter().any(|edit| {
+                let edit = match edit {
+                    FieldEdit::Set { path, .. } | FieldEdit::Remove { path } => path,
+                };
+                child.0.starts_with(&edit.0)
+            });
+            if let Some(raw) = context.get(raw, key)? {
+                if unknown_descendants(raw, old, context)? && !explicit {
+                    return Err(conflict().at_path(child));
+                }
+            }
+            context.set_child(&mut out, key, None)?;
+        }
+    }
+    for (key, new) in after_entries {
+        context.tick()?;
+        if context.get(before, key)?.is_none() {
+            context.set_child(&mut out, key, Some(context.copy(new)?))?;
+        }
+    }
+    Ok(out)
+}
+
 fn list_key(
     node: &TreeNode,
     keys: &[&str],
     path: &FieldPath,
-    gvk: Option<&crate::model::GroupVersionKind>,
-    target: Option<&TargetProfile>,
+    context: BudgetedMergeContext<'_>,
 ) -> Result<Vec<String>, Finding> {
-    let tcp = port_tcp_rule(path, gvk, target);
+    context.tick()?;
+    let tcp = port_tcp_rule(path, context.native.gvk, context.native.target);
     if tcp {
         let port_key = if keys == ["port", "protocol"] {
             "port"
@@ -902,8 +1288,8 @@ fn list_key(
         } else {
             return Err(conflict().at_path(path.clone()));
         };
-        let valid_port = node.get(port_key).is_some_and(|node| matches!(&node.value, TreeValue::Number(number) if number.parse::<i32>().is_ok_and(|port| (1..=65535).contains(&port))));
-        let valid_protocol = node.get("protocol").is_none_or(|node| {
+        let valid_port = context.get(node, port_key)?.is_some_and(|node| matches!(&node.value, TreeValue::Number(number) if number.parse::<i32>().is_ok_and(|port| (1..=65535).contains(&port))));
+        let valid_protocol = context.get(node, "protocol")?.is_none_or(|node| {
             node.as_str()
                 .is_some_and(|protocol| matches!(protocol, "TCP" | "UDP" | "SCTP"))
         });
@@ -913,8 +1299,10 @@ fn list_key(
     }
     keys.iter()
         .map(|key| {
-            let Some(node) = node.get(key) else {
+            context.tick()?;
+            let Some(node) = context.get(node, key)? else {
                 return if tcp && *key == "protocol" {
+                    context.processing.payload(5, context.phase)?;
                     Ok(String::from("\"TCP\""))
                 } else {
                     Err(conflict().at_path(path.clone()))
@@ -927,7 +1315,7 @@ fn list_key(
                 return Err(conflict());
             }
             let mut text = String::new();
-            json(node, &mut text)?;
+            bounded_json(node, &mut text, context.processing)?;
             Ok(text)
         })
         .collect()
@@ -936,12 +1324,14 @@ fn keyed<'a>(
     items: &'a [TreeNode],
     keys: &[&str],
     path: &FieldPath,
-    gvk: Option<&crate::model::GroupVersionKind>,
-    target: Option<&TargetProfile>,
+    context: BudgetedMergeContext<'_>,
 ) -> Result<BTreeMap<Vec<String>, &'a TreeNode>, Finding> {
+    context
+        .processing
+        .payload_array::<(Vec<String>, &TreeNode)>(items.len(), context.phase)?;
     let mut out = BTreeMap::new();
     for node in items {
-        if out.insert(list_key(node, keys, path, gvk, target)?, node).is_some() {
+        if out.insert(list_key(node, keys, path, context)?, node).is_some() {
             return Err(conflict().at_path(path.clone()));
         }
     }
@@ -1041,7 +1431,9 @@ pub(crate) fn json(node: &TreeNode, out: &mut String) -> Result<(), Finding> {
     Ok(())
 }
 
-/// Validate all declared map-list identities even when no semantic edit occurred.
+/// Direct merge tests select their own explicit default operation; production must
+/// use `merge_native_delta_in` with the existing effective-projection operation.
+#[cfg(test)]
 pub(crate) fn merge_native_delta(
     raw: &TreeNode,
     before: &TreeNode,
@@ -1051,35 +1443,66 @@ pub(crate) fn merge_native_delta(
     resolutions: &[FieldEdit],
     context: MergeContext<'_>,
 ) -> Result<TreeNode, Finding> {
+    let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+    merge_native_delta_in(
+        raw,
+        before,
+        after,
+        path,
+        fields,
+        resolutions,
+        BudgetedMergeContext {
+            native: context,
+            processing: &processing,
+            phase: Phase::Generation,
+        },
+    )
+}
+/// Validate all declared map-list identities even when no semantic edit occurred.
+pub(crate) fn merge_native_delta_in(
+    raw: &TreeNode,
+    before: &TreeNode,
+    after: &TreeNode,
+    path: &FieldPath,
+    fields: &[FieldCapability],
+    resolutions: &[FieldEdit],
+    context: BudgetedMergeContext<'_>,
+) -> Result<TreeNode, Finding> {
     let merged = merge_delta_inner(raw, before, after, path, fields, resolutions, context)?;
-    // Explicit caller repair is applied to the checked view, never to immutable originals.
-    let mut checked = merged.clone();
+    // Explicit caller repair is applied to the charged checked view, never to immutable originals.
+    let mut checked = context.copy(&merged)?;
     for edit in resolutions {
+        context.tick()?;
         let (edited, value) = match edit {
             FieldEdit::Set { path, value } => (path, Some(value)),
             FieldEdit::Remove { path } => (path, None),
         };
         if edited.0.starts_with(&path.0) {
-            let relative = FieldPath(edited.0[path.0.len()..].to_vec());
+            let segments = &edited.0[path.0.len()..];
+            context
+                .processing
+                .payload_sizes(segments.iter().map(String::len), context.phase)?;
+            context
+                .processing
+                .payload_array::<String>(segments.len(), context.phase)?;
+            let relative = FieldPath(segments.to_vec());
             if relative.0.is_empty() {
-                checked = value.cloned().unwrap_or_else(|| TreeNode::new(TreeValue::Null));
-            } else {
-                let relative = match value {
-                    Some(value) => FieldEdit::Set {
-                        path: relative,
-                        value: value.clone(),
-                    },
-                    None => FieldEdit::Remove { path: relative },
+                checked = if let Some(value) = value {
+                    context.copy(value)?
+                } else {
+                    TreeNode::new(TreeValue::Null)
                 };
-                apply_edit(&mut checked, &relative)?;
+            } else {
+                apply_edit_value_in(&mut checked, &relative, value, context)?;
             }
         } else if path.0.starts_with(&edited.0) {
             checked = TreeNode::new(TreeValue::Null);
         }
     }
-    check_supplied_list_duplicates(&checked, path, fields, context.gvk, context.target)?;
+    check_supplied_list_duplicates(&checked, path, fields, context)?;
     Ok(merged)
 }
+
 #[cfg(test)]
 pub(crate) fn merge_delta(
     raw: &TreeNode,
@@ -1106,9 +1529,9 @@ fn check_supplied_list_duplicates(
     tree: &TreeNode,
     path: &FieldPath,
     fields: &[FieldCapability],
-    gvk: Option<&crate::model::GroupVersionKind>,
-    target: Option<&TargetProfile>,
+    context: BudgetedMergeContext<'_>,
 ) -> Result<(), Finding> {
+    context.tick()?;
     match &tree.value {
         TreeValue::Sequence(items) => {
             if let MergeStrategy::MapList { keys } = strategy(path, fields) {
@@ -1116,7 +1539,12 @@ fn check_supplied_list_duplicates(
                 for item in items {
                     // Preserve malformed unchanged source values for exact native validation.
                     // Every valid key is still scanned, including those after malformed siblings.
-                    if let Ok(key) = list_key(item, keys, path, gvk, target) {
+                    context.tick()?;
+                    let key = list_key(item, keys, path, context);
+                    if context.processing.exhausted() {
+                        return Err(context.processing.fail(context.phase));
+                    }
+                    if let Ok(key) = key {
                         if !seen.insert(key) {
                             return Err(conflict().at_path(path.clone()));
                         }
@@ -1124,12 +1552,14 @@ fn check_supplied_list_duplicates(
                 }
             }
             for (index, item) in items.iter().enumerate() {
-                check_supplied_list_duplicates(item, &path.child(index.to_string()), fields, gvk, target)?;
+                context.tick()?;
+                check_supplied_list_duplicates(item, &path.child(index.to_string()), fields, context)?;
             }
         }
         TreeValue::Mapping(entries) => {
             for (key, node) in entries {
-                check_supplied_list_duplicates(node, &path.child(key), fields, gvk, target)?;
+                context.tick()?;
+                check_supplied_list_duplicates(node, &path.child(key), fields, context)?;
             }
         }
         _ => {}
@@ -1173,4 +1603,330 @@ fn port_tcp_rule(
 pub(crate) struct MergeContext<'a> {
     pub(crate) gvk: Option<&'a crate::model::GroupVersionKind>,
     pub(crate) target: Option<&'a TargetProfile>,
+}
+
+/// Private effective-reprojection policy and its existing shared operation.
+#[derive(Clone, Copy)]
+pub(crate) struct BudgetedMergeContext<'a> {
+    pub(crate) native: MergeContext<'a>,
+    pub(crate) processing: &'a NativeOperationBudget,
+    pub(crate) phase: Phase,
+}
+impl BudgetedMergeContext<'_> {
+    fn tick(self) -> Result<(), Finding> {
+        self.processing.work(1, self.phase)
+    }
+    fn copy(self, node: &TreeNode) -> Result<TreeNode, Finding> {
+        self.processing.tree_copy(node, self.phase)?;
+        Ok(node.clone())
+    }
+    fn set_child(self, node: &mut TreeNode, key: &str, value: Option<TreeNode>) -> Result<(), Finding> {
+        self.tick()?;
+        let TreeValue::Mapping(entries) = &mut node.value else {
+            return Err(conflict());
+        };
+        let mut found = None;
+        for (index, (name, _)) in entries.iter().enumerate() {
+            self.tick()?;
+            self.processing.work(name.len().saturating_add(key.len()), self.phase)?;
+            if name == key {
+                found = Some(index);
+                break;
+            }
+        }
+        match (found, value) {
+            (Some(index), Some(value)) => entries[index].1 = value,
+            (Some(index), None) => {
+                self.processing.work(entries.len() - index, self.phase)?;
+                entries.remove(index);
+            }
+            (None, Some(value)) => {
+                self.processing
+                    .payload_sizes([key.len(), size_of::<(String, TreeNode)>()], self.phase)?;
+                entries.push((key.to_owned(), value));
+            }
+            (None, None) => {}
+        }
+        Ok(())
+    }
+    fn get<'a>(self, node: &'a TreeNode, key: &str) -> Result<Option<&'a TreeNode>, Finding> {
+        if let Some(entries) = node.as_mapping() {
+            for (name, value) in entries {
+                self.tick()?;
+                self.processing.work(name.len().saturating_add(key.len()), self.phase)?;
+                if name == key {
+                    return Ok(Some(value));
+                }
+            }
+        }
+        Ok(None)
+    }
+}
+/// Apply a retained edit without resetting the caller's operation or cloning before preflight.
+pub(crate) fn apply_edit_in(
+    tree: &mut TreeNode,
+    edit: &FieldEdit,
+    processing: &NativeOperationBudget,
+    phase: Phase,
+) -> Result<(), Finding> {
+    let (path, value) = match edit {
+        FieldEdit::Set { path, value } => (path, Some(value)),
+        FieldEdit::Remove { path } => (path, None),
+    };
+    apply_edit_value_in(
+        tree,
+        path,
+        value,
+        BudgetedMergeContext {
+            native: MergeContext {
+                gvk: None,
+                target: None,
+            },
+            processing,
+            phase,
+        },
+    )
+}
+fn apply_edit_value_in(
+    tree: &mut TreeNode,
+    path: &FieldPath,
+    value: Option<&TreeNode>,
+    context: BudgetedMergeContext<'_>,
+) -> Result<(), Finding> {
+    context.tick()?;
+    let value = value.map(|value| context.copy(value)).transpose()?;
+    let Some((last, parents)) = path.0.split_last() else {
+        return Err(conflict().at_path(path.clone()));
+    };
+    let mut node = tree;
+    for parent in parents {
+        context.tick()?;
+        match &mut node.value {
+            TreeValue::Mapping(entries) => {
+                let mut found = None;
+                for (index, (key, _)) in entries.iter().enumerate() {
+                    context.tick()?;
+                    if key == parent {
+                        found = Some(index);
+                        break;
+                    }
+                }
+                let Some(index) = found else {
+                    return Err(conflict().at_path(path.clone()));
+                };
+                node = &mut entries[index].1;
+            }
+            TreeValue::Sequence(items) => {
+                let index = parent.parse::<usize>().map_err(|_| conflict())?;
+                node = items.get_mut(index).ok_or_else(conflict)?;
+            }
+            _ => return Err(conflict().at_path(path.clone())),
+        }
+    }
+    if let TreeValue::Sequence(items) = &mut node.value {
+        let index = last.parse::<usize>().map_err(|_| conflict())?;
+        if index >= items.len() {
+            return Err(conflict());
+        }
+        if let Some(value) = value {
+            items[index] = value;
+        } else {
+            items.remove(index);
+        }
+        Ok(())
+    } else {
+        if let Some(entries) = node.as_mapping() {
+            context.processing.work(entries.len(), context.phase)?;
+        }
+        context.processing.payload(last.len(), context.phase)?;
+        set_child(node, last, value)
+    }
+}
+
+#[cfg(test)]
+mod merge_processing_tests {
+    use super::*;
+
+    #[test]
+    fn newly_inserted_mapping_keys_preflight_payload_before_copy() -> Result<(), String> {
+        let key = "private-new-key".repeat(1024);
+        let raw = TreeNode::new(TreeValue::Mapping(Vec::new()));
+        let before = TreeNode::new(TreeValue::Mapping(Vec::new()));
+        let after = TreeNode::new(TreeValue::Mapping(vec![(key.clone(), TreeNode::new(TreeValue::Null))]));
+        let merge = |processing: &NativeOperationBudget| {
+            merge_native_delta_in(
+                &raw,
+                &before,
+                &after,
+                &FieldPath::default(),
+                &[],
+                &[],
+                BudgetedMergeContext {
+                    native: MergeContext {
+                        gvk: None,
+                        target: None,
+                    },
+                    processing,
+                    phase: Phase::Generation,
+                },
+            )
+        };
+        // One key copy plus the small fixed nodes fits. Retaining both the inserted
+        // key and the checked view requires two key copies, independently of codec work.
+        let lowered = NativeOperationBudget::new(NativeProcessingLimits {
+            max_payload_bytes: key.len() + 1024,
+            ..NativeProcessingLimits::default()
+        });
+        let Err(finding) = merge(&lowered) else {
+            return Err("unreserved insertion key unexpectedly fit".into());
+        };
+        assert_eq!(finding.code, FindingCode::LimitExceeded);
+        assert!(finding.path.is_none());
+        assert!(!format!("{finding:?}").contains("private-new-key"));
+        assert!(lowered.exhausted());
+        let control = merge(&NativeOperationBudget::new(NativeProcessingLimits::default()))
+            .map_err(|_| "control merge failed")?;
+        assert!(
+            control
+                .get(&key)
+                .is_some_and(|node| matches!(node.value, TreeValue::Null))
+        );
+        assert!(raw.as_mapping().is_some_and(<[_]>::is_empty));
+        assert!(before.as_mapping().is_some_and(<[_]>::is_empty));
+        Ok(())
+    }
+
+    #[test]
+    fn native_pod_reprojection_preflights_raw_and_checked_opaque_copies() -> Result<(), String> {
+        let private = "private-opaque-root".repeat(2048);
+        let text = format!(
+            "apiVersion: v1\nkind: Pod\nmetadata: {{name: merge}}\nspec:\n  containers: [{{name: main, image: example.invalid/app:v1}}]\nretainedOpaque: {private}\n"
+        );
+        let resources = parsed_resources(&text)?;
+        let document = resources.documents.first().ok_or("missing Pod")?;
+        assert!(document.resource::<crate::resources::workloads::Pod>().is_some());
+        let native = document.resource.as_ref().ok_or("missing native Pod")?;
+        let before = document.original_known.as_ref().ok_or("missing original codec tree")?;
+        let target = TargetProfile::documented_defaults(
+            crate::capability::KubernetesVersion::new(1, 30).map_err(|_| "target failed")?,
+        );
+        let prefix_fits = |bytes, copies| codec_prefix_fits(document, &target, bytes, copies);
+        for copies in [0, 1] {
+            let (mut low, mut high) = (0, 1_000_000);
+            assert!(prefix_fits(high, copies));
+            while low < high {
+                let middle = low + (high - low) / 2;
+                if prefix_fits(middle, copies) {
+                    high = middle;
+                } else {
+                    low = middle + 1;
+                }
+            }
+            let allowance = low.checked_add(private.len() / 2).ok_or("allowance overflow")?;
+            assert!(prefix_fits(allowance, copies));
+            let processing = operation(allowance);
+            let context = crate::registry::EncodeContext::in_operation(
+                Some(&target),
+                *document.evidence.limits(),
+                processing.clone(),
+            );
+            let known = crate::registry::encode_in(native.as_ref(), &context).map_err(|_| "encoding did not fit")?;
+            crate::model::identity_in(&known, document.original_identity.scope, &processing, Phase::Generation)
+                .map_err(|_| "identity did not fit")?;
+            let error = merge_native_delta_in(
+                &document.original,
+                before,
+                &known,
+                &FieldPath::default(),
+                document.capability.as_ref().map_or(&[], |capability| capability.fields),
+                &[],
+                BudgetedMergeContext {
+                    native: MergeContext {
+                        gvk: Some(&document.original_identity.gvk),
+                        target: Some(&target),
+                    },
+                    processing: &processing,
+                    phase: Phase::Generation,
+                },
+            )
+            .err()
+            .ok_or("uncharged opaque merge copy")?;
+            assert_eq!(error.code, FindingCode::LimitExceeded);
+            assert!(error.path.is_none());
+            let context = crate::registry::EncodeContext::in_operation(
+                Some(&target),
+                *document.evidence.limits(),
+                operation(allowance),
+            );
+            let error = document
+                .current_tree_in(Some(&target), Some(&context))
+                .err()
+                .ok_or("effective tree bypassed merge budget")?;
+            assert_eq!(error.code, FindingCode::LimitExceeded);
+            assert!(error.path.is_none());
+        }
+        let context = crate::registry::EncodeContext::in_operation(
+            Some(&target),
+            *document.evidence.limits(),
+            operation(1_000_000),
+        );
+        let tree = document
+            .current_tree_in(Some(&target), Some(&context))
+            .map_err(|_| "control merge failed")?;
+        assert_eq!(
+            tree.get("retainedOpaque").and_then(TreeNode::as_str),
+            Some(private.as_str())
+        );
+        assert_eq!(
+            document
+                .source_evidence()
+                .reveal_raw(&crate::source::ExplicitSourceAccess::explicitly_allow_raw_source()),
+            text.as_bytes()
+        );
+        Ok(())
+    }
+    fn parsed_resources(text: &str) -> Result<ResourceSet, String> {
+        let input = crate::parse_source(
+            crate::source::SourceInput {
+                id: crate::source::SourceId(41),
+                format: crate::source::DocumentFormat::YamlStream,
+                origin: crate::source::InputOrigin::Authored,
+                source_version: None,
+                bytes: text.as_bytes(),
+            },
+            &crate::source::ParseLimits::default(),
+        )
+        .map_err(|_| "parse failed")?;
+        input.flatten_resources().map_err(|_| "flatten failed".into())
+    }
+    fn operation(bytes: usize) -> NativeOperationBudget {
+        NativeOperationBudget::new(NativeProcessingLimits {
+            max_payload_bytes: bytes,
+            ..NativeProcessingLimits::default()
+        })
+    }
+    fn codec_prefix_fits(
+        document: &crate::model::ResourceDocument,
+        target: &TargetProfile,
+        bytes: usize,
+        copies: usize,
+    ) -> bool {
+        let processing = operation(bytes);
+        let context =
+            crate::registry::EncodeContext::in_operation(Some(target), *document.evidence.limits(), processing.clone());
+        let Some(native) = &document.resource else {
+            return false;
+        };
+        let Ok(known) = crate::registry::encode_in(native.as_ref(), &context) else {
+            return false;
+        };
+        if crate::model::identity_in(&known, document.original_identity.scope, &processing, Phase::Generation).is_err()
+        {
+            return false;
+        }
+        // Effective known encoding excludes the opaque root. Its preservation
+        // belongs to the merge, so this probe cannot fail while encoding that value.
+        assert!(known.get("retainedOpaque").is_none());
+        (0..copies).all(|_| processing.tree_copy(&document.original, Phase::Generation).is_ok())
+    }
 }

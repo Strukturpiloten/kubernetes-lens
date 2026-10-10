@@ -17,7 +17,12 @@ fn shared_presence_unknown_finalizers_and_selector_knowledge() -> TestResult<()>
     let root = tree(
         "labels: {}\nannotations: null\nfinalizers: []\nownerReferences: [{apiVersion: v1, kind: Pod, name: p, uid: null, extra: private-owner}]\nextra: private-root\n",
     )?;
-    let metadata = Metadata::decode(&root, &FieldPath::default()).required()?;
+    let metadata = Metadata::decode(
+        &root,
+        &crate::registry::FieldDecodeContext::standalone(),
+        &FieldPath::default(),
+    )
+    .required()?;
     assert_eq!(metadata.labels, Presence::Value(std::collections::BTreeMap::new()));
     assert_eq!(metadata.annotations, Presence::Null);
     assert_eq!(metadata.finalizers, Presence::Value(Vec::new()));
@@ -37,12 +42,26 @@ fn shared_presence_unknown_finalizers_and_selector_knowledge() -> TestResult<()>
     authored.include_unknown = true;
     let full = metadata.encode(&authored, &FieldPath::default()).required()?;
     assert!(full.semantic_eq(&root));
-    let selector = LabelSelector::decode(&tree("matchLabels: null\n")?, &FieldPath::default()).required()?;
+    let selector = LabelSelector::decode(
+        &tree("matchLabels: null\n")?,
+        &crate::registry::FieldDecodeContext::standalone(),
+        &FieldPath::default(),
+    )
+    .required()?;
     assert!(selector.matches(&std::collections::BTreeMap::new()).is_err());
-    let selector = LabelSelector::decode(&tree("unknown: private\n")?, &FieldPath::default()).required()?;
+    let selector = LabelSelector::decode(
+        &tree("unknown: private\n")?,
+        &crate::registry::FieldDecodeContext::standalone(),
+        &FieldPath::default(),
+    )
+    .required()?;
     assert_eq!(selector.validate().err().required()?.code, FindingCode::UnadmittedField);
-    let selector =
-        LabelSelector::decode(&tree("matchLabels: {}\nmatchExpressions: []\n")?, &FieldPath::default()).required()?;
+    let selector = LabelSelector::decode(
+        &tree("matchLabels: {}\nmatchExpressions: []\n")?,
+        &crate::registry::FieldDecodeContext::standalone(),
+        &FieldPath::default(),
+    )
+    .required()?;
     assert!(selector.matches(&std::collections::BTreeMap::new()).required()?);
     assert!(!format!("{metadata:?}{selector:?}").contains("private-owner"));
     Ok(())
@@ -60,6 +79,7 @@ fn bounded_construction_counts_keys_cumulatively_and_escapes_before_byte_limit()
         target: None,
         include_unknown: true,
         budget: crate::syntax::EncodingBudget::new(limits),
+        limits: limits.parser,
     };
     ctx.key("k", &path("/k")?).required()?;
     ctx.string("v", &path("/k")?).required()?;
@@ -78,6 +98,7 @@ fn bounded_construction_counts_keys_cumulatively_and_escapes_before_byte_limit()
         target: None,
         include_unknown: true,
         budget: crate::syntax::EncodingBudget::new(limits),
+        limits: limits.parser,
     };
     assert!(ctx.string("ab", &FieldPath::default()).is_err());
     assert!(ctx.integer(-1, &FieldPath::default()).is_err());
@@ -525,6 +546,7 @@ fn constructor_scalar_and_key_bytes_share_one_cumulative_boundary() -> TestResul
         target: None,
         include_unknown: true,
         budget: crate::syntax::EncodingBudget::new(limits),
+        limits: limits.parser,
     };
     ctx.key("ab", &path("/ab")?).required()?;
     assert_eq!(

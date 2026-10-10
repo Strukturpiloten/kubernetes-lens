@@ -279,8 +279,16 @@ assert(
   "foundation parser Cargo dependencies must be owned",
 );
 const timezoneOwners = actual.filter((row) => row.dep.depName === "jiff-tzdb");
-assert.equal(timezoneOwners.length, 1, "bundled timezone pin has exactly one owner");
+assert.equal(
+  timezoneOwners.length,
+  1,
+  "bundled timezone pin has exactly one owner",
+);
 assert.equal(timezoneOwners[0].manager, "cargo");
+const binaryOwners = actual.filter((row) => row.dep.depName === "base64");
+assert.equal(binaryOwners.length, 1, "native binary pin has exactly one owner");
+assert.equal(binaryOwners[0].manager, "cargo");
+assert.equal(binaryOwners[0].dep.currentValue, "=0.22.1");
 const withoutCargo = structuredClone(config);
 withoutCargo.enabledManagers = withoutCargo.enabledManagers.filter(
   (manager) => manager !== "cargo",
@@ -458,6 +466,46 @@ try {
       );
     }
   }
+  const binaryRow = binaryOwners[0];
+  const binaryOriginal = files.get(binaryRow.file);
+  await fs.writeFile(path.join(scratch, binaryRow.file), binaryOriginal);
+  const binaryUpgrade = {
+    ...binaryRow.extraction,
+    ...binaryRow.dep,
+    manager: "cargo",
+    packageFile: binaryRow.file,
+    depIndex: binaryRow.extraction.deps.indexOf(binaryRow.dep),
+    newValue: "=0.22.2",
+  };
+  const binaryUpdated = await doAutoReplace(
+    binaryUpgrade,
+    binaryOriginal,
+    false,
+  );
+  assert(
+    binaryUpdated && binaryUpdated !== binaryOriginal,
+    "actual Cargo replacement advances the binary pin",
+  );
+  const binaryAfter = await cargo.extractPackageFile(
+    binaryUpdated,
+    binaryRow.file,
+    {},
+  );
+  assert.equal(
+    binaryAfter.deps[binaryUpgrade.depIndex].currentValue,
+    "=0.22.2",
+  );
+  assert(
+    binaryUpdated.includes("default-features = false"),
+    "replacement preserves disabled default features",
+  );
+  const absentBinary = binaryOriginal.replace(/^base64 =.*\n/m, "");
+  await fs.writeFile(path.join(scratch, binaryRow.file), absentBinary);
+  assert.equal(
+    await doAutoReplace(binaryUpgrade, absentBinary, false),
+    absentBinary,
+    "replacement refuses a missing dependency instead of modifying another pin",
+  );
   const imageRow = actual.find((row) => row.dep.datasource === "docker");
   const originalImage = files.get(imageRow.file);
   await fs.mkdir(path.join(scratch, path.dirname(imageRow.file)), {
@@ -516,11 +564,26 @@ for (const updateType of ["minor", "patch", "pin", "digest", "pinDigest"]) {
   assert.equal(normal.groupName, "Rust dependencies");
   assert.equal(normal.automerge, true);
   assert.equal(normal.minimumReleaseAge, "3 days");
-  const timezone = await policy({ manager: "cargo", datasource: "crate", depName: "jiff-tzdb", updateType });
+  const timezone = await policy({
+    manager: "cargo",
+    datasource: "crate",
+    depName: "jiff-tzdb",
+    updateType,
+  });
   assert.equal(timezone.groupName, "Native timezone data");
   assert.equal(timezone.automerge, false);
   assert.equal(timezone.dependencyDashboardApproval, true);
   assert.equal(timezone.minimumReleaseAge, "3 days");
+  const binary = await policy({
+    manager: "cargo",
+    datasource: "crate",
+    depName: "base64",
+    updateType,
+  });
+  assert.equal(binary.groupName, "Native binary codecs");
+  assert.equal(binary.automerge, false);
+  assert.equal(binary.dependencyDashboardApproval, true);
+  assert.equal(binary.minimumReleaseAge, "3 days");
   const toolchain = await policy({
     manager: "rust-toolchain",
     datasource: "rust-version",
@@ -627,8 +690,34 @@ assert.equal(
   "negative rule-order mutation must expose the dangerous override",
 );
 assert.throws(() => assert.equal(unsafePolicy.automerge, false));
-const unsafeTimezone = await policy({ manager: "cargo", datasource: "crate", depName: "jiff-tzdb", updateType: "patch" }, reordered);
-assert.equal(unsafeTimezone.automerge, true, "negative rule-order mutation exposes unsafe timezone updates");
+const unsafeBinary = await policy(
+  {
+    manager: "cargo",
+    datasource: "crate",
+    depName: "base64",
+    updateType: "patch",
+  },
+  reordered,
+);
+assert.equal(
+  unsafeBinary.automerge,
+  true,
+  "negative rule-order mutation exposes unsafe binary updates",
+);
+const unsafeTimezone = await policy(
+  {
+    manager: "cargo",
+    datasource: "crate",
+    depName: "jiff-tzdb",
+    updateType: "patch",
+  },
+  reordered,
+);
+assert.equal(
+  unsafeTimezone.automerge,
+  true,
+  "negative rule-order mutation exposes unsafe timezone updates",
+);
 assert.throws(() => assert.equal(unsafeTimezone.automerge, false));
 const unsafeImage = await policy(
   {

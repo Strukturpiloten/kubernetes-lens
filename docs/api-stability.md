@@ -29,3 +29,11 @@ retaining a version does not claim source-server validation. Unchanged malformed
 retain precise native evidence, while duplicate valid keys and unsafe edited associations remain
 errors unless the caller supplies a deliberate explicit repair/removal. Constructor and graph
 budgets are cumulative and never authorize a positive outcome after exhaustion.
+
+[ADR 0006](decisions/0006-shared-native-processing.md) adds ParseLimits.processing,
+GenerationOptions.processing and ReferenceContext.processing. Existing literals migrate using
+Default or explicit members. SourceEvidence retains its effective ceilings; caller overrides cannot
+raise them. NativeBytes exposes protected decoded bytes only with explicit source access, while
+quantity ordering reports exact supplied order separately from native arithmetic uncertainty.
+Sealed field/native hook contexts now preserve one operation session through projections and
+reparsing. These intentional unpublished integration changes do not establish native conformance.

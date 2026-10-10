@@ -137,6 +137,16 @@
       "groupName": "Native timezone data",
       "dependencyDashboardApproval": true,
       "automerge": false
+    },
+    {
+      "description": [
+        "Review native binary codec integrity and padding semantics after generic automerge rules"
+      ],
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["base64"],
+      "groupName": "Native binary codecs",
+      "dependencyDashboardApproval": true,
+      "automerge": false
     }
   ]
 }

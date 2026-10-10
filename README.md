@@ -10,6 +10,9 @@ and native generation. The other resource cohorts remain preservation-only. No K
 renderer or runtime conformance is claimed. Renderer execution and live cluster operations are
 not delivered. See [workload support and limits](docs/workloads.md).
 See the [foundation API and integration contract](docs/foundation-api.md).
+Shared native-processing limits now cover cumulative charged payload/work and diagnostic reports.
+Protected binary values and exact supplied-quantity ordering are available without claiming native
+rounding, storage provisioning or controller behavior.
 
 Rust edition 2024, minimum supported Rust 1.85.0, MPL-2.0. The existing license is preserved.
 The `0.1.0` manifest version is a local package identity, not a published release.

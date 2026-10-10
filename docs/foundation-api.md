@@ -212,3 +212,47 @@ payload comparisons consume the graph work budget; exhaustion cannot retain a po
 Failed supplying PVC decoding leaves claim outcomes incomplete. Ephemeral claim ownership uses
 a structurally valid controlling owner UID; kind/name equality is not added to that UID rule.
 Absent or malformed ownership stays unknown, and contradictory ownership remains incompatible.
+
+## Shared native processing and protected primitives
+
+[ADR 0006](decisions/0006-shared-native-processing.md) defines one shared session per public operation.
+`ParseLimits.processing` retains four lower-configurable ceilings: charged payload bytes and
+conservative processing units (64 MiB each), ordinary report entries (10,000) and report payload
+bytes (1 MiB). Aggregate sources and edit evidence use the componentwise minimum bounded by
+defaults; GenerationOptions.processing, ReferenceContext.processing and
+`validate_for_target_with_limits` can only lower it. Context clones do not reset allowance.
+Authoring snapshot/parse/decode/validation and effective projection/redecode share the same session.
+Existing syntax/construction/snapshot caps remain separate. Charges are conservative payload and
+work units, not allocator/RSS accounting or measured base64-backend visits. Exhaustion is sticky;
+ordinary report retention is bounded, and Vec results can add one fixed pathless emergency limit
+finding. Earlier retained violations cannot be converted to success by suppressed later findings.
+Source-ledger capability checks and List wrapper warnings traverse directly into that shared report
+sink and stop on terminal exhaustion; contextual graph evidence uses the same allowance and cannot
+emit positive facts after exhaustion. Effective reprojection also charges raw/subtree copies,
+the duplicate-check view, retained edit values, and duplicate-key traversal against that session.
+
+`NativeBytes::parse_base64` accepts standard padded native base64 with CR/LF and unused tail bits;
+other whitespace, URL alphabet and invalid padding fail privately. `try_from_bytes` consumes a
+caller buffer after fresh scalar/output preflight. Debug is redacted and clones share immutable
+bytes. `bytes` requires ExplicitSourceAccess. Source spelling is immutable evidence; fresh codec
+output is canonical. Generation's default protected-output denial and separate artifact access
+remain authoritative. Binary parsing alone proves neither PEM/TLS validity nor native admission.
+
+`Quantity::compare_supplied` returns exact mathematical Ordering with a separate NativeQuantityDomain.
+It precharges 533 units for every comparison, including zero/sign shortcuts, and compares symbolic
+ranks/digits without exponent-sized buffers or floating point. Different supplied spellings retain
+their original authority; Kubernetes rounding/capping is not inferred. The conservative arithmetic
+domain is nonnegative integral bytes through i64::MAX, with field positivity/applicability left to
+owning validators. Broader exact results explicitly remain NativeSemanticsUnverified.
+
+Constructor intake and identity scans charge work even for empty Lists and unique identities that
+emit no ordinary findings. Retained List wrapper/item copies and source/resource/item-ID vectors
+preflight conservative structural and payload charges; generation wrapper preparation/rewrapping
+uses the same operation. Separately parsed sources cannot reset these aggregate allowances.
+Independent regressions exercise empty and opaque Lists, and a private synthetic binary codec
+checks unchanged spelling versus canonical changed output without adding a native registration.
+
+Generic List metadata validation charges shared work even when no diagnostic is required; report
+exhaustion stops the scan immediately. Mapping-delta insertion reserves copied key and member
+payloads before insertion and charges its lookup work; a later checked-view copy is a separate
+reservation, not retroactive coverage of the first copy.

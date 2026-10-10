@@ -10,3 +10,5 @@
   observation roles. Other resource cohorts, renderer execution and runtime conformance remain
   pending; no release
   or supported Kubernetes minor is claimed.
+- Add shared native-processing ceilings, protected binary values and exact supplied-quantity
+  ordering. Configuration/storage root resources and native conformance remain pending.
