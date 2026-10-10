@@ -135,7 +135,7 @@ const RULES_0: &[EnumRule] = &[
         "/spec/tolerations/*/effect",
         &["", "NoSchedule", "PreferNoSchedule", "NoExecute"],
     ),
-    ("/spec/tolerations/*/operator", &["Equal", "Exists"]),
+    ("/spec/tolerations/*/operator", &["", "Equal", "Exists"]),
     (
         "/spec/topologySpreadConstraints/*/labelSelector/matchExpressions/*/operator",
         &["In", "NotIn", "Exists", "DoesNotExist"],
@@ -318,7 +318,7 @@ const RULES_1: &[EnumRule] = &[
         "/spec/template/spec/tolerations/*/effect",
         &["", "NoSchedule", "PreferNoSchedule", "NoExecute"],
     ),
-    ("/spec/template/spec/tolerations/*/operator", &["Equal", "Exists"]),
+    ("/spec/template/spec/tolerations/*/operator", &["", "Equal", "Exists"]),
     (
         "/spec/template/spec/topologySpreadConstraints/*/labelSelector/matchExpressions/*/operator",
         &["In", "NotIn", "Exists", "DoesNotExist"],
@@ -509,7 +509,7 @@ const RULES_2: &[EnumRule] = &[
         "/spec/template/spec/tolerations/*/effect",
         &["", "NoSchedule", "PreferNoSchedule", "NoExecute"],
     ),
-    ("/spec/template/spec/tolerations/*/operator", &["Equal", "Exists"]),
+    ("/spec/template/spec/tolerations/*/operator", &["", "Equal", "Exists"]),
     (
         "/spec/template/spec/topologySpreadConstraints/*/labelSelector/matchExpressions/*/operator",
         &["In", "NotIn", "Exists", "DoesNotExist"],
@@ -697,7 +697,7 @@ const RULES_3: &[EnumRule] = &[
         "/spec/template/spec/tolerations/*/effect",
         &["", "NoSchedule", "PreferNoSchedule", "NoExecute"],
     ),
-    ("/spec/template/spec/tolerations/*/operator", &["Equal", "Exists"]),
+    ("/spec/template/spec/tolerations/*/operator", &["", "Equal", "Exists"]),
     (
         "/spec/template/spec/topologySpreadConstraints/*/labelSelector/matchExpressions/*/operator",
         &["In", "NotIn", "Exists", "DoesNotExist"],
@@ -880,7 +880,7 @@ const RULES_4: &[EnumRule] = &[
         "/spec/template/spec/tolerations/*/effect",
         &["", "NoSchedule", "PreferNoSchedule", "NoExecute"],
     ),
-    ("/spec/template/spec/tolerations/*/operator", &["Equal", "Exists"]),
+    ("/spec/template/spec/tolerations/*/operator", &["", "Equal", "Exists"]),
     (
         "/spec/template/spec/topologySpreadConstraints/*/labelSelector/matchExpressions/*/operator",
         &["In", "NotIn", "Exists", "DoesNotExist"],
@@ -1058,7 +1058,7 @@ const RULES_5: &[EnumRule] = &[
         "/spec/template/spec/tolerations/*/effect",
         &["", "NoSchedule", "PreferNoSchedule", "NoExecute"],
     ),
-    ("/spec/template/spec/tolerations/*/operator", &["Equal", "Exists"]),
+    ("/spec/template/spec/tolerations/*/operator", &["", "Equal", "Exists"]),
     (
         "/spec/template/spec/topologySpreadConstraints/*/labelSelector/matchExpressions/*/operator",
         &["In", "NotIn", "Exists", "DoesNotExist"],
@@ -1246,7 +1246,7 @@ const RULES_6: &[EnumRule] = &[
         "/spec/template/spec/tolerations/*/effect",
         &["", "NoSchedule", "PreferNoSchedule", "NoExecute"],
     ),
-    ("/spec/template/spec/tolerations/*/operator", &["Equal", "Exists"]),
+    ("/spec/template/spec/tolerations/*/operator", &["", "Equal", "Exists"]),
     (
         "/spec/template/spec/topologySpreadConstraints/*/labelSelector/matchExpressions/*/operator",
         &["In", "NotIn", "Exists", "DoesNotExist"],
@@ -1449,7 +1449,7 @@ const RULES_7: &[EnumRule] = &[
     ),
     (
         "/spec/jobTemplate/spec/template/spec/tolerations/*/operator",
-        &["Equal", "Exists"],
+        &["", "Equal", "Exists"],
     ),
     (
         "/spec/jobTemplate/spec/template/spec/topologySpreadConstraints/*/labelSelector/matchExpressions/*/operator",
@@ -1653,7 +1653,7 @@ const RULES_8: &[EnumRule] = &[
     ),
     (
         "/spec/jobTemplate/spec/template/spec/tolerations/*/operator",
-        &["Equal", "Exists"],
+        &["", "Equal", "Exists"],
     ),
     (
         "/spec/jobTemplate/spec/template/spec/topologySpreadConstraints/*/labelSelector/matchExpressions/*/operator",

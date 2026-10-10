@@ -1,4 +1,5 @@
 //! Fixed codec aggregator. Cohort slots are declarations, not placeholder implementations.
+pub mod access;
 pub mod common;
 pub mod workloads;
 use crate::{
@@ -27,5 +28,6 @@ pub(crate) fn registry() -> Result<RegistryBuilder, Vec<Finding>> {
             .map_err(|e| vec![e])?;
     }
     workloads::roots::register(&mut registry).map_err(|e| vec![e])?;
+    access::roots::register(&mut registry).map_err(|e| vec![e])?;
     Ok(registry)
 }

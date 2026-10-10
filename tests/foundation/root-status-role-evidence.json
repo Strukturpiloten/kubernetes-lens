@@ -4,6 +4,17 @@
   "report_sha256": "ea9308ea8a4220132c7036b425ee7ebe189cd48e2a05f16679cbbb891f335228",
   "ledger_sha256": "747adc51d5646a1977fd1a6fa0d022414cdab72520d31470696aaf4e5b0d2c08",
   "witness_sha256": "539a6f61f1b6116373f743efc3ac1322020680d1e919f9852bd8a085d5102a44",
+  "evaluation_ledger_sha256": "f071be3cb41aaee879ba0f4b693850c0609d45f872b2439f236b6acb1cd7875f",
+  "observation_basis_transition": {
+    "verification_kind": "schema-observation-basis-equivalence-only",
+    "historical_ledger_sha256": "747adc51d5646a1977fd1a6fa0d022414cdab72520d31470696aaf4e5b0d2c08",
+    "evaluation_ledger_sha256": "f071be3cb41aaee879ba0f4b693850c0609d45f872b2439f236b6acb1cd7875f",
+    "canonicalization": "UTF-8 compact JSON; recursively sorted object keys; preserved array order",
+    "schema_profiles_projection": "entire schema_profiles array",
+    "schema_profiles_sha256": "c027fa1516513e48210ab98b0505b941b7c675d0fd2e74472ae3983889c86852",
+    "api_root_status_projection": "resource/profile order; kind, api_version, target_availability_ranges, root_schema_forms, status_fields containing complete /status field facts",
+    "api_root_status_sha256": "b0b7c64087cb49980a3b47b9027ba7b17aba19005e30b3847d965b111c4d1eb5"
+  },
   "schemas": [
     {
       "schema_id": "k8s-1.20-0",
@@ -386,9 +397,9 @@
       "status": null
     }
   ],
-  "current_evaluation_ledger_sha256": "7bf212bf07f345452016ea8c03676286cb89bee91bcc3a13979d66edf92813d0",
+  "current_evaluation_ledger_sha256": "5a9a11aedd2a4b4dec2587923dc0357fb7ea40209302f8dab3bc007e845388f6",
   "current_evaluation_source_sha256": {
-    "src/capability.rs": "260a49f45127f7e71b0f286eafa6c8f4d8a91cbe31c8e9d5471b6a64970375f2",
+    "src/capability.rs": "359f7ee36b36f548af7dd4755db2eb17e82ac6eb8071880847035622ce89d9d6",
     "src/generation.rs": "8aa8a5b4c6e9c6df937cd7c38c42ccba34965b4be55fc8eb601cd53077c2bfaa",
     "src/model.rs": "d903c5fbcd992329bd61108d4af557fb7466edfef4f453a498045385c06a4c68",
     "src/registry.rs": "71bf00721a16773a22aeddc78dd6f0a1d1f39df994aa09bbad2d1a6bcff47b25",
@@ -396,11 +407,12 @@
     "src/resources/common.rs": "3f29b27b3b8891ef1d8443dc2109a292c5e8ccdefe95d3b318afdd31446d11d6",
     "src/resources/common/native_helpers.rs": "ac2b96b49c9dad81ea2164406662370b1e5c87d894f476a7731d3dbf206474ba",
     "src/resources/workloads/roots.rs": "2c7505117d1ce25b233d3d176e6d94abf9635a3de18ffe35904f37885ce6f72c",
-    "src/resources/workloads/validation.rs": "edc8f82cd1a664ffa35fe3d67cfc0e0102c77fc8ddd7f7a01361711e047cfa73",
-    "src/value.rs": "f40b5ce85bf7d5f0559602ba48bf13fec76315de910b4ea6481713ae08ea9971",
+    "src/resources/workloads/validation.rs": "00a060141f580b1d20aabc997ef51d8669420982df9d7088ccbb6b2490705791",
+    "src/value.rs": "d738ce545fd20a86891ef16e2aba6cd403a787de05ba23b085928bd357bf10db",
     "src/value/access_modes.rs": "1c24f7a3aab90f55838a149bda6ab169cff84d6418b9a0ee4d6b57f83817c33b",
     "src/source.rs": "5df62b9a50108d60e0598fbb1054522e55a59d808e2f0354eee4e1ae46adb4af"
   },
   "unchanged_historical_projection_sha256": "c56b88043b874ac0a2d9b909364c5b8d444e64df5fefad56f1b3092b9481953f",
-  "unchanged_source_schema_projection_sha256": "c21b5bca4a0765fb22363638cfb165fe86650ea1c264ef0595ee06ea7a249819"
+  "unchanged_source_schema_projection_sha256": "c21b5bca4a0765fb22363638cfb165fe86650ea1c264ef0595ee06ea7a249819",
+  "access_candidate_evaluation_ledger_sha256": "f071be3cb41aaee879ba0f4b693850c0609d45f872b2439f236b6acb1cd7875f"
 }

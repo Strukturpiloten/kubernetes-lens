@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Regression tests for independent source facts and effective frozen admission."""
 import copy
+import hashlib
+import re
 import importlib.util
 import json
 from pathlib import Path
@@ -93,6 +95,46 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(self.evaluate(d, 'maxSurge', '1.25'), 'selected_expected_pending')
         self.assertEqual(self.evaluate(d, 'maxSurge', '1.37'), 'selected_expected_pending')
         self.assertEqual(self.evaluate(d, 'maxSurge', '1.37', DaemonSetUpdateSurge='disabled'), 'invalid-target-profile')
+
+    def test_load_balancer_class_requires_stable_admission_not_gate_presence(self):
+        pointer = '/spec/loadBalancerClass'
+        gate = 'ServiceLoadBalancerClass'
+        for target in ('1.21', '1.22', '1.23'):
+            for setting in ('documented-default', 'enabled', 'disabled'):
+                self.assertEqual(self.root_evaluate('Service', 'v1', pointer, target,
+                                                   'example.com/internal-vip', **{gate: setting}),
+                                 'unadmitted-field')
+        self.assertEqual(self.root_evaluate('Service', 'v1', pointer, '1.20'), 'unavailable-field')
+        for number in range(24, 38):
+            target = f'1.{number}'
+            self.assertEqual(self.root_evaluate('Service', 'v1', pointer, target,
+                                               'example.com/internal-vip'), 'selected_expected_pending')
+            for setting in ('enabled', 'disabled'):
+                self.assertEqual(self.root_evaluate('Service', 'v1', pointer, target,
+                                                   'example.com/internal-vip', **{gate: setting}),
+                                 'invalid-target-profile')
+        source = next(s for s in self.ledger['feature_gate_sources'] if s['gate'] == gate)
+        stage = contract.documented_gate(source, '1.26')
+        self.assertEqual(stage['stage'], 'stable')
+        self.assertEqual(stage['fromVersion'], '1.24')
+        self.assertTrue(stage['configuration_removed'])
+
+    def test_load_balancer_class_gate_evidence_detects_missing_constraint_or_binding(self):
+        gate = 'ServiceLoadBalancerClass'
+        cases = json.loads((ROOT / self.ledger['gate_case_file']).read_text())
+        binding = next(b for b in self.ledger['feature_gate_bindings'] if b['gate'] == gate)
+        self.assertEqual((binding['kind'], binding['api_version'], binding['pointer'], binding['selection']),
+                         ('Service', 'v1', '/spec/loadBalancerClass', 'stable_only'))
+        self.assertEqual(len([c for c in cases['cases'] if c['binding_id'] == binding['id']]), 54)
+        changed = copy.deepcopy(self.ledger)
+        changed['feature_gate_bindings'] = [b for b in changed['feature_gate_bindings'] if b['gate'] != gate]
+        self.assertTrue(contract.validate_gate_cases(changed, cases))
+        changed = copy.deepcopy(self.ledger)
+        resource = next(r for r in changed['resources'] if r['kind'] == 'Service')
+        api = next(a for a in resource['proposed_admitted_api_profiles'] if a['api_version'] == 'v1')
+        field = next(f for f in api['typed_field_pointers'] if f['pointer'] == '/spec/loadBalancerClass')
+        field['native_constraints'] = []
+        self.assertTrue(contract.validate_gate_cases(changed, cases))
 
     def test_generic_ephemeral_and_proc_mount_differ_by_value_and_context(self):
         self.assertEqual(self.evaluate('io.k8s.api.core.v1.Volume', 'ephemeral', '1.20', GenericEphemeralVolume='enabled'), 'unadmitted-field')
@@ -223,6 +265,100 @@ class ContractTests(unittest.TestCase):
             (Path(directory) / sample['schema_profiles'][0]['cache_filename']).write_text('{}')
             self.assertTrue(any('integrity mismatch' in error for error in contract.verify_schema_cache(sample, self.witnesses, Path(directory))))
 
+
+
+    def access_code_errors(self, evidence):
+        errors = []
+        if evidence.get('format') != 'local_access_code_evidence_v1' or evidence.get('issue') != 12:
+            errors.append('access evidence identity')
+        if evidence.get('status') != 'offline_code_obligations_only':
+            errors.append('unsupported evidence status')
+        expected_conformance = {
+            'supported_kubernetes_versions': [], 'field_cases': 'pending',
+            'native_kind_scenarios': 'pending', 'tool_commands': 'pending',
+            'api_server': 'pending', 'runtime': 'pending',
+        }
+        if evidence.get('conformance') != expected_conformance:
+            errors.append('fabricated native success')
+        ledger_path = 'schemas/capabilities/kubernetes-1.20-1.37.json'
+        if evidence.get('canonical_ledger') != {
+            'path': ledger_path, 'sha256': hashlib.sha256((ROOT / ledger_path).read_bytes()).hexdigest(),
+        }:
+            errors.append('stale canonical ledger')
+        expected_roots = []
+        for i, resource in enumerate(self.ledger['resources']):
+            if resource['cohort_issue'] != 12:
+                continue
+            for j, profile in enumerate(resource['proposed_admitted_api_profiles']):
+                expected_roots.append({
+                    'kind': resource['kind'], 'api_version': profile['api_version'],
+                    'selected_field_catalogue_pointer': f'/resources/{i}/proposed_admitted_api_profiles/{j}',
+                    'expected_availability_ranges': profile['target_availability_ranges'],
+                    'code_registration': 'src/resources/access/roots.rs', 'native_case_status': 'pending',
+                })
+        if len(expected_roots) != 18 or evidence.get('roots') != expected_roots:
+            errors.append('incomplete or unsupported access roots')
+        expected_sources = {
+            'src/capability.rs', 'src/generation.rs', 'src/graph.rs', 'src/model.rs', 'src/registry.rs',
+            'src/resources/common.rs', 'src/resources/common/native_helpers.rs', 'src/resources/mod.rs',
+            'src/resources/access.rs', 'src/value.rs', 'src/value/native_quantity.rs',
+            'tests/access.rs', 'tests/access/native_rules.rs',
+        } | {str(path.relative_to(ROOT)) for path in (ROOT / 'src/resources/access').glob('*.rs')}
+        hashes = evidence.get('source_sha256', {})
+        if set(hashes) != expected_sources:
+            errors.append('incomplete source binding')
+        for name, digest in hashes.items():
+            if name not in expected_sources or hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != digest:
+                errors.append('stale source binding')
+        expected_tests = []
+        for name, prefix in [('tests/access.rs', ''), ('tests/access/native_rules.rs', 'native_rules::')]:
+            expected_tests.extend(prefix + case for case in re.findall(
+                r'#\[test\]\s*fn (\w+)\(', (ROOT / name).read_text()))
+        if len(expected_tests) != 46 or evidence.get('independent_access_tests') != expected_tests:
+            errors.append('incomplete independent cases')
+        checks = evidence.get('selected_native_checks', [])
+        if len(checks) != 18 or len({check['id'] for check in checks}) != 18:
+            errors.append('incomplete native check obligations')
+        for check in checks:
+            if check['test'] not in expected_tests or check['code'] not in expected_sources:
+                errors.append('unbound native check')
+        witness_path = 'docs/evidence/access-native-specification.json'
+        if evidence.get('native_source_witnesses') != {
+            'path': witness_path, 'sha256': hashlib.sha256((ROOT / witness_path).read_bytes()).hexdigest(),
+        }:
+            errors.append('stale native witness')
+        witness = json.loads((ROOT / witness_path).read_text())
+        if witness['evidence_kind'] != 'static-source-inspection-only' or witness['native_commands_run']:
+            errors.append('unsupported witness claim')
+        records = witness['records']
+        if len(records) != 92 or len({record['id'] for record in records}) != 92:
+            errors.append('incomplete native witnesses')
+        for record in records:
+            if not re.fullmatch(r'[0-9a-f]{64}', record['sha256']) or not record['license_url'].startswith('https://github.com/kubernetes/'):
+                errors.append('invalid witness integrity or attribution')
+        if not evidence.get('limitations'):
+            errors.append('missing native limitations')
+        return errors
+
+    def test_access_code_evidence_binds_all_roots_cases_sources_and_pending_native_profiles(self):
+        evidence = json.loads((ROOT / 'schemas/capabilities/access-code-evidence.json').read_text())
+        self.assertEqual(self.access_code_errors(evidence), [])
+
+    def test_access_code_evidence_rejects_omissions_stale_sources_and_fabricated_success(self):
+        evidence = json.loads((ROOT / 'schemas/capabilities/access-code-evidence.json').read_text())
+        for field in ['roots', 'independent_access_tests', 'selected_native_checks']:
+            changed = copy.deepcopy(evidence)
+            changed[field].pop()
+            self.assertTrue(self.access_code_errors(changed), field)
+        changed = copy.deepcopy(evidence)
+        changed['source_sha256']['src/resources/access/quantity_rules.rs'] = '0' * 64
+        self.assertIn('stale source binding', self.access_code_errors(changed))
+        changed = copy.deepcopy(evidence)
+        changed['conformance']['api_server'] = 'passed'
+        self.assertIn('fabricated native success', self.access_code_errors(changed))
+        changed = copy.deepcopy(evidence)
+        changed['roots'][0]['native_case_status'] = 'passed'
+        self.assertIn('incomplete or unsupported access roots', self.access_code_errors(changed))
 
 if __name__ == '__main__':
     unittest.main()

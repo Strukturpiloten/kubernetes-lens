@@ -11,3 +11,6 @@ pending native evidence for the agreed version/kind slice.
 
 The [foundation API](foundation-api.md) records delivered offline behavior, private evidence and
 sealed cohort integration. Runtime and renderer conformance remain pending.
+
+[Access and policy](access.md) records typed resource/field boundaries and source-only admission
+witnesses. Its local code ledger does not substitute for the pending native conformance gate.

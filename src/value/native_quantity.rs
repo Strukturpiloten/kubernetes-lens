@@ -114,9 +114,19 @@ impl Quantity {
         }
         Ok(if left.sign < 0 { order.reverse() } else { order })
     }
-    fn conservative_bytes(&self) -> bool {
+    pub(crate) fn conservative_bytes(&self) -> bool {
+        self.conservative_scaled(0)
+    }
+    /// Exact nonnegative milli-units are integral and fit signed 64-bit native conversion.
+    pub(crate) fn conservative_milli(&self) -> bool {
+        self.conservative_scaled(3)
+    }
+    fn conservative_scaled(&self, shift: i32) -> bool {
         let value = &self.value;
-        if value.sign < 0 || value.scale > 0 {
+        let Some(scale) = value.scale.checked_sub(shift) else {
+            return false;
+        };
+        if value.sign < 0 || scale > 0 {
             return false;
         }
         if value.sign == 0 {
@@ -124,7 +134,7 @@ impl Quantity {
         }
         let Some(rank) = i64::try_from(value.digits.len())
             .ok()
-            .and_then(|length| length.checked_sub(i64::from(value.scale)))
+            .and_then(|length| length.checked_sub(i64::from(scale)))
         else {
             return false;
         };

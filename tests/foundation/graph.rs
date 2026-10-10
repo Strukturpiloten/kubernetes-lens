@@ -980,5 +980,47 @@ fn root_status_expectations_bind_the_immutable_report_ledger_and_authenticated_w
         "c21b5bca4a0765fb22363638cfb165fe86650ea1c264ef0595ee06ea7a249819"
     );
     assert_eq!(evidence["unchanged_source_schema_projection_sha256"], actual);
+    let transition = &evidence["observation_basis_transition"];
+    assert_eq!(transition["historical_ledger_sha256"], evidence["ledger_sha256"]);
+    assert_eq!(
+        transition["evaluation_ledger_sha256"],
+        evidence["access_candidate_evaluation_ledger_sha256"]
+    );
+    assert_eq!(
+        transition["verification_kind"],
+        "schema-observation-basis-equivalence-only"
+    );
+    let ledger: serde_json::Value = serde_json::from_slice(crate::capability::capability_ledger_bytes())?;
+    let mut roots = Vec::new();
+    for resource in ledger["resources"].as_array().required()? {
+        for profile in resource["proposed_admitted_api_profiles"].as_array().required()? {
+            let status = profile["typed_field_pointers"]
+                .as_array()
+                .required()?
+                .iter()
+                .filter(|field| field["pointer"] == "/status")
+                .cloned()
+                .collect::<Vec<_>>();
+            roots.push(serde_json::json!({
+                "kind": resource["kind"],
+                "api_version": profile["api_version"],
+                "target_availability_ranges": profile["target_availability_ranges"],
+                "root_schema_forms": profile["root_schema_forms"],
+                "status_fields": status,
+            }));
+        }
+    }
+    for (key, projection) in [
+        ("schema_profiles_sha256", ledger["schema_profiles"].clone()),
+        ("api_root_status_sha256", serde_json::Value::Array(roots)),
+    ] {
+        let bytes = serde_json::to_vec(&projection)?;
+        let mut actual = String::new();
+        for byte in ledger_digest(&bytes) {
+            use std::fmt::Write as _;
+            write!(&mut actual, "{byte:02x}")?;
+        }
+        assert_eq!(actual, transition[key].as_str().required()?);
+    }
     Ok(())
 }

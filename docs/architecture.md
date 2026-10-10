@@ -25,7 +25,8 @@ and establishes neither schema evaluation nor server behavior.
 
 The workload cohort registers nine API roots for eight kinds; shared native helpers live in
 `resources::common`. Typed workload validation, facts, observations and generation use the
-same sealed registry and bounded core projection. The other cohorts and custom documents
+same sealed registry and bounded core projection. Eighteen access/policy API roots add finite
+validation and supplied-only relationships through the same hooks. The other cohorts and custom documents
 remain preservation-only with structured findings. The frozen compatibility ledger and all
 named native conformance cells remain pending; focused code tests are separate evidence. See
 [ADR 0003](decisions/0003-offline-native-foundation.md) and the

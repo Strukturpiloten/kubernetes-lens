@@ -2361,11 +2361,10 @@ fn source_field(
     session: &mut SourceFieldSession<'_>,
     depth: usize,
 ) {
-    let ledger = session.ledger;
     if !session.depth(depth) {
         return;
     }
-    let (owner, path) = location;
+    let (_, path) = location;
     let forms = fact["schema_forms"].as_array();
     let selected = forms.and_then(|forms| {
         forms.iter().find(|form| {
@@ -2391,36 +2390,15 @@ fn source_field(
     if !session.tick() {
         return;
     }
-    if let Some((definition, member)) = owner {
-        if let Some(bindings) = ledger["feature_gate_bindings"].as_array() {
-            for binding in bindings {
-                if !session.tick() {
-                    return;
-                }
-                if binding["definition"].as_str() != Some(definition) || binding["member"].as_str() != Some(member) {
-                    continue;
-                }
-                if let Some(gate) = FeatureGateId::ALL
-                    .iter()
-                    .find(|gate| Some(gate.as_str()) == binding["gate"].as_str())
-                {
-                    let (stages, removed) = gate_stages(*gate);
-                    let stage = stages.iter().find(|stage| {
-                        stage.first <= session.target.kubernetes.minor()
-                            && session.target.kubernetes.minor() <= stage.last
-                    });
-                    let stable = stage.is_some_and(|stage| stage.stable)
-                        || removed
-                            && stages
-                                .last()
-                                .is_some_and(|s| s.stable && session.target.kubernetes.minor() > s.last);
-                    if session.target.feature_gates.resolve(*gate, session.target.kubernetes)
-                        != Ok(FeatureGateState::Enabled)
-                        || binding["selection"].as_str() == Some("stable_only") && !stable
-                    {
-                        session.finding(FindingCode::FeatureGateRequired, path);
-                    }
-                }
+    if let Some(constraints) = fact["native_constraints"].as_array() {
+        for rule in constraints {
+            if !session.tick() {
+                return;
+            }
+            if rule["rule"].as_str() == Some("feature_gate")
+                || rule["rule"].as_str() == Some("value_predicate") && rule["gate"].is_string()
+            {
+                source_gate_constraint(node, rule, path, session);
             }
         }
     }
@@ -2517,6 +2495,99 @@ fn enum_unselected(
     false
 }
 
+// Binding variants are evidence samples, not the gated value set. Both roots and
+// helper members evaluate their reviewed native predicate through the same budget.
+fn source_gate_constraint(
+    node: &crate::syntax::TreeNode,
+    rule: &serde_json::Value,
+    path: &crate::diagnostic::FieldPath,
+    session: &mut SourceFieldSession<'_>,
+) {
+    if let Some(values) = rule["unconditional_values"].as_array() {
+        for value in values {
+            match source_gate_value_matches(node, value, session) {
+                Some(true) | None => return,
+                Some(false) => {}
+            }
+        }
+    }
+    if let Some(values) = rule["gated_values"].as_array() {
+        let mut matched = false;
+        for value in values {
+            match source_gate_value_matches(node, value, session) {
+                Some(true) => {
+                    matched = true;
+                    break;
+                }
+                None => return,
+                Some(false) => {}
+            }
+        }
+        if !matched {
+            return;
+        }
+    }
+    if !session.tick() {
+        return;
+    }
+    let Some(gate) = FeatureGateId::ALL
+        .iter()
+        .find(|gate| Some(gate.as_str()) == rule["gate"].as_str())
+    else {
+        session.finding(FindingCode::UnadmittedField, path);
+        return;
+    };
+    let (stages, removed) = gate_stages(*gate);
+    let stage = stages.iter().find(|stage| {
+        stage.first <= session.target.kubernetes.minor() && session.target.kubernetes.minor() <= stage.last
+    });
+    let stable = stage.is_some_and(|stage| stage.stable)
+        || removed
+            && stages
+                .last()
+                .is_some_and(|stage| stage.stable && session.target.kubernetes.minor() > stage.last);
+    if session.target.feature_gates.resolve(*gate, session.target.kubernetes) != Ok(FeatureGateState::Enabled)
+        || rule["selection"].as_str() == Some("stable_only") && !stable
+    {
+        session.finding(FindingCode::FeatureGateRequired, path);
+    }
+}
+fn source_gate_value_matches(
+    node: &crate::syntax::TreeNode,
+    value: &serde_json::Value,
+    session: &mut SourceFieldSession<'_>,
+) -> Option<bool> {
+    use crate::syntax::TreeValue;
+    if !session.tick() {
+        return None;
+    }
+    let bytes = match (&node.value, value) {
+        (TreeValue::String(actual), serde_json::Value::String(expected)) => actual.len().checked_add(expected.len()),
+        (TreeValue::Number(actual), _) => Some(actual.len()),
+        _ => Some(0),
+    };
+    let result = bytes
+        .ok_or_else(|| session.processing.fail(session.phase))
+        .and_then(|bytes| session.processing.work(bytes, session.phase));
+    if let Err(finding) = result {
+        session.out.push(finding);
+        return None;
+    }
+    Some(match (&node.value, value) {
+        (TreeValue::String(actual), serde_json::Value::String(expected)) => actual == expected,
+        (TreeValue::Number(actual), serde_json::Value::Number(expected)) => {
+            expected
+                .as_i64()
+                .is_some_and(|expected| actual.parse::<i64>() == Ok(expected))
+                || expected
+                    .as_u64()
+                    .is_some_and(|expected| actual.parse::<u64>() == Ok(expected))
+        }
+        (TreeValue::Bool(actual), serde_json::Value::Bool(expected)) => actual == expected,
+        (TreeValue::Null, serde_json::Value::Null) => true,
+        _ => false,
+    })
+}
 fn source_shape(
     node: &crate::syntax::TreeNode,
     shape: &serde_json::Value,

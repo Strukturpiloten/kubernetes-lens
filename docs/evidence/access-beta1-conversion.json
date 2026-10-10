@@ -1,0 +1,74 @@
+{
+  "evidence_kind": "independent-source-facts-only; no native conformance result",
+  "sources": [
+    {
+      "repository": "kubernetes/kubernetes",
+      "tag": "v1.20.0",
+      "commit": "af46c47ce925f4c4ad5cc8d1fca46c7b77d13b38",
+      "path": "pkg/apis/autoscaling/v2beta1/conversion.go",
+      "immutable_url": "https://raw.githubusercontent.com/kubernetes/kubernetes/af46c47ce925f4c4ad5cc8d1fca46c7b77d13b38/pkg/apis/autoscaling/v2beta1/conversion.go",
+      "sha256": "22f5ce614ae2a4ce1552d905c8742aec51a4293f9e7b340bee530d92ddc3a5ed",
+      "git_blob_sha1": "171b2af4248ea9c023f88095f3bc730b431f4551",
+      "bytes": 13705,
+      "license": "Apache-2.0",
+      "source_redistributed": false,
+      "verified": "independent SHA-256, Git blob identity and Apache header; source inspection only"
+    },
+    {
+      "repository": "kubernetes/kubernetes",
+      "tag": "v1.20.0",
+      "commit": "af46c47ce925f4c4ad5cc8d1fca46c7b77d13b38",
+      "path": "staging/src/k8s.io/api/autoscaling/v2beta1/types.go",
+      "immutable_url": "https://raw.githubusercontent.com/kubernetes/kubernetes/af46c47ce925f4c4ad5cc8d1fca46c7b77d13b38/staging/src/k8s.io/api/autoscaling/v2beta1/types.go",
+      "sha256": "d982a1f933c089cb701b390dbe217951c4321496d0230439c7023f8180b73756",
+      "git_blob_sha1": "05023d9bcf436d3573eb877e8aa795a29b63a72b",
+      "bytes": 27410,
+      "license": "Apache-2.0",
+      "source_redistributed": false,
+      "verified": "independent SHA-256, Git blob identity and Apache header; source inspection only"
+    },
+    {
+      "repository": "kubernetes/kubernetes",
+      "tag": "v1.24.0",
+      "commit": "4ce5a8954017644c5420bae81d72b09b735c21f0",
+      "path": "pkg/apis/autoscaling/v2beta1/conversion.go",
+      "immutable_url": "https://raw.githubusercontent.com/kubernetes/kubernetes/4ce5a8954017644c5420bae81d72b09b735c21f0/pkg/apis/autoscaling/v2beta1/conversion.go",
+      "sha256": "b7bf204d231ffcb29623178cfd43897b47a5b383007ffd15dfa85d7255a11408",
+      "git_blob_sha1": "513b41a2a3ee836acda51a401d5cf62f4f397740",
+      "bytes": 13729,
+      "license": "Apache-2.0",
+      "source_redistributed": false,
+      "verified": "independent SHA-256, Git blob identity and Apache header; source inspection only"
+    },
+    {
+      "repository": "kubernetes/kubernetes",
+      "tag": "v1.24.0",
+      "commit": "4ce5a8954017644c5420bae81d72b09b735c21f0",
+      "path": "staging/src/k8s.io/api/autoscaling/v2beta1/types.go",
+      "immutable_url": "https://raw.githubusercontent.com/kubernetes/kubernetes/4ce5a8954017644c5420bae81d72b09b735c21f0/staging/src/k8s.io/api/autoscaling/v2beta1/types.go",
+      "sha256": "93f24e5bb2670c4559eeb162f8f472555246faf1d420efadf6f51fb67adeee29",
+      "git_blob_sha1": "22bb7699e9d1481bbe3890cecaa8e0f815656f77",
+      "bytes": 27419,
+      "license": "Apache-2.0",
+      "source_redistributed": false,
+      "verified": "independent SHA-256, Git blob identity and Apache header; source inspection only"
+    }
+  ],
+  "acquisition": "host gh contents API GET at immutable commit; decoded bytes verified by independent reviewer",
+  "findings": {
+    "Object": "Mandatory strictly positive targetValue; optional strictly positive nonnull averageValue; both preserved",
+    "Resource_ContainerResource": "Exactly one nonnull positive targetAverageUtilization or targetAverageValue",
+    "External": "Exactly one nonnull strictly positive targetValue or targetAverageValue"
+  },
+  "implementation_policy": "Original implementation; no oracle implementation copied or mechanically translated; no API defaults/conversion output authored",
+  "acquisition_command_template": [
+    "gh",
+    "api",
+    "--method",
+    "GET",
+    "repos/kubernetes/kubernetes/contents/{path}",
+    "-f",
+    "ref={commit}"
+  ],
+  "acquisition_response_processing": "Decode the returned content field as base64; verify byte length, SHA-256, Git blob SHA-1 and Apache-2.0 source header against each source record. No source implementation is redistributed."
+}

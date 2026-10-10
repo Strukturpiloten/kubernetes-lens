@@ -274,7 +274,9 @@ fn target_api_boundaries_and_finite_gate_settings() -> TestResult<()> {
     assert!(KubernetesVersion::new(2, 20).is_err());
     assert_eq!(FeatureGateId::ALL.len(), 51);
     assert_eq!(kubernetes_lens::capability::KindId::ALL.len(), 35);
-    let set = resources("apiVersion: policy/v1beta1\nkind: PodSecurityPolicy\nmetadata: {name: legacy}\n")?;
+    let set = resources(
+        "apiVersion: policy/v1beta1\nkind: PodSecurityPolicy\nmetadata: {name: legacy}\nspec:\n  privileged: false\n  runAsUser: {rule: RunAsAny}\n  seLinux: {rule: RunAsAny}\n  supplementalGroups: {rule: RunAsAny}\n  fsGroup: {rule: RunAsAny}\n",
+    )?;
     assert!(generate(&set, &target(24)?, OutputFormat::Yaml, &preserve()).is_ok());
     let errors = generate(&set, &target(25)?, OutputFormat::Yaml, &preserve())
         .err()

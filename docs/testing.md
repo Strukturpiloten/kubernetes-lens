@@ -46,3 +46,9 @@ cells remain pending. Focused checks never replace the primary agent's final com
 JSON primitive checks are `cargo test --locked --test exact_json_number --test protected_json`.
 Internal snapshot cases cover raw numeric magnitude, duplicate keys, malformed numbers and private
 budget failures. These tests establish neither CRD evaluation nor API-server numeric parity.
+
+Access/policy development checks use `cargo test --locked --lib --test access`. Independent cases
+cover all eighteen roots, generated fixed points, source-free validation, API removals, feature gates,
+RBAC/selector resolution and protected evidence. Quota scopes, HPA Create context and LimitRange
+relationships use authenticated native source expectations. Cumulative work/payload and report tests
+retain one pathless terminal finding. Local code checks do not establish native runtime conformance.

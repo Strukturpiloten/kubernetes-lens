@@ -6,7 +6,8 @@ identities and Lists, explicit Kubernetes 1.20–1.37 target facts, supplied-onl
 merge-safe edits, deterministic private in-memory output and explicit bounded Linux input reads.
 Typed workload support covers Pod, Deployment, StatefulSet, DaemonSet, ReplicaSet,
 ReplicationController, Job and historical/current CronJob APIs, with validation, supplied facts
-and native generation. The other resource cohorts remain preservation-only. No Kubernetes minor,
+and native generation. Typed access, RBAC, scaling and policy resources now use the same
+contracts; see [access support and limits](docs/access.md). Other resource cohorts remain preservation-only. No Kubernetes minor,
 renderer or runtime conformance is claimed. Renderer execution and live cluster operations are
 not delivered. See [workload support and limits](docs/workloads.md).
 See the [foundation API and integration contract](docs/foundation-api.md).

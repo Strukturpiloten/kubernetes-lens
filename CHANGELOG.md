@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Add typed native access, RBAC, autoscaling, disruption and policy resources, supplied relationships,
+  finite version/context checks and bounded native generation. Preserve unresolved controller and
+  quantity/defaulting semantics explicitly; native conformance remains pending.
+
 - Add finite storage access modes with original-occurrence preservation and bounded native
   unknown-field capture and traversal. Native resource conformance remains pending.
 
