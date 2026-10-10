@@ -261,7 +261,347 @@ impl NativeOccurrence {
         Arc::ptr_eq(&self.0, &other.0)
     }
 }
-pub(crate) type NativeOccurrences = BTreeMap<FieldPath, NativeOccurrence>;
+/// Private balanced path index. It retains no operation handle: each fallible
+/// insertion receives the current inherited budget. Taking the index moves its
+/// arena without allocating, comparing paths, or rebuilding another table.
+#[derive(Clone, Default)]
+pub(crate) struct NativeOccurrences {
+    entries: Vec<OccurrenceEntry>,
+    root: Option<usize>,
+}
+#[derive(Clone)]
+struct OccurrenceEntry {
+    path: FieldPath,
+    occurrence: NativeOccurrence,
+    left: Option<usize>,
+    right: Option<usize>,
+    height: usize,
+}
+impl NativeOccurrences {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.entries.len()
+    }
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+    /// Read-only reconciliation callers precharge all retained path comparisons
+    /// before lookup. That bound also covers this index's visited subset.
+    pub(crate) fn get(&self, path: &FieldPath) -> Option<&NativeOccurrence> {
+        let mut current = self.root;
+        while let Some(index) = current {
+            let entry = &self.entries[index];
+            match path.cmp(&entry.path) {
+                std::cmp::Ordering::Less => current = entry.left,
+                std::cmp::Ordering::Greater => current = entry.right,
+                std::cmp::Ordering::Equal => return Some(&entry.occurrence),
+            }
+        }
+        None
+    }
+    pub(crate) fn keys(&self) -> impl Iterator<Item = &FieldPath> {
+        self.iter().map(|entry| &entry.path)
+    }
+    pub(crate) fn values(&self) -> impl Iterator<Item = &NativeOccurrence> {
+        self.iter().map(|entry| &entry.occurrence)
+    }
+    fn iter(&self) -> OccurrenceIter<'_> {
+        OccurrenceIter {
+            entries: &self.entries,
+            current: self.root,
+            // AVL height is less than twice log2(n + 1). No representable
+            // arena can require more slots; iteration allocates no scratch heap.
+            stack: [0; 2 * usize::BITS as usize],
+            depth: 0,
+        }
+    }
+    pub(crate) fn insert_in(
+        &mut self,
+        path: &FieldPath,
+        occurrence: &NativeOccurrence,
+        processing: &crate::processing::NativeOperationBudget,
+        phase: Phase,
+    ) -> Result<(), Finding> {
+        let root = self.insert_at(self.root, path, occurrence, processing, phase)?;
+        self.root = Some(root);
+        Ok(())
+    }
+    fn compare_in(
+        left: &FieldPath,
+        right: &FieldPath,
+        processing: &crate::processing::NativeOperationBudget,
+        phase: Phase,
+    ) -> Result<std::cmp::Ordering, Finding> {
+        processing.work(1, phase)?;
+        for (left, right) in left.0.iter().zip(&right.0) {
+            processing.work(1, phase)?;
+            // Charge the conservative complete byte scan of the actual segment
+            // pair BEFORE delegating its comparison, never every table key.
+            processing.work(left.len(), phase)?;
+            processing.work(right.len(), phase)?;
+            let order = left.cmp(right);
+            if order != std::cmp::Ordering::Equal {
+                return Ok(order);
+            }
+        }
+        Ok(left.0.len().cmp(&right.0.len()))
+    }
+    fn charge_path_copy(
+        path: &FieldPath,
+        processing: &crate::processing::NativeOperationBudget,
+        phase: Phase,
+    ) -> Result<(), Finding> {
+        processing.payload_array::<String>(path.0.len(), phase)?;
+        for segment in &path.0 {
+            processing.payload(segment.len(), phase)?;
+            processing.work(segment.len(), phase)?;
+        }
+        Ok(())
+    }
+    fn insert_at(
+        &mut self,
+        current: Option<usize>,
+        path: &FieldPath,
+        occurrence: &NativeOccurrence,
+        processing: &crate::processing::NativeOperationBudget,
+        phase: Phase,
+    ) -> Result<usize, Finding> {
+        processing.work(1, phase)?;
+        let Some(index) = current else {
+            processing.payload_array::<OccurrenceEntry>(1, phase)?;
+            Self::charge_path_copy(path, processing, phase)?;
+            if self.entries.len() == self.entries.capacity() {
+                // Vec growth can copy the complete retained structural arena;
+                // strings/tokens move without copying their private payloads.
+                processing.work(
+                    self.entries
+                        .len()
+                        .checked_mul(size_of::<OccurrenceEntry>())
+                        .ok_or_else(|| processing.fail(phase))?,
+                    phase,
+                )?;
+            }
+            let index = self.entries.len();
+            self.entries.push(OccurrenceEntry {
+                path: path.clone(),
+                occurrence: occurrence.clone(),
+                left: None,
+                right: None,
+                height: 1,
+            });
+            return Ok(index);
+        };
+        let order = Self::compare_in(path, &self.entries[index].path, processing, phase)?;
+        if order == std::cmp::Ordering::Equal {
+            // Diagnostic path retention is also a real private copy. Failure to
+            // reserve it returns terminal LimitExceeded, never a partial success.
+            Self::charge_path_copy(path, processing, phase)?;
+            return Err(Finding::error(FindingCode::MergeConflict, phase).at_path(path.clone()));
+        }
+        // Fixed local metadata allowance per ACTUALLY visited ancestor: one
+        // child update/height check and at most two local rotations (three
+        // touched nodes): at most five height updates, six rotation-link accesses,
+        // and the child/balance accesses, bounded by 64 structural units.
+        // Reserve before descent so failure cannot leave a
+        // partially inserted or unbalanced index. This is not a logarithmic guess.
+        processing.work(64, phase)?;
+        if order == std::cmp::Ordering::Less {
+            let child = self.insert_at(self.entries[index].left, path, occurrence, processing, phase)?;
+            self.entries[index].left = Some(child);
+        } else {
+            let child = self.insert_at(self.entries[index].right, path, occurrence, processing, phase)?;
+            self.entries[index].right = Some(child);
+        }
+        Ok(self.balance(index))
+    }
+    fn height(&self, index: Option<usize>) -> usize {
+        index.map_or(0, |index| self.entries[index].height)
+    }
+    fn update_height(&mut self, index: usize) {
+        self.entries[index].height = 1 + self
+            .height(self.entries[index].left)
+            .max(self.height(self.entries[index].right));
+    }
+    fn rotate_left(&mut self, index: usize, right: usize) -> usize {
+        self.entries[index].right = self.entries[right].left;
+        self.entries[right].left = Some(index);
+        self.update_height(index);
+        self.update_height(right);
+        right
+    }
+    fn rotate_right(&mut self, index: usize, left: usize) -> usize {
+        self.entries[index].left = self.entries[left].right;
+        self.entries[left].right = Some(index);
+        self.update_height(index);
+        self.update_height(left);
+        left
+    }
+    fn balance(&mut self, index: usize) -> usize {
+        self.update_height(index);
+        let left = self.entries[index].left;
+        let right = self.entries[index].right;
+        if self.height(left) > self.height(right) + 1 {
+            if let Some(mut left) = left {
+                if self.height(self.entries[left].right) > self.height(self.entries[left].left) {
+                    if let Some(right) = self.entries[left].right {
+                        left = self.rotate_left(left, right);
+                        self.entries[index].left = Some(left);
+                    }
+                }
+                return self.rotate_right(index, left);
+            }
+        } else if self.height(right) > self.height(left) + 1 {
+            if let Some(mut right) = right {
+                if self.height(self.entries[right].left) > self.height(self.entries[right].right) {
+                    if let Some(left) = self.entries[right].left {
+                        right = self.rotate_right(right, left);
+                        self.entries[index].right = Some(right);
+                    }
+                }
+                return self.rotate_left(index, right);
+            }
+        }
+        index
+    }
+}
+struct OccurrenceIter<'a> {
+    entries: &'a [OccurrenceEntry],
+    current: Option<usize>,
+    stack: [usize; 2 * usize::BITS as usize],
+    depth: usize,
+}
+impl<'a> Iterator for OccurrenceIter<'a> {
+    type Item = &'a OccurrenceEntry;
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(index) = self.current {
+            self.stack[self.depth] = index;
+            self.depth += 1;
+            self.current = self.entries[index].left;
+        }
+        if self.depth == 0 {
+            return None;
+        }
+        self.depth -= 1;
+        let index = self.stack[self.depth];
+        self.current = self.entries[index].right;
+        Some(&self.entries[index])
+    }
+}
+
+#[cfg(test)]
+mod occurrence_index_tests {
+    use super::*;
+    use crate::processing::{NativeOperationBudget, NativeProcessingLimits};
+
+    fn check_avl(table: &NativeOccurrences, index: Option<usize>) -> usize {
+        let Some(index) = index else {
+            return 0;
+        };
+        let entry = &table.entries[index];
+        let left_height = check_avl(table, entry.left);
+        let right_height = check_avl(table, entry.right);
+        assert!(left_height.abs_diff(right_height) <= 1);
+        assert_eq!(entry.height, 1 + left_height.max(right_height));
+        if let Some(left) = entry.left {
+            assert!(table.entries[left].path < entry.path);
+        }
+        if let Some(right) = entry.right {
+            assert!(table.entries[right].path > entry.path);
+        }
+        entry.height
+    }
+
+    #[test]
+    fn insertion_orders_preserve_sorted_paths_and_exact_tokens_without_rebuilding() -> Result<(), Finding> {
+        for order in [
+            (0..512).collect::<Vec<_>>(),
+            (0..512).rev().collect(),
+            (0..256).flat_map(|i| [i, 511 - i]).collect(),
+        ] {
+            let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+            let mut table = NativeOccurrences::new();
+            let mut expected = BTreeMap::new();
+            for number in order {
+                let path = FieldPath(vec!["private/~unicode-λ".into(), format!("field-{number:04}")]);
+                let token = NativeOccurrence::new_in(&processing, Phase::Generation)?;
+                table.insert_in(&path, &token, &processing, Phase::Generation)?;
+                expected.insert(path, token);
+                check_avl(&table, table.root);
+            }
+            assert_eq!(table.keys().collect::<Vec<_>>(), expected.keys().collect::<Vec<_>>());
+            for (path, expected_token) in &expected {
+                assert!(table.get(path).is_some_and(|token| token.same(expected_token)));
+            }
+            assert!(
+                table
+                    .values()
+                    .zip(expected.values())
+                    .all(|(left, right)| left.same(right))
+            );
+            // Taking is a constant structural move, not a second charged index build.
+            let retained = processing.charged_payload_bytes();
+            let moved = std::mem::take(&mut table);
+            assert!(table.is_empty());
+            assert_eq!(moved.len(), 512);
+            assert_eq!(processing.charged_payload_bytes(), retained);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn comparison_charges_only_the_segment_pairs_it_actually_visits() -> Result<(), Finding> {
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_processing_units: 4,
+            ..NativeProcessingLimits::default()
+        });
+        let left = FieldPath(vec!["a".into(), "unvisited-private-tail".repeat(2048)]);
+        let right = FieldPath(vec!["b".into(), "unvisited-private-tail".repeat(2048)]);
+        assert_eq!(
+            NativeOccurrences::compare_in(&left, &right, &processing, Phase::Analysis)?,
+            std::cmp::Ordering::Less
+        );
+        assert!(!processing.exhausted());
+        let exhausted = NativeOccurrences::compare_in(&left, &right, &processing, Phase::Analysis)
+            .err()
+            .ok_or_else(|| Finding::error(FindingCode::NativeFieldInvalid, Phase::Analysis))?;
+        assert_eq!(exhausted.code, FindingCode::LimitExceeded);
+        assert_eq!(exhausted.phase, Phase::Analysis);
+        assert!(exhausted.path.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn failed_insert_is_atomic_and_uses_the_current_supplied_budget_and_phase() -> Result<(), Finding> {
+        let original_budget = NativeOperationBudget::new(NativeProcessingLimits::default());
+        let path = FieldPath::parse("/spec/retained/~0~1private")?;
+        let token = NativeOccurrence::new_in(&original_budget, Phase::Decoding)?;
+        let mut table = NativeOccurrences::new();
+        table.insert_in(&path, &token, &original_budget, Phase::Decoding)?;
+        let current = NativeOperationBudget::new(NativeProcessingLimits {
+            max_processing_units: 0,
+            ..NativeProcessingLimits::default()
+        });
+        let next = FieldPath::parse("/spec/new")?;
+        let error = table
+            .insert_in(&next, &token, &current, Phase::Analysis)
+            .err()
+            .ok_or_else(|| Finding::error(FindingCode::NativeFieldInvalid, Phase::Analysis))?;
+        assert_eq!(error.code, FindingCode::LimitExceeded);
+        assert_eq!(error.phase, Phase::Analysis);
+        assert!(error.path.is_none());
+        assert!(current.exhausted());
+        assert!(!original_budget.exhausted());
+        assert_eq!(table.len(), 1);
+        assert!(table.get(&path).is_some_and(|saved| saved.same(&token)));
+        assert!(table.get(&next).is_none());
+        check_avl(&table, table.root);
+        Ok(())
+    }
+}
 
 /// Retained unknown nested syntax. It is not typed capability or serializable by default.
 #[derive(Clone, Default)]

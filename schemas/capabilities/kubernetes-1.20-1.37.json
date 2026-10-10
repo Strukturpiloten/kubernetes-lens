@@ -49461,7 +49461,7 @@
           "native_constraints": [
             {
               "rule": "enum",
-              "values": ["None", "NoneOnDryRun"],
+              "values": ["None", "NoneOnDryRun", "Some", "Unknown"],
               "other_values": "preserve_only"
             }
           ],
@@ -95002,7 +95002,7 @@
           "native_constraints": [
             {
               "rule": "enum",
-              "values": ["None", "NoneOnDryRun"],
+              "values": ["None", "NoneOnDryRun", "Some", "Unknown"],
               "other_values": "preserve_only"
             }
           ],
@@ -112716,7 +112716,7 @@
           "native_constraints": [
             {
               "rule": "enum",
-              "values": ["None", "NoneOnDryRun"],
+              "values": ["None", "NoneOnDryRun", "Some", "Unknown"],
               "other_values": "preserve_only"
             }
           ],
@@ -114554,7 +114554,7 @@
           "native_constraints": [
             {
               "rule": "enum",
-              "values": ["None", "NoneOnDryRun"],
+              "values": ["None", "NoneOnDryRun", "Some", "Unknown"],
               "other_values": "preserve_only"
             }
           ],

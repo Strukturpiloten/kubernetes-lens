@@ -352,6 +352,20 @@ impl ResourceDocument {
     pub const fn collection(&self) -> Option<&CollectionPath> {
         self.collection.as_ref()
     }
+    pub(crate) fn field_decode_context(
+        &self,
+        processing: &crate::processing::NativeOperationBudget,
+        phase: Phase,
+    ) -> Result<registry::FieldDecodeContext, Finding> {
+        Ok(
+            registry::FieldDecodeContext::new(*self.evidence.limits(), processing.clone(), phase)
+                .with_evidence(&self.evidence)
+                .with_source_location(
+                    self.source,
+                    source_pointer(self.collection.as_ref(), processing, phase)?,
+                ),
+        )
+    }
 
     /// Current effective identity, recomputed from the live encoded value and explicit edits.
     /// # Errors
@@ -651,8 +665,16 @@ impl ResourceDocument {
         Ok((tree, ctx.take_occurrences()))
     }
 }
+/// Multiple supplied CRD candidates never select a scope by insertion order.
+#[derive(Clone, Copy)]
+pub(crate) enum CrdScopeCandidate {
+    Unique(bool),
+    Ambiguous,
+}
+
 /// Ordered supplied resources, retained wrappers, and immutable private sources.
 pub struct ResourceSet {
+    pub(crate) custom_authority: Arc<()>,
     pub(crate) documents: Vec<ResourceDocument>,
     pub(crate) lists: Vec<ListDocument>,
     pub(crate) sources: Vec<Arc<SourceEvidence>>,
@@ -667,7 +689,7 @@ impl fmt::Debug for ResourceSet {
             .field("sources", &self.sources)
             .field("findings", &self.findings)
             .field("processing", &self.processing.limits())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 impl ResourceSet {
@@ -781,6 +803,7 @@ impl ResourceSet {
         processing: crate::processing::NativeOperationBudget,
     ) -> Result<Self, Vec<Finding>> {
         let mut set = Self {
+            custom_authority: Arc::new(()),
             documents: Vec::new(),
             lists: Vec::new(),
             sources: Vec::new(),
@@ -855,6 +878,22 @@ impl ResourceSet {
     #[must_use]
     pub fn sources(&self) -> &[Arc<SourceEvidence>] {
         &self.sources
+    }
+    /// Resolve supplied custom resources against supplied CRDs and locally check the supported
+    /// schema subset. The caller can lower the shared processing ceilings; this never claims
+    /// API-server admission, conversion-webhook execution, or controller behavior.
+    /// # Errors
+    /// Returns an operation-limit finding when the cumulative check cannot complete.
+    pub fn check_custom_documents(
+        &self,
+        target: &crate::capability::TargetProfile,
+        processing_limits: crate::processing::NativeProcessingLimits,
+    ) -> Result<Vec<crate::resources::extensions::CustomDocumentResult>, Finding> {
+        crate::resources::extensions::custom_documents::check_custom_documents_with_limits(
+            self,
+            target,
+            processing_limits,
+        )
     }
     pub(crate) fn operation(
         &self,
@@ -992,6 +1031,7 @@ impl ResourceSet {
         charge_identity(&tree, &self.processing, Phase::Decoding)?;
         let original_identity = identity(&tree, scope)?;
         let id = ResourceId(u64::try_from(self.documents.len()).map_err(|_| invalid())?);
+        let source_pointer = source_pointer(collection.as_ref(), &self.processing, Phase::Decoding)?;
         let (resource, original_known, original_occurrences, capability) =
             if let Some(entry) = registry.entries.get(&gvk) {
                 if entry.gvk != gvk || entry.scope != scope {
@@ -1007,7 +1047,9 @@ impl ResourceSet {
                             *evidence.limits(),
                             self.processing.clone(),
                             Phase::Decoding,
-                        ),
+                        )
+                        .with_evidence(&evidence)
+                        .with_source_location(source, source_pointer),
                     },
                 )
                 .map_err(|findings| {
@@ -1042,7 +1084,7 @@ impl ResourceSet {
                 .for_resource(id);
                 self.processing.report(&finding, Phase::Decoding)?;
                 self.findings.push(finding);
-                (None, None, BTreeMap::new(), None)
+                (None, None, crate::syntax::NativeOccurrences::new(), None)
             };
         crate::source::check_observation_budget(&tree, &gvk)?;
         let mut observations = crate::source::root_observation_paths();
@@ -1166,7 +1208,7 @@ impl ResourceSet {
             finding
         })
     }
-    pub(crate) fn crd_scopes(&self) -> Result<BTreeMap<(String, String, String), bool>, Finding> {
+    pub(crate) fn crd_scopes(&self) -> Result<BTreeMap<(String, String, String), CrdScopeCandidate>, Finding> {
         let mut crds = BTreeMap::new();
         for doc in &self.documents {
             self.processing.work(1, Phase::Decoding)?;
@@ -1212,12 +1254,9 @@ impl ResourceSet {
                 self.processing.work(1, Phase::Decoding)?;
                 self.processing
                     .payload_sizes([group.len(), kind.len()], Phase::Decoding)?;
-                if crds
-                    .insert((group.to_owned(), kind.to_owned(), version), namespaced)
-                    .is_some()
-                {
-                    return Err(Finding::error(FindingCode::ScopeMismatch, Phase::Decoding));
-                }
+                crds.entry((group.to_owned(), kind.to_owned(), version))
+                    .and_modify(|candidate| *candidate = CrdScopeCandidate::Ambiguous)
+                    .or_insert(CrdScopeCandidate::Unique(namespaced));
             }
         }
         Ok(crds)
@@ -1238,7 +1277,7 @@ impl ResourceSet {
                 ],
                 Phase::Decoding,
             )?;
-            if let Some(namespaced) = gvk
+            if let Some(CrdScopeCandidate::Unique(namespaced)) = gvk
                 .group
                 .as_ref()
                 .and_then(|g| crds.get(&(g.clone(), gvk.kind.clone(), gvk.version.clone())))
@@ -1253,12 +1292,91 @@ impl ResourceSet {
         Ok(())
     }
 }
+
+fn source_pointer(
+    collection: Option<&CollectionPath>,
+    processing: &crate::processing::NativeOperationBudget,
+    phase: Phase,
+) -> Result<FieldPath, Finding> {
+    let Some(collection) = collection else {
+        return Ok(FieldPath::default());
+    };
+    processing.payload_array::<String>(collection.items.len().saturating_mul(2), phase)?;
+    let mut pointer = FieldPath::default();
+    for (_, index) in &collection.items {
+        let index_len = if *index == 0 { 1 } else { index.ilog10() as usize + 1 };
+        processing.work(index_len.saturating_add(5), phase)?;
+        processing.payload(5, phase)?;
+        processing.payload(index_len, phase)?;
+        pointer.0.push("items".to_owned());
+        pointer.0.push(index.to_string());
+    }
+    Ok(pointer)
+}
 /// Opaque authoring input; only delivered native kinds provide public conversions.
 /// There is no public raw-JSON constructor or externally implementable codec.
 pub struct AuthoredResource(Box<dyn NativeResource>);
 impl AuthoredResource {
     pub(crate) fn new(value: Box<dyn NativeResource>) -> Self {
         Self(value)
+    }
+    /// Build a sealed opaque custom object for explicit native authoring.
+    ///
+    /// The protected JSON value must be a complete Kubernetes object whose `apiVersion` and
+    /// `kind` match these identity fields. `ResourceSet::from_authored` checks that consistency
+    /// under its cumulative construction budget and records `NativeAuthored` evidence.
+    ///
+    /// # Errors
+    /// Rejects malformed Kubernetes group/version/kind identifiers.
+    pub fn custom_object(
+        api_version: impl Into<String>,
+        kind: impl Into<String>,
+        body: crate::value::ProtectedJsonValue,
+    ) -> Result<Self, Finding> {
+        let api_version = api_version.into();
+        let kind = kind.into();
+        let gvk = GroupVersionKind::new(&api_version, &kind)?;
+        Ok(Self::new(Box::new(AuthoredCustomObject { gvk, body })))
+    }
+}
+struct AuthoredCustomObject {
+    gvk: GroupVersionKind,
+    body: crate::value::ProtectedJsonValue,
+}
+impl AuthoredCustomObject {
+    fn encode_body(&self, ctx: &registry::EncodeContext<'_>) -> Result<TreeNode, Finding> {
+        use registry::codec::FieldCodec;
+        let tree = self.body.encode(ctx, &FieldPath::default())?;
+        if tree_gvk(&tree)? != self.gvk {
+            return Err(Finding::error(FindingCode::CodecIdentityMismatch, ctx.budget.phase()));
+        }
+        identity(&tree, ResourceScope::Unknown)?;
+        Ok(tree)
+    }
+}
+impl NativeResource for AuthoredCustomObject {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+    fn collect_references(&self, _ctx: &registry::EncodeContext<'_>, _out: &mut dyn crate::graph::ReferenceSink) {}
+    fn collect_protected_paths(&self, _ctx: &registry::EncodeContext<'_>, out: &mut Vec<FieldPath>) {
+        out.push(FieldPath::default());
+    }
+    fn validate(&self, ctx: &registry::ValidationContext<'_>, out: &mut dyn registry::FindingSink) {
+        if let Err(finding) = self.encode_body(&ctx.encoding()) {
+            out.push(finding);
+        }
+    }
+    fn encode_known(
+        &self,
+        ctx: &registry::EncodeContext<'_>,
+        out: &mut crate::syntax::SyntaxBuilder,
+    ) -> Result<(), Finding> {
+        out.set_root(self.encode_body(ctx)?);
+        Ok(())
     }
 }
 impl fmt::Debug for AuthoredResource {

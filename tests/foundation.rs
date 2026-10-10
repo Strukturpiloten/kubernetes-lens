@@ -709,8 +709,18 @@ fn review_owner_uses_supplied_cluster_crd_scope_and_reports_unknown_scope() -> T
         "---\napiVersion: v1\nkind: Pod\nmetadata: {name: child, namespace: demo, ownerReferences: [{apiVersion: review.invalid/v1, kind: Widget, name: owner, uid: owner-uid}]}\n",
     ))?;
     let graph = kubernetes_lens::graph::resolve_references(&set);
-    assert_eq!(graph.edges.len(), 1);
-    assert!(matches!(&graph.edges[0].resolution, Resolution::Resolved(ids) if ids == &[set.documents()[1].id()]));
+    assert_eq!(graph.edges.len(), 2);
+    let mut owner_edges = graph.edges.iter().filter(|edge| {
+        edge.reference.from == set.documents()[2].id() && edge.reference.relation == RelationshipKind::Owner
+    });
+    let owner_edge = owner_edges.next().required()?;
+    assert!(owner_edges.next().is_none());
+    assert!(matches!(&owner_edge.resolution, Resolution::Resolved(ids) if ids == &[set.documents()[1].id()]));
+    assert!(graph.edges.iter().any(|edge| {
+        edge.reference.from == set.documents()[1].id()
+            && edge.reference.relation == RelationshipKind::Operator
+            && edge.resolution == Resolution::External(kubernetes_lens::graph::ExternalRefKind::Operator)
+    }));
     let set = resources(
         "apiVersion: v1\nkind: Pod\nmetadata: {name: child, namespace: demo, ownerReferences: [{apiVersion: review.invalid/v1, kind: Widget, name: missing}]}\n",
     )?;
@@ -951,16 +961,24 @@ fn review_owner_missing_known_scope_and_live_duplicate_targets_stay_distinct() -
         "---\napiVersion: review.invalid/v1\nkind: Widget\nmetadata: {name: second}\n",
         "---\napiVersion: v1\nkind: Pod\nmetadata: {name: child, namespace: demo, ownerReferences: [{apiVersion: review.invalid/v1, kind: Widget, name: missing}]}\n",
     ))?;
-    assert!(matches!(
-        kubernetes_lens::graph::resolve_references(&set).edges[0].resolution,
-        Resolution::Missing
-    ));
+    let graph = kubernetes_lens::graph::resolve_references(&set);
+    let mut owner_edges = graph.edges.iter().filter(|edge| {
+        edge.reference.from == set.documents()[3].id() && edge.reference.relation == RelationshipKind::Owner
+    });
+    let owner_edge = owner_edges.next().required()?;
+    assert!(owner_edges.next().is_none());
+    assert!(matches!(owner_edge.resolution, Resolution::Missing));
     let value = parsed(b"first", DocumentFormat::YamlStream)?;
     set.documents_mut()[2].set_field_from_source(FieldPath::parse("/metadata/name")?, value)?;
     let value = parsed(b"first", DocumentFormat::YamlStream)?;
     set.documents_mut()[3].set_field_from_source(FieldPath::parse("/metadata/ownerReferences/0/name")?, value)?;
     let graph = kubernetes_lens::graph::resolve_references(&set);
-    assert!(matches!(&graph.edges[0].resolution, Resolution::Ambiguous(ids) if ids.len() == 2));
+    let mut owner_edges = graph.edges.iter().filter(|edge| {
+        edge.reference.from == set.documents()[3].id() && edge.reference.relation == RelationshipKind::Owner
+    });
+    let owner_edge = owner_edges.next().required()?;
+    assert!(owner_edges.next().is_none());
+    assert!(matches!(&owner_edge.resolution, Resolution::Ambiguous(ids) if ids.len() == 2));
     Ok(())
 }
 
@@ -1075,5 +1093,48 @@ fn malformed_wrapper_decode_findings_keep_attempted_and_nested_subjects() -> Tes
     let subject = errors[0].wrapper.required()?;
     assert_eq!(subject.source.source, SourceId(22));
     assert_eq!(subject.list, kubernetes_lens::model::ListId(1));
+    Ok(())
+}
+
+#[test]
+fn duplicate_crd_candidates_retain_all_documents_without_selecting_a_scope() -> TestResult<()> {
+    fn definition(plural: &str, scope: &str, duplicate_version: bool) -> String {
+        let extra = if duplicate_version {
+            "  - {name: v1, served: true, storage: false}\n"
+        } else {
+            ""
+        };
+        format!(
+            "---\napiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nmetadata: {{name: {plural}.example.org}}\nspec:\n  group: example.org\n  names: {{kind: Widget, plural: {plural}}}\n  scope: {scope}\n  versions:\n  - {{name: v1, served: true, storage: true}}\n{extra}"
+        )
+    }
+    const CUSTOM: &str = "---\napiVersion: example.org/v1\nkind: Widget\nmetadata: {name: private-widget, namespace: supplied-ns}\nspec: {}\n";
+    for scope in ["Namespaced", "Cluster"] {
+        let text = format!(
+            "{}{}{}",
+            definition("widgets", "Namespaced", false),
+            definition("alternatewidgets", scope, false),
+            CUSTOM
+        );
+        let set = resources(&text)?;
+        assert_eq!(set.documents().len(), 3);
+        let custom = set.documents().last().required()?;
+        assert_eq!(
+            custom.identity().required()?.scope,
+            kubernetes_lens::model::ResourceScope::Unknown
+        );
+        assert_eq!(custom.identity().required()?.gvk.kind, "Widget");
+    }
+    let set = resources(&format!("{}{}", definition("widgets", "Namespaced", true), CUSTOM))?;
+    assert_eq!(set.documents().len(), 2);
+    assert_eq!(
+        set.documents().last().required()?.identity().required()?.scope,
+        kubernetes_lens::model::ResourceScope::Unknown
+    );
+    let set = resources(&format!("{}{}", definition("widgets", "Namespaced", false), CUSTOM))?;
+    assert_eq!(
+        set.documents().last().required()?.identity().required()?.scope,
+        kubernetes_lens::model::ResourceScope::CrdResolved { namespaced: true }
+    );
     Ok(())
 }

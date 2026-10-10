@@ -4,7 +4,7 @@
   "issue": 12,
   "canonical_ledger": {
     "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
-    "sha256": "5a9a11aedd2a4b4dec2587923dc0357fb7ea40209302f8dab3bc007e845388f6"
+    "sha256": "37e926f6e9d40fea1086808656864dc81ae98fc6799edfde7628e0571aac518a"
   },
   "native_source_witnesses": {
     "path": "docs/evidence/access-native-specification.json",
@@ -248,11 +248,11 @@
   ],
   "field_selection_rule": "Only canonical selected root pointers and recursively selected helpers; no prefix admission. Native case coverage remains pending.",
   "source_sha256": {
-    "src/capability.rs": "15a973ef0ef34325165e1a1258c886ddb5ca01618a5c6d1a0e32a22e91f2d69d",
-    "src/generation.rs": "6905882e1672641c1007d00d1f29e3a7fb6c181d1a56baebe4e9828f4f329527",
-    "src/graph.rs": "d4f5bc2c8b9a2ce0dafd90663795b1eb3fa54f7f2a224580e1312de92f9ce3c8",
-    "src/model.rs": "4e66307f90d065836c86837de3db7c94cd484784ff2cb35d9b1a182a40233636",
-    "src/registry.rs": "71bf00721a16773a22aeddc78dd6f0a1d1f39df994aa09bbad2d1a6bcff47b25",
+    "src/capability.rs": "dd9a69ee48aee45a5638fb38be7988c7c6d02ad0c176f697245ecf8a8a40ed40",
+    "src/generation.rs": "b4e5963e6a926f50ad290cbaf731caefde2878368052f190f9996fdd6d2d1366",
+    "src/graph.rs": "a8f0a202afdd6ba9f10d20bd43f4899de4f04a37063975aea23525184f5cda9f",
+    "src/model.rs": "f263ebfbafd45927081f1c094c705a6e5d5ab6b124a0f09d93b321fde85cbcd9",
+    "src/registry.rs": "5e03c877fbbb689c5122be45a1403f0bf4615e53a2d3ed043d7d8c363fcd2bab",
     "src/resources/access.rs": "4f693b89c2736250531e593f460692403b8994cfd0ea838af45c3c7ffcff787d",
     "src/resources/access/capabilities.rs": "e16f6bba49d6e5c54e1beaa4ce6f3e0f958fe6231446e9f9d8c9b8263b7e6c80",
     "src/resources/access/facts.rs": "fdb5726b0fe5278421c7ba2ac379ed2eb4a42061d1dbbea5fb2da426c6e117fc",
@@ -268,7 +268,7 @@
     "src/resources/access/validation.rs": "28aae8ca6708b988fd92038d7d4773b121133429db721f1b63ad1188c65f654d",
     "src/resources/common.rs": "3f29b27b3b8891ef1d8443dc2109a292c5e8ccdefe95d3b318afdd31446d11d6",
     "src/resources/common/native_helpers.rs": "ac2b96b49c9dad81ea2164406662370b1e5c87d894f476a7731d3dbf206474ba",
-    "src/resources/mod.rs": "deb430974ca47d73009f51790b817c1fb93195238d9fd641d28e30db4aa08405",
+    "src/resources/mod.rs": "6ac20bfc6dd7331f444b24d157f913a29c394c7e18d45f3f784c7ec603cc014e",
     "src/value.rs": "a8517e40b01c39bc373e4530c63abd699e7f0d7cbe3edf3f01b21efc014d69db",
     "src/value/native_quantity.rs": "91bae8b0fc21dca7bbb2e8b999feb82cdcec5542b98b69c68448c211e8fb524c",
     "tests/access.rs": "17ebf77e7b67ff3c5a8b4b92fcc2a1a1ebd54a9107f95b30b538976ead13f605",
@@ -448,5 +448,39 @@
     "Local code cases are not API-server or runtime evidence.",
     "RuntimeClass hugepage page-size, divisibility and companion CPU/memory checks remain explicit unadmitted semantics.",
     "Integer resources use only exact nonnegative integral milli-units fitting int64; finer fractions, native rounding/capping and overflow remain explicit unadmitted semantics."
+  ],
+  "prior_source_bindings": [
+    {
+      "issue": 13,
+      "source_sha256": {
+        "src/capability.rs": "15a973ef0ef34325165e1a1258c886ddb5ca01618a5c6d1a0e32a22e91f2d69d",
+        "src/generation.rs": "6905882e1672641c1007d00d1f29e3a7fb6c181d1a56baebe4e9828f4f329527",
+        "src/graph.rs": "d4f5bc2c8b9a2ce0dafd90663795b1eb3fa54f7f2a224580e1312de92f9ce3c8",
+        "src/model.rs": "4e66307f90d065836c86837de3db7c94cd484784ff2cb35d9b1a182a40233636",
+        "src/registry.rs": "71bf00721a16773a22aeddc78dd6f0a1d1f39df994aa09bbad2d1a6bcff47b25",
+        "src/resources/access.rs": "4f693b89c2736250531e593f460692403b8994cfd0ea838af45c3c7ffcff787d",
+        "src/resources/access/capabilities.rs": "e16f6bba49d6e5c54e1beaa4ce6f3e0f958fe6231446e9f9d8c9b8263b7e6c80",
+        "src/resources/access/facts.rs": "fdb5726b0fe5278421c7ba2ac379ed2eb4a42061d1dbbea5fb2da426c6e117fc",
+        "src/resources/access/hpa.rs": "cd39ec2cac7b25da54681ec272cb8ebaa193628046f6e2be27759a301cd28f62",
+        "src/resources/access/policy.rs": "7aee204d2fd44d5d0b996f782b595d5a5ba630e880c85e72d86f9c272540c3bd",
+        "src/resources/access/processing_tests.rs": "8787b2b5799c37116f39ffb6dd323bb285dc4be30d4876748fece3b3baf90b73",
+        "src/resources/access/quantity_rules.rs": "1c90804a80cb7e9e4865318c26ba0b4ad3f5d8f5ff4c800584d8334219cb0d65",
+        "src/resources/access/rbac.rs": "2427a64749ab673aabb2ff467b4b37cfb5cc957339d90ed19708cb18f581aef3",
+        "src/resources/access/required.rs": "7b1edba0a7df6030f341b32319b8a6304a8e80c720ea5e64132e74e367f52e98",
+        "src/resources/access/resource_names.rs": "bf539e7c945682348a3c4fbe2075de98e1fc5030ad99052a3554b484033ba586",
+        "src/resources/access/roots.rs": "a05e9906e13248e045293c38f4a6966c97da5bc82c80b89b530b5b8672738690",
+        "src/resources/access/types.rs": "d18e9b8ce621c54985bcb741e6e376bd8c15fecd5458f0149141e97755910a2b",
+        "src/resources/access/validation.rs": "28aae8ca6708b988fd92038d7d4773b121133429db721f1b63ad1188c65f654d",
+        "src/resources/common.rs": "3f29b27b3b8891ef1d8443dc2109a292c5e8ccdefe95d3b318afdd31446d11d6",
+        "src/resources/common/native_helpers.rs": "ac2b96b49c9dad81ea2164406662370b1e5c87d894f476a7731d3dbf206474ba",
+        "src/resources/mod.rs": "deb430974ca47d73009f51790b817c1fb93195238d9fd641d28e30db4aa08405",
+        "src/value.rs": "a8517e40b01c39bc373e4530c63abd699e7f0d7cbe3edf3f01b21efc014d69db",
+        "src/value/native_quantity.rs": "91bae8b0fc21dca7bbb2e8b999feb82cdcec5542b98b69c68448c211e8fb524c",
+        "tests/access.rs": "17ebf77e7b67ff3c5a8b4b92fcc2a1a1ebd54a9107f95b30b538976ead13f605",
+        "tests/access/native_rules.rs": "cf1398d98312befac341366bff7681d31a0555e0400f873dc7612c556b04be85"
+      },
+      "native_conformance": "pending",
+      "status": "prior_static_source_bindings_not_current_validation"
+    }
   ]
 }

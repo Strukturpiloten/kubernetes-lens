@@ -435,7 +435,7 @@ pub enum FeatureGateResolution {
     ResolveFromEvidence(FeatureGateEvidenceId),
 }
 /// Explicit settings independent of authored fields/source version.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct FeatureGateProfile {
     /// Finite caller settings.
     pub states: BTreeMap<FeatureGateId, FeatureGateState>,
@@ -455,7 +455,7 @@ pub enum RendererProfile {
     Kustomize5_8_3,
 }
 /// Explicit output target.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TargetProfile {
     /// Reviewed Kubernetes minor.
     pub kubernetes: KubernetesVersion,

@@ -4,7 +4,7 @@
   "issue": 11,
   "canonical_ledger": {
     "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
-    "sha256": "5a9a11aedd2a4b4dec2587923dc0357fb7ea40209302f8dab3bc007e845388f6"
+    "sha256": "37e926f6e9d40fea1086808656864dc81ae98fc6799edfde7628e0571aac518a"
   },
   "roots": [
     {
@@ -75,11 +75,11 @@
   ],
   "field_selection_rule": "Catalogue pointers define selected inventory; finite typed codecs/validators admit only local behavior, preserving context and opaque outcomes.",
   "source_sha256": {
-    "src/capability.rs": "15a973ef0ef34325165e1a1258c886ddb5ca01618a5c6d1a0e32a22e91f2d69d",
-    "src/generation.rs": "6905882e1672641c1007d00d1f29e3a7fb6c181d1a56baebe4e9828f4f329527",
-    "src/graph.rs": "d4f5bc2c8b9a2ce0dafd90663795b1eb3fa54f7f2a224580e1312de92f9ce3c8",
-    "src/model.rs": "4e66307f90d065836c86837de3db7c94cd484784ff2cb35d9b1a182a40233636",
-    "src/registry.rs": "71bf00721a16773a22aeddc78dd6f0a1d1f39df994aa09bbad2d1a6bcff47b25",
+    "src/capability.rs": "dd9a69ee48aee45a5638fb38be7988c7c6d02ad0c176f697245ecf8a8a40ed40",
+    "src/generation.rs": "b4e5963e6a926f50ad290cbaf731caefde2878368052f190f9996fdd6d2d1366",
+    "src/graph.rs": "a8f0a202afdd6ba9f10d20bd43f4899de4f04a37063975aea23525184f5cda9f",
+    "src/model.rs": "f263ebfbafd45927081f1c094c705a6e5d5ab6b124a0f09d93b321fde85cbcd9",
+    "src/registry.rs": "5e03c877fbbb689c5122be45a1403f0bf4615e53a2d3ed043d7d8c363fcd2bab",
     "src/resources/common.rs": "3f29b27b3b8891ef1d8443dc2109a292c5e8ccdefe95d3b318afdd31446d11d6",
     "src/resources/common/native_helpers.rs": "ac2b96b49c9dad81ea2164406662370b1e5c87d894f476a7731d3dbf206474ba",
     "src/resources/configuration_storage.rs": "139a4cef8dd27f2952a5b3a40b3e2fbecff72cce5b9a2c8c9444d268b9d37a6d",
@@ -93,7 +93,7 @@
     "src/resources/configuration_storage/validation/static_checks/pv/sources.rs": "2633ce5c9368a0bcb6cc3a34d1d384572c8e3d9ae0797ba020c61f2d18a6af20",
     "src/resources/configuration_storage/validation/static_checks/pv/sources/identifiers.rs": "1c70c8e2c89fdacbff3c95ed069bd40d066ae6423b17c5a149ff4f8e93c88a34",
     "src/resources/configuration_storage/validation/static_checks/tests.rs": "03f08fb535647c5cc8facdd00fb6fc5a81a28658705c18bf5cd3d17521cf0f3e",
-    "src/resources/mod.rs": "deb430974ca47d73009f51790b817c1fb93195238d9fd641d28e30db4aa08405",
+    "src/resources/mod.rs": "6ac20bfc6dd7331f444b24d157f913a29c394c7e18d45f3f784c7ec603cc014e",
     "src/value.rs": "a8517e40b01c39bc373e4530c63abd699e7f0d7cbe3edf3f01b21efc014d69db",
     "tests/access_modes.rs": "58e263f989d235f1d7da1e095a90f8b67a9dc0df432cab574d5c33d3f9859ad7",
     "tests/configuration_storage.rs": "2ecf0efacd3e1839c5ad558290b4f75edee98a60593a2ac382e63c00f697a0bb",
@@ -169,5 +169,39 @@
     "FlexVolume exactly-one-source product rule is deliberately stronger than observed native union-counting exception.",
     "Native JSON/quantity arithmetic, strategy options, OS paths and transport uncertainty stay explicit.",
     "KubernetesLens never acquires deployed resources."
+  ],
+  "prior_source_bindings": [
+    {
+      "issue": 13,
+      "source_sha256": {
+        "src/capability.rs": "15a973ef0ef34325165e1a1258c886ddb5ca01618a5c6d1a0e32a22e91f2d69d",
+        "src/generation.rs": "6905882e1672641c1007d00d1f29e3a7fb6c181d1a56baebe4e9828f4f329527",
+        "src/graph.rs": "d4f5bc2c8b9a2ce0dafd90663795b1eb3fa54f7f2a224580e1312de92f9ce3c8",
+        "src/model.rs": "4e66307f90d065836c86837de3db7c94cd484784ff2cb35d9b1a182a40233636",
+        "src/registry.rs": "71bf00721a16773a22aeddc78dd6f0a1d1f39df994aa09bbad2d1a6bcff47b25",
+        "src/resources/common.rs": "3f29b27b3b8891ef1d8443dc2109a292c5e8ccdefe95d3b318afdd31446d11d6",
+        "src/resources/common/native_helpers.rs": "ac2b96b49c9dad81ea2164406662370b1e5c87d894f476a7731d3dbf206474ba",
+        "src/resources/configuration_storage.rs": "139a4cef8dd27f2952a5b3a40b3e2fbecff72cce5b9a2c8c9444d268b9d37a6d",
+        "src/resources/configuration_storage/capabilities.rs": "459049718ec11782e585c855a5ed82919a6ccf10a5ed18950a5e57ab0ca06285",
+        "src/resources/configuration_storage/facts.rs": "9689cd35b8ffa08017359690462718053a6f6390effb5507e6cd04ceb51d825e",
+        "src/resources/configuration_storage/roots.rs": "40d65d1b9281504eaf54e9cb76901f2e207d3dfdd6e3a071ebd467c2c1bd5a21",
+        "src/resources/configuration_storage/validation.rs": "21636fd45354e52bd70a80363848a798ffc87659de343efebb244443679e05b2",
+        "src/resources/configuration_storage/validation/static_checks.rs": "f482cd868d0240097ad32baf1afff721c5bfcaa56db1fc9acd4d71ad39641f48",
+        "src/resources/configuration_storage/validation/static_checks/pv.rs": "7658d24256a9a3c244d034cd9c123bf254c1f866a1dfaa02d75aefa97ee2ee2d",
+        "src/resources/configuration_storage/validation/static_checks/pv/affinity.rs": "ea854741fd5bdbc16cae74e7dcb55be964e1465b13caed330cbac89b640930ad",
+        "src/resources/configuration_storage/validation/static_checks/pv/sources.rs": "2633ce5c9368a0bcb6cc3a34d1d384572c8e3d9ae0797ba020c61f2d18a6af20",
+        "src/resources/configuration_storage/validation/static_checks/pv/sources/identifiers.rs": "1c70c8e2c89fdacbff3c95ed069bd40d066ae6423b17c5a149ff4f8e93c88a34",
+        "src/resources/configuration_storage/validation/static_checks/tests.rs": "03f08fb535647c5cc8facdd00fb6fc5a81a28658705c18bf5cd3d17521cf0f3e",
+        "src/resources/mod.rs": "deb430974ca47d73009f51790b817c1fb93195238d9fd641d28e30db4aa08405",
+        "src/value.rs": "a8517e40b01c39bc373e4530c63abd699e7f0d7cbe3edf3f01b21efc014d69db",
+        "tests/access_modes.rs": "58e263f989d235f1d7da1e095a90f8b67a9dc0df432cab574d5c33d3f9859ad7",
+        "tests/configuration_storage.rs": "2ecf0efacd3e1839c5ad558290b4f75edee98a60593a2ac382e63c00f697a0bb",
+        "tests/configuration_storage/corrections.rs": "67a9865bb397d704de34b60fcf383e3a630cc7db49689fdbb338e9c53cc696d0",
+        "tests/configuration_storage/pv_contract.rs": "d1f0a3da666d608387844b76a01027114ab4871e0c8c0ca9c87586404ccd211f",
+        "tests/configuration_storage/static_contract.rs": "0d5534373a83e5e4e070191bd7d2a402e3b542266aaf7a37b4c3f87a9adac451"
+      },
+      "native_conformance": "pending",
+      "status": "prior_static_source_bindings_not_current_validation"
+    }
   ]
 }

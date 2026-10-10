@@ -64,7 +64,10 @@ zero-based half-open intervals. Each new selected CR document also has one exact
 manifest/document witness. The materializer recomputes these slice hashes and boundaries; recorded
 CRD scope, served/storage flags and schema presence are source observations, not KubernetesLens
 schema/API validation or proof of installed controllers. All seven selected kinds now have official
-source inputs; native acceptance remains pending.
+source inputs. Their separate [offline native checks](custom-acceptance.md) have completed at
+targets 1.20 and 1.37, including supplied CRD bindings, supported-subset checks, explicit unsupported
+schema outcomes and generation/rechecking. Renderer, API, controller and runtime evidence remains
+separate and incomplete.
 
 Materialized files are private (0600), directories are private (0700), and the tool refuses a
 destination within the repository or overlapping the cache. Failures leave no partial destination
@@ -211,11 +214,13 @@ Other minimums/profile details not established by source research remain unknown
 acceptance gate is not the operator's runtime support policy. Do not relabel modern releases as
 1.20 evidence or infer feature-gate/image/storage prerequisites from successful parsing.
 
-Continuation after #1, the native cohorts, and #3/#4 must:
+The seven selected custom kinds have completed their #13 offline corpus assertions; local
+regressions separately cover missing/ambiguous CRDs and schema/reference failures. Unsupported
+upstream schema behavior remains explicit, with no positive CRD dependency or operator claim.
+Source presence and slice witnesses alone still do not prove native acceptance.
 
-- Execute native assertions for the supplied CNPG Cluster, Pooler, Backup and ScheduledBackup and
-  Grafana/GrafanaDashboard/GrafanaDatasource samples, including missing/ambiguous CRD, schema and
-  reference cases under #13. Their presence and slice witnesses do not prove native acceptance.
+Remaining continuation after the native cohorts and #3/#4 must:
+
 - Independently assert every admitted resource/value/reference and classify unsupported kinds/fields.
   Freeze actual kind/field coverage with no unexplained omission across all five resource cohorts.
 - Admit exact offline Helm/Kustomize profiles, deterministic public overrides, limits and sanitized

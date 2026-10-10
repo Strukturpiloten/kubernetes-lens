@@ -61,6 +61,40 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(self.evaluate('io.k8s.api.core.v1.Container', 'futureField', '1.37'), 'unadmitted-field')
         self.assertEqual(contract.evaluate_root(self.ledger, 'FutureKind', 'v1', '/metadata/name', '1.37', self.settings()), 'unknown-kind')
 
+    def test_webhook_side_effects_selection_preserves_exact_historical_spellings(self):
+        # Source selection includes existing stable objects; Create rules belong to
+        # the API/intent-aware native validator rather than this finite selector.
+        spellings = ['None', 'NoneOnDryRun', 'Some', 'Unknown']
+        for family, last_minor in [('v1', 37), ('v1beta1', 21)]:
+            for webhook in ['MutatingWebhook', 'ValidatingWebhook']:
+                definition = f'io.k8s.api.admissionregistration.{family}.{webhook}'
+                field = contract.member(self.ledger, definition, 'sideEffects')
+                self.assertEqual(field['native_constraints'], [{
+                    'rule': 'enum', 'values': spellings, 'other_values': 'preserve_only',
+                }])
+                for minor in range(20, last_minor + 1):
+                    target = f'1.{minor}'
+                    for spelling in spellings:
+                        with self.subTest(definition=definition, target=target, spelling=spelling):
+                            self.assertEqual(self.evaluate(definition, 'sideEffects', target, spelling),
+                                             'selected_expected_pending')
+                    for spelling in ['', 'none', 'NoneOnDryRuns', 'PrivateFutureValue']:
+                        with self.subTest(definition=definition, target=target, spelling=spelling):
+                            self.assertEqual(self.evaluate(definition, 'sideEffects', target, spelling),
+                                             'unadmitted-field')
+
+    def test_beta_webhook_side_effects_do_not_extend_removed_api_boundary(self):
+        for webhook in ['MutatingWebhook', 'ValidatingWebhook']:
+            definition = f'io.k8s.api.admissionregistration.v1beta1.{webhook}'
+            for target in ['1.22', '1.37']:
+                for spelling in ['None', 'NoneOnDryRun', 'Some', 'Unknown']:
+                    with self.subTest(webhook=webhook, target=target, spelling=spelling):
+                        self.assertEqual(self.evaluate(definition, 'sideEffects', target, spelling),
+                                         'unavailable-field')
+                        self.assertEqual(self.root_evaluate(
+                            f'{webhook}Configuration', 'admissionregistration.k8s.io/v1beta1',
+                            '/metadata/name', target), 'unavailable-api')
+
     def test_sidecar_stage_default_explicit_setting_and_context(self):
         d = 'io.k8s.api.core.v1.Container'
         ctx = {'container_role': 'initContainers', 'workload': 'Deployment'}
@@ -618,6 +652,81 @@ class ContractTests(unittest.TestCase):
         changed = copy.deepcopy(witness)
         changed['native_commands_run'] = True
         self.assertIn('unsupported witness claim', self.storage_witness_errors(changed))
+
+
+    @staticmethod
+    def extension_code_errors(evidence):
+        errors = []
+        ledger_path = 'schemas/capabilities/kubernetes-1.20-1.37.json'
+        ledger = json.loads((ROOT / ledger_path).read_text())
+        if evidence.get('canonical_ledger') != {
+            'path': ledger_path,
+            'sha256': hashlib.sha256((ROOT / ledger_path).read_bytes()).hexdigest(),
+        }:
+            errors.append('extension ledger binding')
+        expected = []
+        for index, resource in enumerate(ledger['resources']):
+            if resource['cohort_issue'] != 13:
+                continue
+            for profile_index, profile in enumerate(resource['proposed_admitted_api_profiles']):
+                expected.append({
+                    'kind': resource['kind'], 'api_version': profile['api_version'],
+                    'selected_field_catalogue_pointer':
+                        f'/resources/{index}/proposed_admitted_api_profiles/{profile_index}',
+                    'expected_availability_ranges': profile['target_availability_ranges'],
+                    'code_registration': 'src/resources/extensions/roots.rs',
+                    'native_case_status': 'pending',
+                })
+        if evidence.get('roots') != expected or len(expected) != 6:
+            errors.append('extension root profiles')
+        sources = {
+            'src/resources/extensions.rs', 'src/resources/mod.rs', 'src/capability.rs',
+            'src/generation.rs', 'src/graph.rs', 'src/model.rs', 'src/registry.rs',
+            'src/value/protected_json.rs', 'tests/extensions.rs',
+            'tests/extensions_final_corrections.rs',
+        } | {str(path.relative_to(ROOT)) for path in (ROOT / 'src/resources/extensions').rglob('*.rs')}
+        hashes = evidence.get('source_sha256', {})
+        if set(hashes) != sources:
+            errors.append('extension source completeness')
+        for path, digest in hashes.items():
+            if path not in sources or hashlib.sha256((ROOT / path).read_bytes()).hexdigest() != digest:
+                errors.append('extension source freshness')
+        conformance = evidence.get('conformance', {})
+        if conformance != {
+            'supported_kubernetes_versions': [], 'api_server': 'pending', 'runtime': 'pending',
+            'controller_webhook': 'pending', 'official_corpus': 'pending',
+            'native_kind_profiles': 'pending',
+        } or evidence.get('custom_document_contract', {}).get('official_case_status') != 'pending':
+            errors.append('unexecuted extension conformance claim')
+        return errors
+
+    def test_extension_current_source_and_pending_profiles(self):
+        evidence = json.loads((ROOT / 'schemas/capabilities/extensions-code-evidence.json').read_text())
+        self.assertEqual(self.extension_code_errors(evidence), [])
+
+    def test_extension_evidence_refuses_stale_missing_relabelled_and_fabricated_claims(self):
+        evidence = json.loads((ROOT / 'schemas/capabilities/extensions-code-evidence.json').read_text())
+        mutations = []
+        stale = copy.deepcopy(evidence)
+        stale['source_sha256']['src/graph.rs'] = '0' * 64
+        mutations.append(stale)
+        missing = copy.deepcopy(evidence)
+        missing['source_sha256'].pop('src/model.rs')
+        mutations.append(missing)
+        relabelled = copy.deepcopy(evidence)
+        relabelled['roots'][1]['api_version'] = 'apiextensions.k8s.io/v1'
+        mutations.append(relabelled)
+        omitted = copy.deepcopy(evidence)
+        omitted['roots'].pop()
+        mutations.append(omitted)
+        claimed = copy.deepcopy(evidence)
+        claimed['conformance']['api_server'] = 'passed'
+        mutations.append(claimed)
+        custom_claimed = copy.deepcopy(evidence)
+        custom_claimed['custom_document_contract']['official_case_status'] = 'passed'
+        mutations.append(custom_claimed)
+        for mutation in mutations:
+            self.assertTrue(self.extension_code_errors(mutation))
 
 
 if __name__ == '__main__':

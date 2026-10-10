@@ -96,3 +96,17 @@ fn decode_and_encode_cannot_restart_prior_shared_work_or_payload_consumption() -
     }
     Ok(())
 }
+
+#[test]
+fn inherited_json_sizing_is_cumulative_and_keeps_limit_failure_sticky() -> TestResult {
+    let value = ProtectedJsonValue::parse_json(b"1", &ParseLimits::default())
+        .map_err(|_| "small protected number failed to parse")?;
+    let budget = limited_work(3);
+    let fields = FieldDecodeContext::new(ParseLimits::default(), budget.clone(), Phase::Analysis);
+    assert_eq!(require(value.retained_json_len_in(&fields))?, 1);
+    failure(value.retained_json_len_in(&fields))?;
+    assert!(budget.exhausted());
+    failure(budget.work(0, Phase::Analysis))?;
+    failure(budget.payload(0, Phase::Analysis))?;
+    Ok(())
+}

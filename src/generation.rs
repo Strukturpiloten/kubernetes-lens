@@ -60,7 +60,8 @@ pub enum ProtectedOutput {
 pub enum OpaqueFieldPolicy {
     /// Fail when field availability cannot be established.
     Block,
-    /// Explicitly preserve with unadmitted findings.
+    /// Explicitly preserve with private warnings at unadmitted subtree boundaries.
+    /// Resource warnings retain source-document paths and enclosing List coordinates.
     PreserveWithFinding,
 }
 /// Native wrapper retention is an explicit caller decision.
@@ -453,43 +454,190 @@ fn validate_native(
     }
 }
 fn bounded_json(node: &TreeNode, out: &mut String, processing: &NativeOperationBudget) -> Result<(), Finding> {
-    fn bound(node: &TreeNode, processing: &NativeOperationBudget) -> Result<usize, Finding> {
+    // Charge the scan before inspecting bytes. serde_json preserves UTF-8 and only
+    // expands JSON escapes; its temporary quoted string shares the 2x allowance.
+    fn quoted_len(value: &str, processing: &NativeOperationBudget) -> Result<usize, Finding> {
+        processing.work(value.len(), Phase::Generation)?;
+        value.bytes().try_fold(2usize, |total, byte| {
+            let bytes = match byte {
+                b'"' | b'\\' | b'\x08' | b'\x0c' | b'\n' | b'\r' | b'\t' => 2,
+                0..=0x1f => 6,
+                _ => 1,
+            };
+            total
+                .checked_add(bytes)
+                .ok_or_else(|| processing.fail(Phase::Generation))
+        })
+    }
+    // Keep the original conservative serialization work bound, independently
+    // of the tighter output capacity/payload bound.
+    fn bound(node: &TreeNode, processing: &NativeOperationBudget) -> Result<(usize, usize), Finding> {
         processing.work(1, Phase::Generation)?;
         let fail = || processing.fail(Phase::Generation);
         match &node.value {
-            TreeValue::String(value) => value
-                .len()
-                .checked_mul(6)
-                .and_then(|bytes| bytes.checked_add(2))
-                .ok_or_else(fail),
-            TreeValue::Number(value) => Ok(value.len()),
-            TreeValue::Mapping(entries) => entries.iter().try_fold(2usize, |total, (key, node)| {
-                let key = key
+            TreeValue::String(value) => Ok((
+                quoted_len(value, processing)?,
+                value
+                    .len()
+                    .checked_mul(6)
+                    .and_then(|bytes| bytes.checked_add(2))
+                    .ok_or_else(fail)?,
+            )),
+            TreeValue::Number(value) => Ok((value.len(), value.len())),
+            TreeValue::Mapping(entries) => entries.iter().try_fold((2usize, 2usize), |(total, work), (key, node)| {
+                let key_bytes = quoted_len(key, processing)?.checked_add(2).ok_or_else(fail)?;
+                let key_work = key
                     .len()
                     .checked_mul(6)
                     .and_then(|bytes| bytes.checked_add(4))
                     .ok_or_else(fail)?;
-                total
-                    .checked_add(key)
-                    .and_then(|total| total.checked_add(bound(node, processing).ok()?))
-                    .ok_or_else(fail)
+                let (child_bytes, child_work) = bound(node, processing)?;
+                Ok((
+                    total
+                        .checked_add(key_bytes)
+                        .and_then(|n| n.checked_add(child_bytes))
+                        .ok_or_else(fail)?,
+                    work.checked_add(key_work)
+                        .and_then(|n| n.checked_add(child_work))
+                        .ok_or_else(fail)?,
+                ))
             }),
-            TreeValue::Sequence(items) => items.iter().try_fold(2usize, |total, node| {
-                total
-                    .checked_add(1)
-                    .and_then(|total| total.checked_add(bound(node, processing).ok()?))
-                    .ok_or_else(fail)
+            TreeValue::Sequence(items) => items.iter().try_fold((2usize, 2usize), |(total, work), node| {
+                let (child_bytes, child_work) = bound(node, processing)?;
+                Ok((
+                    total
+                        .checked_add(1)
+                        .and_then(|n| n.checked_add(child_bytes))
+                        .ok_or_else(fail)?,
+                    work.checked_add(1)
+                        .and_then(|n| n.checked_add(child_work))
+                        .ok_or_else(fail)?,
+                ))
             }),
-            _ => Ok(5),
+            _ => Ok((5, 5)),
         }
     }
-    let upper = bound(node, processing)?;
+    let (upper, work) = bound(node, processing)?;
     let payload = upper.checked_mul(2).ok_or_else(|| processing.fail(Phase::Generation))?;
     processing.payload(payload, Phase::Generation)?;
-    processing.work(upper, Phase::Generation)?;
+    processing.work(work, Phase::Generation)?;
     out.reserve_exact(upper);
     json(node, out)
 }
+#[cfg(test)]
+mod bounded_json_capacity_tests {
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn quoted_utf8_capacity_matches_json_escaping_and_keeps_two_buffers() -> TestResult {
+        let controls: String = (0..=0x1f).map(char::from).collect();
+        for value in [
+            controls,
+            "\"\\/\t\n\r".into(),
+            "Grüße 世界 🙂\u{2028}\u{2029}".into(),
+            String::new(),
+        ] {
+            let expected = serde_json::to_string(&value)?;
+            let processing = NativeOperationBudget::new(NativeProcessingLimits {
+                max_payload_bytes: expected.len() * 2,
+                ..NativeProcessingLimits::default()
+            });
+            let mut out = String::new();
+            bounded_json(&TreeNode::string(&value), &mut out, &processing)?;
+            assert_eq!(out, expected);
+            assert_eq!(processing.charged_payload_bytes(), expected.len() * 2);
+            assert!(!processing.exhausted());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn ordinary_strings_fit_tighter_payload_but_keep_conservative_work_and_scan() -> TestResult {
+        let value = "é/plain".repeat(1024);
+        let node = TreeNode::string(&value);
+        let payload = (value.len() + 2) * 2;
+        let work = 1 + value.len() + value.len() * 6 + 2;
+        let limits = NativeProcessingLimits {
+            max_payload_bytes: payload,
+            max_processing_units: work,
+            ..NativeProcessingLimits::default()
+        };
+        assert!(payload < (value.len() * 6 + 2) * 2);
+        let processing = NativeOperationBudget::new(limits);
+        let mut out = String::new();
+        bounded_json(&node, &mut out, &processing)?;
+        assert_eq!(out, serde_json::to_string(&value)?);
+        for lower in [
+            NativeProcessingLimits {
+                max_payload_bytes: payload - 1,
+                ..limits
+            },
+            NativeProcessingLimits {
+                max_processing_units: work - 1,
+                ..limits
+            },
+            NativeProcessingLimits {
+                max_processing_units: value.len(),
+                ..limits
+            },
+        ] {
+            let processing = NativeOperationBudget::new(lower);
+            let shared = processing.clone();
+            let mut out = String::new();
+            assert!(bounded_json(&node, &mut out, &processing).is_err());
+            assert!(out.is_empty());
+            assert!(shared.exhausted());
+            assert!(bounded_json(&TreeNode::string(""), &mut out, &shared).is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn mapping_keys_sequences_and_number_spelling_keep_existing_output() -> TestResult {
+        let node = TreeNode::mapping(vec![
+            (
+                "z\n".into(),
+                TreeNode::new(TreeValue::Sequence(vec![
+                    TreeNode::new(TreeValue::Bool(true)),
+                    TreeNode::new(TreeValue::Null),
+                    TreeNode::new(TreeValue::Number("1.2300e+02".into())),
+                ])),
+            ),
+            ("ä\"".into(), TreeNode::string("\\世界")),
+        ]);
+        let mut expected = String::new();
+        json(&node, &mut expected)?;
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            // One extra comma per container and conservative true/null lengths.
+            max_payload_bytes: (expected.len() + 5) * 2,
+            ..NativeProcessingLimits::default()
+        });
+        let mut out = String::new();
+        bounded_json(&node, &mut out, &processing)?;
+        assert_eq!(out, "{\"z\\n\":[true,null,1.2300e+02],\"ä\\\"\":\"\\\\世界\"}");
+        assert_eq!(out, expected);
+        assert!(!processing.exhausted());
+        Ok(())
+    }
+
+    #[test]
+    fn tagged_values_and_duplicate_keys_still_fail() {
+        for node in [
+            TreeNode::new(TreeValue::Tagged("tag".into(), Box::new(TreeNode::string("x")))),
+            TreeNode::mapping(vec![
+                ("a".into(), TreeNode::string("x")),
+                ("a".into(), TreeNode::string("y")),
+            ]),
+        ] {
+            let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+            assert!(bounded_json(&node, &mut String::new(), &processing).is_err());
+            assert!(!processing.exhausted());
+        }
+    }
+}
+
 pub(crate) fn field_nodes<'a>(tree: &'a TreeNode, pointer: &str) -> Vec<&'a TreeNode> {
     let Ok(path) = FieldPath::parse(pointer) else {
         return Vec::new();
@@ -555,11 +703,7 @@ pub fn generate(
             break;
         }
         preserve_access_mode_findings(doc, &tree, &projection.occurrences, options, &processing, &mut findings);
-        if options.opaque_fields == OpaqueFieldPolicy::Block
-            && (doc.resource.is_none() || has_unknown_fields(&tree, doc.capability.as_ref().map_or(&[], |c| c.fields)))
-        {
-            findings.push(Finding::error(FindingCode::OpaqueOutputDenied, Phase::Generation).for_resource(doc.id));
-        }
+        apply_generation_admission(doc, &tree, options, &processing, &mut findings);
         let mut protected_paths = Vec::new();
         if let Some(resource) = &projection.resource {
             resource.collect_protected_paths(&context, &mut protected_paths);
@@ -583,11 +727,11 @@ pub fn generate(
         }
         trees.insert(doc.id, tree);
     }
-    let wrappers = prepare_wrappers(resources, options, &processing, &mut findings);
+    let mut wrappers = prepare_wrappers(resources, options, &processing, &mut findings);
     if findings.failed() || has_errors(&findings) {
         return Err(findings.into_vec());
     }
-    let roots = match output_roots(resources, options.collections, &mut trees, &wrappers, &processing) {
+    let roots = match output_roots(resources, options.collections, &mut trees, &mut wrappers, &processing) {
         Ok(roots) => roots,
         Err(finding) => {
             findings.push(finding);
@@ -833,7 +977,7 @@ fn output_roots(
     resources: &ResourceSet,
     collections: CollectionOutput,
     trees: &mut BTreeMap<ResourceId, TreeNode>,
-    wrappers: &BTreeMap<crate::model::ListId, TreeNode>,
+    wrappers: &mut BTreeMap<crate::model::ListId, TreeNode>,
     processing: &NativeOperationBudget,
 ) -> Result<Vec<TreeNode>, Finding> {
     processing.payload_array::<&crate::model::ResourceDocument>(resources.documents.len(), Phase::Generation)?;
@@ -919,11 +1063,16 @@ fn prepare_wrappers(
         if findings.failed() {
             break;
         }
-        if let Err(finding) = processing.tree_copy(&list.original, Phase::Generation) {
-            findings.push(finding);
-            break;
-        }
-        let mut tree = list.original.clone();
+        // Resource projections already own each replacement item. Retain only
+        // this wrapper's fields; copying its source items would duplicate all
+        // descendants, again at every enclosing List level.
+        let mut tree = match wrapper_header(&list.original, processing) {
+            Ok(tree) => tree,
+            Err(finding) => {
+                findings.push(finding);
+                break;
+            }
+        };
         let unknown = wrapper_unknown_paths(&tree, list, processing, findings);
         if findings.failed() {
             break;
@@ -954,7 +1103,14 @@ fn prepare_wrappers(
                 true,
             ));
         }
-        if contains_tags(&tree) {
+        let tagged = match wrapper_contains_tags(&list.original, processing) {
+            Ok(tagged) => tagged,
+            Err(finding) => {
+                findings.push(finding);
+                break;
+            }
+        };
+        if tagged {
             findings.push(wrapper_finding(
                 list,
                 FindingCode::UnsupportedScalar,
@@ -997,6 +1153,72 @@ fn prepare_wrappers(
     }
     wrappers
 }
+
+/// Copy wrapper fields and source positions once, reserving an empty items
+/// slot. Source item count/order remain in the immutable `ListDocument`; effective
+/// resource values are moved into that slot during reconstruction.
+fn wrapper_header(original: &TreeNode, processing: &NativeOperationBudget) -> Result<TreeNode, Finding> {
+    let phase = Phase::Generation;
+    processing.work(1, phase)?;
+    let TreeValue::Mapping(entries) = &original.value else {
+        return Err(conflict());
+    };
+    processing.payload_array::<TreeNode>(1, phase)?;
+    processing.payload_array::<(String, TreeNode)>(entries.len(), phase)?;
+    let mut header = Vec::new();
+    header
+        .try_reserve_exact(entries.len())
+        .map_err(|_| processing.fail(phase))?;
+    for (key, value) in entries {
+        processing.work(key.len().checked_add(1).ok_or_else(|| processing.fail(phase))?, phase)?;
+        processing.payload(key.len(), phase)?;
+        let value = if key == "items" {
+            if value.as_sequence().is_none() {
+                return Err(conflict());
+            }
+            TreeNode {
+                value: TreeValue::Sequence(Vec::new()),
+                start: value.start,
+            }
+        } else {
+            processing.tree_copy(value, phase)?;
+            value.clone()
+        };
+        header.push((key.clone(), value));
+    }
+    Ok(TreeNode {
+        value: TreeValue::Mapping(header),
+        start: original.start,
+    })
+}
+
+// The original wrapper, including its source items, still participates in tag
+// denial. Charge each visited node now that no incidental whole-wrapper copy
+// supplies its traversal allowance.
+fn wrapper_contains_tags(tree: &TreeNode, processing: &NativeOperationBudget) -> Result<bool, Finding> {
+    processing.work(1, Phase::Generation)?;
+    match &tree.value {
+        TreeValue::Tagged(..) => Ok(true),
+        TreeValue::Mapping(entries) => {
+            for (_, child) in entries {
+                if wrapper_contains_tags(child, processing)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+        TreeValue::Sequence(items) => {
+            for child in items {
+                if wrapper_contains_tags(child, processing)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+        _ => Ok(false),
+    }
+}
+
 fn list_tree(items: Vec<TreeNode>) -> TreeNode {
     TreeNode::mapping(vec![
         ("apiVersion".into(), TreeNode::string("v1")),
@@ -1007,20 +1229,22 @@ fn list_tree(items: Vec<TreeNode>) -> TreeNode {
 fn rewrap(
     resources: &ResourceSet,
     id: crate::model::ListId,
-    trees: &BTreeMap<ResourceId, TreeNode>,
-    wrappers: &BTreeMap<crate::model::ListId, TreeNode>,
+    trees: &mut BTreeMap<ResourceId, TreeNode>,
+    wrappers: &mut BTreeMap<crate::model::ListId, TreeNode>,
     processing: &NativeOperationBudget,
 ) -> Result<TreeNode, Finding> {
     processing.work(resources.lists.len(), Phase::Generation)?;
     let list = resources.lists.iter().find(|list| list.id == id).ok_or_else(conflict)?;
     let result = (|| {
-        let original = wrappers.get(&id).ok_or_else(conflict)?;
-        processing.tree_copy(original, Phase::Generation)?;
-        let mut wrapper = original.clone();
-        let Some(items) = wrapper.get("items").and_then(TreeNode::as_sequence) else {
+        let mut wrapper = wrappers.remove(&id).ok_or_else(conflict)?;
+        let Some(items) = list.original.get("items").and_then(TreeNode::as_sequence) else {
             return Err(conflict());
         };
+        processing.payload_array::<TreeNode>(items.len(), Phase::Generation)?;
         let mut current = Vec::new();
+        current
+            .try_reserve_exact(items.len())
+            .map_err(|_| processing.fail(Phase::Generation))?;
         for index in 0..items.len() {
             processing.work(
                 resources
@@ -1042,9 +1266,7 @@ fn rewrap(
                     .as_ref()
                     .is_some_and(|path| path.items.last() == Some(&(id, index)))
             }) {
-                let tree = trees.get(&doc.id).ok_or_else(conflict)?;
-                processing.tree_copy(tree, Phase::Generation)?;
-                current.push(tree.clone());
+                current.push(trees.remove(&doc.id).ok_or_else(conflict)?);
             } else {
                 return Err(conflict());
             }
@@ -1070,6 +1292,389 @@ fn rewrap(
 }
 fn strip_wrapper_observed(tree: &mut TreeNode, findings: &mut ProcessingReport) {
     strip_observation_paths(tree, None, &crate::source::list_observation_paths(), findings);
+}
+
+#[cfg(test)]
+mod wrapper_ownership_tests {
+    use super::*;
+    use crate::source::{DocumentFormat, ExplicitSourceAccess, InputOrigin, ParseLimits, SourceId, SourceInput};
+
+    type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
+
+    fn syntax(value: &serde_json::Value) -> TestResult<crate::ParsedInput> {
+        let bytes = serde_json::to_vec(value)?;
+        crate::parse_source(
+            SourceInput {
+                id: SourceId(84),
+                format: DocumentFormat::Json,
+                origin: InputOrigin::CallerSupplied,
+                source_version: None,
+                bytes: &bytes,
+            },
+            &ParseLimits::default(),
+        )
+        .map_err(|_| "parse wrapper fixture".into())
+    }
+    fn parse(value: &serde_json::Value) -> TestResult<ResourceSet> {
+        syntax(value)?
+            .flatten_resources()
+            .map_err(|_| "decode wrapper fixture".into())
+    }
+    fn target(minor: u8) -> TestResult<TargetProfile> {
+        Ok(TargetProfile::documented_defaults(
+            crate::capability::KubernetesVersion::new(1, minor)?,
+        ))
+    }
+    fn preserve() -> GenerationOptions {
+        GenerationOptions {
+            protected_output: ProtectedOutput::Include,
+            opaque_fields: OpaqueFieldPolicy::PreserveWithFinding,
+            json_shape: JsonShape::SingleResource,
+            ..GenerationOptions::default()
+        }
+    }
+    fn replacement_trees(resources: &ResourceSet) -> BTreeMap<ResourceId, TreeNode> {
+        resources
+            .documents
+            .iter()
+            .map(|document| (document.id, document.original.clone()))
+            .collect()
+    }
+    fn value(tree: &TreeNode) -> TestResult<serde_json::Value> {
+        let mut text = String::new();
+        json(tree, &mut text)?;
+        Ok(serde_json::from_str(&text)?)
+    }
+
+    #[test]
+    fn nested_wrappers_move_large_replacement_buffers_under_a_small_payload_allowance() -> TestResult {
+        let payload = "private-owned-item".repeat(8192);
+        let input = serde_json::json!({
+            "apiVersion":"v1", "kind":"List", "metadata":{"resourceVersion":"outer"},
+            "items":[
+                {"apiVersion":"example.test/v1", "kind":"Thing", "metadata":{"name":"z"}, "spec":{"payload":payload}},
+                {"apiVersion":"v1", "kind":"List", "metadata":{"resourceVersion":"inner"}, "items":[
+                    {"apiVersion":"example.test/v1", "kind":"Thing", "metadata":{"name":"a"}, "spec":{"payload":"private-nested"}}
+                ]}
+            ]
+        });
+        let resources = parse(&input)?;
+        let mut trees = replacement_trees(&resources);
+        let first = resources.documents.first().ok_or("missing first resource")?;
+        let projected = trees.get_mut(&first.id).ok_or("missing replacement")?;
+        set_child(
+            projected,
+            "metadata",
+            Some(TreeNode::mapping(vec![(
+                "name".into(),
+                TreeNode::string("replacement-name"),
+            )])),
+        )?;
+        let owned_pointer = projected
+            .get("spec")
+            .and_then(|node| node.get("payload"))
+            .and_then(TreeNode::as_str)
+            .ok_or("missing owned payload")?
+            .as_ptr();
+        let limits = NativeProcessingLimits {
+            max_payload_bytes: 8192,
+            ..NativeProcessingLimits::default()
+        };
+        let processing = NativeOperationBudget::new(limits);
+        let mut findings = ProcessingReport::new(processing.clone(), Phase::Generation);
+        let mut wrappers = prepare_wrappers(&resources, &preserve(), &processing, &mut findings);
+        assert!(!findings.failed());
+        for list in &resources.lists {
+            let header = wrappers.get(&list.id).ok_or("missing prepared header")?;
+            assert_eq!(header.start, list.original.start);
+            assert!(
+                header
+                    .get("items")
+                    .and_then(TreeNode::as_sequence)
+                    .is_some_and(<[_]>::is_empty)
+            );
+        }
+        let list = resources.lists.first().ok_or("missing outer List")?;
+        let result = rewrap(&resources, list.id, &mut trees, &mut wrappers, &processing)?;
+        let items = result
+            .get("items")
+            .and_then(TreeNode::as_sequence)
+            .ok_or("missing reconstructed items")?;
+        let retained_pointer = items
+            .first()
+            .and_then(|node| node.get("spec"))
+            .and_then(|node| node.get("payload"))
+            .and_then(TreeNode::as_str)
+            .ok_or("missing reconstructed payload")?
+            .as_ptr();
+        assert_eq!(owned_pointer, retained_pointer);
+        assert!(trees.is_empty());
+        assert!(wrappers.is_empty());
+        assert!(!processing.exhausted());
+        let mut expected = input.clone();
+        expected["items"][0]["metadata"]["name"] = "replacement-name".into();
+        assert_eq!(value(&result)?, expected);
+        assert_eq!(value(&list.original)?, input);
+        assert!(
+            NativeOperationBudget::new(limits)
+                .tree_copy(&list.original, Phase::Generation)
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn public_nested_generation_preserves_edited_identities_order_and_fixed_points() -> TestResult {
+        let input = serde_json::json!({
+            "apiVersion":"v1", "kind":"List", "metadata":{"resourceVersion":"outer"},
+            "items":[
+                {"apiVersion":"v1", "kind":"ConfigMap", "metadata":{"name":"z","namespace":"ns"}, "data":{"private":"remove-me"}},
+                {"apiVersion":"v1", "kind":"List", "metadata":{"resourceVersion":"inner"}, "items":[
+                    {"apiVersion":"v1", "kind":"ConfigMap", "metadata":{"name":"a","namespace":"ns"}}
+                ]}
+            ]
+        });
+        let mut resources = parse(&input)?;
+        let document = resources
+            .documents_mut()
+            .first_mut()
+            .ok_or("missing editable resource")?;
+        document.remove_field(FieldPath::parse("/data")?);
+        document.set_field_from_source(
+            FieldPath::parse("/metadata/name")?,
+            syntax(&serde_json::json!("replacement-name"))?,
+        )?;
+        let mut expected = input.clone();
+        expected["items"][0]["metadata"]["name"] = "replacement-name".into();
+        expected["items"][0]
+            .as_object_mut()
+            .ok_or("missing expected object")?
+            .remove("data");
+        let raw = ExplicitArtifactAccess::explicitly_allow_raw_artifact();
+        for minor in [20, 37] {
+            let target = target(minor)?;
+            let artifact = generate(&resources, &target, OutputFormat::Json, &preserve())
+                .map_err(|_| "generate edited nested List")?;
+            let actual: serde_json::Value = serde_json::from_slice(artifact.reveal_bytes(&raw))?;
+            assert_eq!(actual, expected);
+            let reparsed = parse(&actual)?;
+            let repeated =
+                generate(&reparsed, &target, OutputFormat::Json, &preserve()).map_err(|_| "regenerate nested List")?;
+            assert_eq!(repeated.reveal_bytes(&raw), artifact.reveal_bytes(&raw));
+        }
+        assert_eq!(
+            value(&resources.lists.first().ok_or("missing original wrapper")?.original)?,
+            input
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wrapper_admission_privacy_observation_and_flatten_policies_remain_explicit() -> TestResult {
+        let input = serde_json::json!({
+            "apiVersion":"v1", "kind":"List", "private-wrapper":"PRIVATE_WRAPPER_MARKER",
+            "metadata":{"continue":"PRIVATE_CONTINUATION","resourceVersion":"42"},
+            "items":[{"apiVersion":"v1", "kind":"List", "metadata":{"resourceVersion":"43"}, "items":[]}]
+        });
+        let resources = parse(&input)?;
+        let source = resources.sources().first().ok_or("missing wrapper evidence")?;
+        let source_access = ExplicitSourceAccess::explicitly_allow_raw_source();
+        let original = source.reveal_raw(&source_access).to_vec();
+        let target = target(37)?;
+        for collections in [CollectionOutput::PreserveWrappers, CollectionOutput::Flatten] {
+            let options = GenerationOptions {
+                collections,
+                ..GenerationOptions::default()
+            };
+            let errors = generate(&resources, &target, OutputFormat::Json, &options)
+                .err()
+                .ok_or("private wrapper admitted by default")?;
+            for code in [FindingCode::OpaqueOutputDenied, FindingCode::ProtectedOutputDenied] {
+                assert!(
+                    errors
+                        .iter()
+                        .any(|finding| finding.code == code && finding.wrapper.is_some())
+                );
+            }
+            assert!(!format!("{errors:?}").contains("PRIVATE_WRAPPER_MARKER"));
+            assert!(!format!("{errors:?}").contains("PRIVATE_CONTINUATION"));
+            let opaque = GenerationOptions {
+                opaque_fields: OpaqueFieldPolicy::PreserveWithFinding,
+                ..options
+            };
+            assert!(
+                generate(&resources, &target, OutputFormat::Json, &opaque)
+                    .err()
+                    .ok_or("protected consent omitted")?
+                    .iter()
+                    .any(|finding| finding.code == FindingCode::ProtectedOutputDenied)
+            );
+            let options = GenerationOptions {
+                protected_output: ProtectedOutput::Include,
+                intent: OutputIntent::AuthoredIntent,
+                ..opaque
+            };
+            let artifact = generate(&resources, &target, OutputFormat::Json, &options)
+                .map_err(|_| "generate authorized private wrapper")?;
+            let output: serde_json::Value = serde_json::from_slice(
+                artifact.reveal_bytes(&ExplicitArtifactAccess::explicitly_allow_raw_artifact()),
+            )?;
+            assert_eq!(
+                artifact
+                    .findings()
+                    .iter()
+                    .filter(|finding| finding.code == FindingCode::ObservedFieldRemoved)
+                    .count(),
+                3
+            );
+            assert!(
+                artifact
+                    .findings()
+                    .iter()
+                    .filter(|finding| finding.code == FindingCode::ObservedFieldRemoved)
+                    .all(|finding| finding.wrapper.is_some() && finding.path.is_some() && finding.source.is_some())
+            );
+            if collections == CollectionOutput::PreserveWrappers {
+                assert_eq!(output["items"][0]["private-wrapper"], "PRIVATE_WRAPPER_MARKER");
+                assert!(output["items"][0]["metadata"].get("continue").is_none());
+                assert!(
+                    output["items"][0]["items"][0]["metadata"]
+                        .get("resourceVersion")
+                        .is_none()
+                );
+            } else {
+                assert_eq!(output["items"], serde_json::json!([]));
+                assert!(
+                    artifact
+                        .findings()
+                        .iter()
+                        .any(|finding| finding.code == FindingCode::CollectionFieldRemoved)
+                );
+            }
+            assert!(!format!("{artifact:?}").contains("PRIVATE_WRAPPER_MARKER"));
+            assert!(!format!("{artifact:?}").contains("PRIVATE_CONTINUATION"));
+        }
+        assert_eq!(source.reveal_raw(&source_access), original);
+        Ok(())
+    }
+
+    #[test]
+    fn tags_in_original_replaced_items_still_block_every_wrapper_route() -> TestResult {
+        let text = "apiVersion: v1\nkind: List\nitems:\n- apiVersion: example.test/v1\n  kind: Thing\n  metadata: {name: one}\n  spec: {payload: !private PRIVATE_TAG_MARKER}\n";
+        let mut resources = crate::parse_source(
+            SourceInput {
+                id: SourceId(85),
+                format: DocumentFormat::YamlStream,
+                origin: InputOrigin::CallerSupplied,
+                source_version: None,
+                bytes: text.as_bytes(),
+            },
+            &ParseLimits::default(),
+        )
+        .map_err(|_| "parse tagged wrapper")?
+        .flatten_resources()
+        .map_err(|_| "decode tagged wrapper")?;
+        resources
+            .documents_mut()
+            .first_mut()
+            .ok_or("missing tagged resource")?
+            .remove_field(FieldPath::parse("/spec/payload")?);
+        let target = target(37)?;
+        for collections in [CollectionOutput::PreserveWrappers, CollectionOutput::Flatten] {
+            for format in [OutputFormat::Json, OutputFormat::Yaml] {
+                let options = GenerationOptions {
+                    collections,
+                    ..preserve()
+                };
+                let findings = generate(&resources, &target, format, &options)
+                    .err()
+                    .ok_or("source wrapper tag bypassed")?;
+                assert!(
+                    findings
+                        .iter()
+                        .any(|finding| finding.code == FindingCode::UnsupportedScalar && finding.wrapper.is_some())
+                );
+                assert!(!format!("{findings:?}").contains("PRIVATE_TAG_MARKER"));
+            }
+        }
+        let original = &resources.lists.first().ok_or("missing tagged wrapper")?.original;
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_processing_units: 1,
+            ..NativeProcessingLimits::default()
+        });
+        assert!(wrapper_contains_tags(original, &processing).is_err());
+        assert!(processing.exhausted());
+        Ok(())
+    }
+
+    #[test]
+    fn header_and_item_storage_are_precharged_and_shared_exhaustion_is_sticky() -> TestResult {
+        let input = serde_json::json!({"apiVersion":"v1","kind":"List","items":[
+            {"apiVersion":"example.test/v1","kind":"Thing","metadata":{"name":"one"}}
+        ]});
+        let resources = parse(&input)?;
+        let list = resources.lists.first().ok_or("missing List")?;
+        let control = NativeOperationBudget::new(NativeProcessingLimits::default());
+        let mut report = ProcessingReport::new(control.clone(), Phase::Generation);
+        let _ = prepare_wrappers(&resources, &preserve(), &control, &mut report);
+        assert!(!report.failed());
+        let header_bytes = control.charged_payload_bytes();
+        for allowance in [header_bytes - 1, header_bytes + size_of::<TreeNode>() - 1] {
+            let processing = NativeOperationBudget::new(NativeProcessingLimits {
+                max_payload_bytes: allowance,
+                ..NativeProcessingLimits::default()
+            });
+            let shared = processing.clone();
+            let mut report = ProcessingReport::new(processing.clone(), Phase::Generation);
+            let mut wrappers = prepare_wrappers(&resources, &preserve(), &processing, &mut report);
+            let mut trees = replacement_trees(&resources);
+            if !report.failed() {
+                assert!(rewrap(&resources, list.id, &mut trees, &mut wrappers, &processing).is_err());
+                assert_eq!(trees.len(), 1);
+            }
+            assert!(shared.exhausted());
+            assert!(wrapper_header(&list.original, &shared).is_err());
+            assert_eq!(value(&list.original)?, input);
+        }
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_processing_units: 0,
+            ..NativeProcessingLimits::default()
+        });
+        assert!(wrapper_header(&list.original, &processing).is_err());
+        assert!(processing.exhausted());
+        Ok(())
+    }
+
+    #[test]
+    fn missing_nested_replacements_fail_with_private_wrapper_attribution() -> TestResult {
+        let input = serde_json::json!({"apiVersion":"v1","kind":"List","items":[
+            {"apiVersion":"v1","kind":"List","items":[
+                {"apiVersion":"example.test/v1","kind":"Thing","metadata":{"name":"private-replacement"}}
+            ]}
+        ]});
+        let resources = parse(&input)?;
+        let root = resources.lists.first().ok_or("missing root wrapper")?;
+        let nested = resources.lists.get(1).ok_or("missing nested wrapper")?;
+        let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+        let mut report = ProcessingReport::new(processing.clone(), Phase::Generation);
+        let mut wrappers = prepare_wrappers(&resources, &preserve(), &processing, &mut report);
+        let error = rewrap(&resources, root.id, &mut BTreeMap::new(), &mut wrappers, &processing)
+            .err()
+            .ok_or("missing replacement silently discarded")?;
+        assert_eq!(error.code, FindingCode::MergeConflict);
+        assert_eq!(
+            error.wrapper,
+            Some(WrapperSubject {
+                source: nested.source,
+                list: nested.id
+            })
+        );
+        assert!(error.source.is_some());
+        assert!(!processing.exhausted());
+        assert!(!format!("{error:?}").contains("private-replacement"));
+        assert_eq!(value(&root.original)?, input);
+        Ok(())
+    }
 }
 /// Enumerate warnings lazily; retain only the first path needed by output policies.
 fn wrapper_unknown_paths(
@@ -1296,36 +1901,1403 @@ fn strip_observation_paths(
         findings.push(error);
     }
 }
-
-fn has_unknown_fields(tree: &TreeNode, fields: &[FieldCapability]) -> bool {
-    fn visit(node: &TreeNode, path: &FieldPath, fields: &[FieldCapability]) -> bool {
-        if path.0.len() == 1 && matches!(path.0[0].as_str(), "apiVersion" | "kind") {
-            return false;
+fn apply_generation_admission(
+    doc: &crate::model::ResourceDocument,
+    tree: &TreeNode,
+    options: &GenerationOptions,
+    processing: &NativeOperationBudget,
+    findings: &mut ProcessingReport,
+) {
+    let paths = match generation_typed_paths(
+        doc.capability.as_ref().map_or(&[], |capability| capability.fields),
+        processing,
+    ) {
+        Ok(paths) => paths,
+        Err(finding) => {
+            findings.push(finding.for_resource(doc.id));
+            return;
         }
-        let admitted = fields.iter().any(|field| {
-            FieldPath::parse(field.path).is_ok_and(|p| {
-                p.0.len() == path.0.len()
-                    && p.0.iter().zip(&path.0).all(|(a, b)| a == "*" || a == b)
-                    && field.admission == FieldAdmission::Typed
-            })
-        });
+    };
+    match extension_generation_admission(
+        tree,
+        &doc.original_identity.gvk,
+        &paths,
+        doc.evidence.limits(),
+        processing,
+        options.protected_output == ProtectedOutput::Include,
+    ) {
+        Ok((has_unadmitted, has_protected_schema_payload)) => {
+            if options.opaque_fields == OpaqueFieldPolicy::Block && (doc.resource.is_none() || has_unadmitted) {
+                findings.push(Finding::error(FindingCode::OpaqueOutputDenied, Phase::Generation).for_resource(doc.id));
+            }
+            if has_protected_schema_payload && options.protected_output == ProtectedOutput::Deny {
+                findings
+                    .push(Finding::error(FindingCode::ProtectedOutputDenied, Phase::Generation).for_resource(doc.id));
+            }
+            if !findings.failed()
+                && options.opaque_fields == OpaqueFieldPolicy::PreserveWithFinding
+                && doc.resource.is_some()
+            {
+                if let Err(finding) = preserve_unknown_field_findings(
+                    doc,
+                    tree,
+                    &paths,
+                    options.protected_output == ProtectedOutput::Include,
+                    processing,
+                    findings,
+                ) {
+                    findings.push(finding);
+                }
+            }
+        }
+        Err(finding) => findings.push(finding.for_resource(doc.id)),
+    }
+}
+
+/// Report maximal unadmitted subtrees without implying native admission of preserved bytes.
+fn preserve_unknown_field_findings(
+    document: &crate::model::ResourceDocument,
+    tree: &TreeNode,
+    paths: &[GenerationPattern],
+    include_protected_schema_payload: bool,
+    processing: &NativeOperationBudget,
+    findings: &mut ProcessingReport,
+) -> Result<(), Finding> {
+    let phase = Phase::Generation;
+    processing.payload_array::<(&TreeNode, FieldPath)>(1, phase)?;
+    let mut pending = vec![(tree, FieldPath::default())];
+    let mut source_proofs = PreservationSourceProofs::new(document, tree, processing);
+    while let Some((node, path)) = pending.pop() {
+        processing.work(1, phase)?;
+        if path.0.len() == 1 && matches!(path.0[0].as_str(), "apiVersion" | "kind") {
+            continue;
+        }
+        let mut admitted = path.0.is_empty();
+        // Recursive schema admission is independent of the finite static path expansion
+        // and of the narrower supported subset used by the local document checker.
+        admitted |=
+            match crate::resources::extensions::capabilities::schema_path_class(&document.original_identity.gvk, &path)
+            {
+                Some(crate::resources::extensions::capabilities::SchemaPathClass::Typed) => true,
+                Some(crate::resources::extensions::capabilities::SchemaPathClass::ProtectedPayload) => {
+                    include_protected_schema_payload
+                }
+                None => false,
+            };
+        let mut descendants = false;
+        // Descendant-pattern evidence is used only for an unadmitted parent.
+        // Already admitted nodes still visit every child; they need no static
+        // proof of their own admission or of whether known children exist.
+        if !admitted {
+            for candidate in paths {
+                processing.work(1, phase)?;
+                if candidate.merge == MergeStrategy::AtomicList
+                    && candidate.depth.checked_add(1) == Some(path.depth())
+                    && generation_list_index(&path, processing)?
+                    && generation_pattern_prefix(candidate, &path, candidate.depth, processing)?
+                {
+                    admitted = true;
+                }
+                if candidate.depth >= path.depth()
+                    && generation_pattern_prefix(candidate, &path, path.depth(), processing)?
+                {
+                    admitted |= candidate.depth == path.depth();
+                    descendants |= candidate.depth > path.depth();
+                }
+                if admitted {
+                    break;
+                }
+            }
+        }
+        let empty = match &node.value {
+            TreeValue::Mapping(entries) => entries.is_empty(),
+            TreeValue::Sequence(items) => items.is_empty(),
+            _ => true,
+        };
+        if !admitted && (empty || !descendants) {
+            preservation_field_warning(&mut source_proofs, &path, findings)?;
+            continue;
+        }
         match &node.value {
             TreeValue::Mapping(entries) => {
-                (entries.is_empty() && !path.0.is_empty() && !admitted)
-                    || entries.iter().any(|(key, n)| visit(n, &path.child(key), fields))
+                for (key, child) in entries.iter().rev() {
+                    preservation_push_child(&mut pending, child, key, &path, document, processing)?;
+                }
             }
             TreeValue::Sequence(items) => {
-                (items.is_empty() && !admitted)
-                    || items
-                        .iter()
-                        .enumerate()
-                        .any(|(index, n)| visit(n, &path.child(index.to_string()), fields))
+                for (index, child) in items.iter().enumerate().rev() {
+                    processing.payload(20, phase)?;
+                    preservation_push_child(&mut pending, child, &index.to_string(), &path, document, processing)?;
+                }
             }
-            _ => !admitted,
+            _ => {}
         }
     }
-    visit(tree, &FieldPath::default(), fields)
+    Ok(())
 }
+fn preservation_push_child<'a>(
+    pending: &mut Vec<(&'a TreeNode, FieldPath)>,
+    child: &'a TreeNode,
+    key: &str,
+    path: &FieldPath,
+    document: &crate::model::ResourceDocument,
+    processing: &NativeOperationBudget,
+) -> Result<(), Finding> {
+    let phase = Phase::Generation;
+    let depth = path.depth().checked_add(1).ok_or_else(|| processing.fail(phase))?;
+    if depth > document.evidence.limits().max_depth {
+        return Err(processing.fail(phase));
+    }
+    processing.work(depth.saturating_add(key.len()), phase)?;
+    processing.payload_array::<String>(depth, phase)?;
+    processing.payload_sizes(path.0.iter().map(String::len).chain(std::iter::once(key.len())), phase)?;
+    processing.payload_array::<(&TreeNode, FieldPath)>(1, phase)?;
+    pending.try_reserve(1).map_err(|_| processing.fail(phase))?;
+    pending.push((child, path.child(key)));
+    Ok(())
+}
+fn preservation_field_warning(
+    source_proofs: &mut PreservationSourceProofs<'_>,
+    path: &FieldPath,
+    findings: &mut ProcessingReport,
+) -> Result<(), Finding> {
+    let document = source_proofs.document;
+    let processing = source_proofs.context.processing;
+    let phase = Phase::Generation;
+    for existing in findings.iter() {
+        processing.work(1, phase)?;
+        if existing.code == FindingCode::UnadmittedField && existing.resource == Some(document.id) {
+            if let Some(previous) = &existing.path {
+                processing.work(previous.depth().saturating_add(path.depth()), phase)?;
+                processing.work(previous.0.iter().chain(&path.0).map(String::len).sum(), phase)?;
+                if previous.0.len() == path.0.len()
+                    && previous
+                        .0
+                        .iter()
+                        .zip(&path.0)
+                        .all(|(expected, actual)| expected == "*" || expected == actual)
+                {
+                    return Ok(());
+                }
+            }
+        }
+    }
+    let mut pointer = FieldPath::default();
+    let mut wrapper = None;
+    if let Some(collection) = &document.collection {
+        for (list, index) in &collection.items {
+            processing.work(1, phase)?;
+            processing.payload_array::<String>(2, phase)?;
+            processing.payload(25, phase)?;
+            pointer.0.push("items".into());
+            pointer.0.push(index.to_string());
+            wrapper = Some(WrapperSubject {
+                source: document.source,
+                list: *list,
+            });
+        }
+    }
+    processing.payload_array::<String>(path.depth(), phase)?;
+    processing.payload_sizes(path.0.iter().map(String::len), phase)?;
+    pointer.0.extend(path.0.iter().cloned());
+    let mut warning = Finding::warning(FindingCode::UnadmittedField, phase)
+        .for_resource(document.id)
+        .at_path(pointer);
+    warning.wrapper = wrapper;
+    warning.source = preservation_source_position(source_proofs, path)?;
+    findings.push(warning);
+    processing.work(0, phase)
+}
+
+/// Completed ordered ancestor-sequence proofs for one immutable document/output pass.
+/// Borrowed pair identity cannot authorize another occurrence or a later operation.
+/// Lookup, retention and insertion all inherit the pass's sticky processing session.
+struct PreservationSourceProofs<'a> {
+    document: &'a crate::model::ResourceDocument,
+    tree: &'a TreeNode,
+    context: BudgetedMergeContext<'a>,
+    completed_sequences: Vec<(&'a TreeNode, &'a TreeNode)>,
+}
+impl<'a> PreservationSourceProofs<'a> {
+    fn new(
+        document: &'a crate::model::ResourceDocument,
+        tree: &'a TreeNode,
+        processing: &'a NativeOperationBudget,
+    ) -> Self {
+        Self {
+            document,
+            tree,
+            context: BudgetedMergeContext {
+                native: MergeContext {
+                    gvk: None,
+                    target: None,
+                },
+                processing,
+                phase: Phase::Generation,
+            },
+            completed_sequences: Vec::new(),
+        }
+    }
+
+    fn sequence_eq(&mut self, before: &'a TreeNode, after: &'a TreeNode) -> Result<bool, Finding> {
+        let context = self.context;
+        context.tick()?;
+        for (original, effective) in &self.completed_sequences {
+            context.processing.work(2, context.phase)?;
+            if std::ptr::eq(*original, before) && std::ptr::eq(*effective, after) {
+                return Ok(true);
+            }
+        }
+        if !merge_semantic_eq(before, after, context)? {
+            return Ok(false);
+        }
+        // Growing the borrowed-pair vector may move every retained pair.
+        context.processing.work(
+            self.completed_sequences.len().saturating_mul(2).saturating_add(1),
+            context.phase,
+        )?;
+        context
+            .processing
+            .payload_array::<(&TreeNode, &TreeNode)>(1, context.phase)?;
+        self.completed_sequences
+            .try_reserve_exact(1)
+            .map_err(|_| context.processing.fail(context.phase))?;
+        self.completed_sequences.push((before, after));
+        Ok(true)
+    }
+}
+
+fn preservation_source_position(
+    source_proofs: &mut PreservationSourceProofs<'_>,
+    path: &FieldPath,
+) -> Result<Option<crate::diagnostic::SourcePosition>, Finding> {
+    let document = source_proofs.document;
+    if document.evidence.origin == crate::source::EvidenceOrigin::NativeAuthored {
+        return Ok(None);
+    }
+    let context = source_proofs.context;
+    let processing = context.processing;
+    let mut before = &document.original;
+    let mut after = source_proofs.tree;
+    for key in &path.0 {
+        processing.work(key.len().saturating_add(1), Phase::Generation)?;
+        if before.as_sequence().is_some() && !source_proofs.sequence_eq(before, after)? {
+            return Ok(None);
+        }
+        let (Some(original), Some(current)) = (
+            preservation_source_child(before, key, context)?,
+            preservation_source_child(after, key, context)?,
+        ) else {
+            return Ok(None);
+        };
+        before = original;
+        after = current;
+    }
+    Ok(if merge_semantic_eq(before, after, context)? {
+        before.start
+    } else {
+        None
+    })
+}
+
+fn preservation_source_child<'a>(
+    node: &'a TreeNode,
+    key: &str,
+    context: BudgetedMergeContext<'_>,
+) -> Result<Option<&'a TreeNode>, Finding> {
+    Ok(context.get(node, key)?.or_else(|| {
+        node.as_sequence()
+            .and_then(|items| key.parse::<usize>().ok().and_then(|index| items.get(index)))
+    }))
+}
+
+/// Borrow each valid Typed pointer once for both admission and preservation.
+/// No decoded String or segment vector is retained for absent static paths.
+struct GenerationPattern {
+    pointer: &'static str,
+    depth: usize,
+    merge: MergeStrategy,
+}
+
+fn generation_typed_paths(
+    fields: &[FieldCapability],
+    processing: &NativeOperationBudget,
+) -> Result<Vec<GenerationPattern>, Finding> {
+    let phase = Phase::Generation;
+    processing.payload_array::<GenerationPattern>(fields.len(), phase)?;
+    let mut paths = Vec::new();
+    paths
+        .try_reserve_exact(fields.len())
+        .map_err(|_| processing.fail(phase))?;
+    for field in fields {
+        processing.work(1, phase)?;
+        if field.admission != FieldAdmission::Typed {
+            continue;
+        }
+        // One byte scan validates escapes and counts separators. Rust strings
+        // already establish UTF-8 validity; matching decodes without allocating.
+        processing.work(field.path.len(), phase)?;
+        let mut bytes = field.path.bytes();
+        let mut depth: usize = match bytes.next() {
+            None => 0,
+            Some(b'/') => 1,
+            _ => continue,
+        };
+        let mut valid = true;
+        while let Some(byte) = bytes.next() {
+            match byte {
+                b'/' => depth = depth.checked_add(1).ok_or_else(|| processing.fail(phase))?,
+                b'~' if !matches!(bytes.next(), Some(b'0' | b'1')) => {
+                    valid = false;
+                    break;
+                }
+                _ => {}
+            }
+        }
+        if valid {
+            paths.push(GenerationPattern {
+                pointer: field.path,
+                depth,
+                merge: field.merge,
+            });
+        }
+    }
+    Ok(paths)
+}
+
+fn generation_static_admission(
+    paths: &[GenerationPattern],
+    path: &FieldPath,
+    processing: &NativeOperationBudget,
+) -> Result<bool, Finding> {
+    let phase = Phase::Generation;
+    for candidate in paths {
+        processing.work(1, phase)?;
+        let exact = candidate.depth == path.depth();
+        let list_item = candidate.merge == MergeStrategy::AtomicList
+            && candidate.depth.checked_add(1) == Some(path.depth())
+            && generation_list_index(path, processing)?;
+        if !exact && !list_item {
+            continue;
+        }
+        if generation_pattern_prefix(candidate, path, candidate.depth, processing)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn generation_list_index(path: &FieldPath, processing: &NativeOperationBudget) -> Result<bool, Finding> {
+    let Some(index) = path.0.last() else {
+        return Ok(false);
+    };
+    processing.work(index.len(), Phase::Generation)?;
+    Ok(!index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+fn generation_pattern_prefix(
+    candidate: &GenerationPattern,
+    path: &FieldPath,
+    depth: usize,
+    processing: &NativeOperationBudget,
+) -> Result<bool, Finding> {
+    let phase = Phase::Generation;
+    processing.work(0, phase)?;
+    if depth > candidate.depth || depth > path.depth() {
+        return Ok(false);
+    }
+    // Preparation already validated the leading slash and escapes. Scan only
+    // compared tokens; every raw/actual byte read is charged before access.
+    let pointer = candidate.pointer.as_bytes();
+    let mut offset = 1;
+    for actual in path.0.iter().take(depth) {
+        processing.work(1, phase)?;
+        let mut raw = generation_pattern_byte(pointer, offset, processing)?;
+        let mut peeked = None;
+        if raw == Some(b'*') {
+            // Look ahead once to distinguish a wildcard from a literal such
+            // as "*suffix". A non-wildcard reuses this charged byte below.
+            let next = generation_pattern_byte(pointer, offset + 1, processing)?;
+            if matches!(next, None | Some(b'/')) {
+                offset += 1 + usize::from(next.is_some());
+                continue;
+            }
+            peeked = Some(next);
+        }
+        let actual = actual.as_bytes();
+        let mut actual_offset = 0;
+        while let Some(byte) = raw.filter(|byte| *byte != b'/') {
+            let byte = if byte == b'~' {
+                offset += 1;
+                match generation_pattern_byte(pointer, offset, processing)? {
+                    Some(b'0') => b'~',
+                    Some(b'1') => b'/',
+                    _ => return Ok(false),
+                }
+            } else {
+                byte
+            };
+            if generation_pattern_byte(actual, actual_offset, processing)? != Some(byte) {
+                return Ok(false);
+            }
+            actual_offset += 1;
+            offset += 1;
+            raw = if let Some(next) = peeked.take() {
+                next
+            } else {
+                generation_pattern_byte(pointer, offset, processing)?
+            };
+        }
+        if generation_pattern_byte(actual, actual_offset, processing)?.is_some() {
+            return Ok(false);
+        }
+        offset += usize::from(raw.is_some());
+    }
+    Ok(true)
+}
+
+fn generation_pattern_byte(
+    bytes: &[u8],
+    offset: usize,
+    processing: &NativeOperationBudget,
+) -> Result<Option<u8>, Finding> {
+    // EOF/boundary checks cost one unit too; a failed reservation never reads
+    // the byte, and exhaustion remains shared and terminal.
+    processing.work(1, Phase::Generation)?;
+    Ok(bytes.get(offset).copied())
+}
+
+#[cfg(test)]
+mod preservation_sequence_proof_tests {
+    use super::*;
+    use crate::source::{DocumentFormat, InputOrigin, ParseLimits, SourceId, SourceInput};
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn parse(value: &serde_json::Value, origin: InputOrigin) -> Result<ResourceSet, Box<dyn std::error::Error>> {
+        let bytes = serde_json::to_vec(value)?;
+        crate::parse_source(
+            SourceInput {
+                id: SourceId(71),
+                format: DocumentFormat::Json,
+                origin,
+                source_version: None,
+                bytes: &bytes,
+            },
+            &ParseLimits::default(),
+        )
+        .map_err(|_| "parse preservation proof fixture")?
+        .flatten_resources()
+        .map_err(|_| "flatten preservation proof fixture".into())
+    }
+
+    fn crd(properties: &serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition",
+            "metadata": {"name": "widgets.example.test"},
+            "spec": {"versions": [{"schema": {"openAPIV3Schema": {"properties": properties}}}]}
+        })
+    }
+
+    fn patterns() -> Vec<GenerationPattern> {
+        [
+            ("", 0, MergeStrategy::Object),
+            ("/metadata", 1, MergeStrategy::Object),
+            ("/metadata/name", 2, MergeStrategy::Scalar),
+            ("/spec", 1, MergeStrategy::Object),
+            ("/spec/versions", 2, MergeStrategy::AtomicList),
+            ("/spec/versions/*/schema", 4, MergeStrategy::Object),
+        ]
+        .into_iter()
+        .map(|(pointer, depth, merge)| GenerationPattern { pointer, depth, merge })
+        .collect()
+    }
+
+    fn vendor_path(name: &str) -> Result<FieldPath, Finding> {
+        FieldPath::parse(&format!(
+            "/spec/versions/0/schema/openAPIV3Schema/properties/{name}/vendor"
+        ))
+    }
+
+    #[test]
+    fn many_sibling_warnings_share_one_completed_large_sequence_proof() -> TestResult {
+        let properties: serde_json::Map<String, serde_json::Value> = (0..32)
+            .map(|index| {
+                (
+                    format!("p{index:02}"),
+                    serde_json::json!({"type": "string", "vendor": "x".repeat(4096)}),
+                )
+            })
+            .collect();
+        let resources = parse(&crd(&properties.into()), InputOrigin::CallerSupplied)?;
+        let document = resources.documents().first().ok_or("missing document")?;
+        let tree = document.original.clone();
+        let allowance = NativeProcessingLimits {
+            max_processing_units: 1_000_000,
+            max_payload_bytes: 1_000_000,
+            ..NativeProcessingLimits::default()
+        };
+        let processing = NativeOperationBudget::new(allowance);
+        let mut findings = ProcessingReport::new(processing.clone(), Phase::Generation);
+        preserve_unknown_field_findings(document, &tree, &patterns(), false, &processing, &mut findings)?;
+        assert_eq!(findings.len(), 32);
+        let setup = NativeOperationBudget::new(NativeProcessingLimits::default());
+        for (index, warning) in findings.iter().enumerate() {
+            let path = vendor_path(&format!("p{index:02}"))?;
+            let original = observation_node(&document.original, &path, &setup)?.ok_or("missing vendor")?;
+            assert_eq!(warning.path.as_ref(), Some(&path));
+            assert_eq!(warning.source, original.start);
+            assert!(warning.source.is_some());
+            assert_eq!(warning.code, FindingCode::UnadmittedField);
+            assert_eq!(warning.resource, Some(document.id));
+            assert_eq!(warning.severity, Severity::Warning);
+        }
+        assert!(!processing.exhausted());
+
+        // Independent control: proving the ancestor anew for each warning cannot fit.
+        let repeated = NativeOperationBudget::new(allowance);
+        let mut refused = false;
+        for index in 0..32 {
+            let mut proofs = PreservationSourceProofs::new(document, &tree, &repeated);
+            if let Err(error) = preservation_source_position(&mut proofs, &vendor_path(&format!("p{index:02}"))?) {
+                assert_eq!(error.code, FindingCode::LimitExceeded);
+                assert!(error.path.is_none());
+                refused = true;
+                break;
+            }
+        }
+        assert!(refused);
+        assert!(repeated.exhausted());
+        Ok(())
+    }
+
+    #[test]
+    fn moved_changed_and_ambiguous_sequences_never_claim_original_positions() -> TestResult {
+        let mut value = crd(&serde_json::json!({"p": {"vendor": "first-private"}}));
+        let mut second = value["spec"]["versions"][0].clone();
+        second["schema"]["openAPIV3Schema"]["properties"]["p"]["vendor"] = "second-private".into();
+        value["spec"]["versions"].as_array_mut().ok_or("versions")?.push(second);
+        let resources = parse(&value, InputOrigin::CallerSupplied)?;
+        let document = resources.documents().first().ok_or("missing document")?;
+        let original_sequence = document
+            .original
+            .get("spec")
+            .and_then(|node| node.get("versions"))
+            .ok_or("versions")?;
+        let items = original_sequence.as_sequence().ok_or("versions sequence")?;
+        let mut changed_second = items[1].clone();
+        set_child(
+            &mut changed_second,
+            "new-ambiguous-field",
+            Some(TreeNode::string("changed")),
+        )?;
+        for replacement in [
+            vec![items[1].clone(), items[0].clone()],
+            vec![items[0].clone(), changed_second],
+            vec![items[0].clone(), items[0].clone()],
+            vec![items[0].clone(), items[1].clone(), items[1].clone()],
+        ] {
+            let mut tree = document.original.clone();
+            let mut spec = tree.get("spec").ok_or("spec")?.clone();
+            set_child(
+                &mut spec,
+                "versions",
+                Some(TreeNode::new(TreeValue::Sequence(replacement))),
+            )?;
+            set_child(&mut tree, "spec", Some(spec))?;
+            let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+            let mut proofs = PreservationSourceProofs::new(document, &tree, &processing);
+            for _ in 0..2 {
+                assert_eq!(preservation_source_position(&mut proofs, &vendor_path("p")?)?, None);
+                assert!(proofs.completed_sequences.is_empty());
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn proof_identity_and_scope_never_reuse_content_or_another_operation() -> TestResult {
+        let value = crd(&serde_json::json!({}));
+        let resources = parse(&value, InputOrigin::CallerSupplied)?;
+        let other_resources = parse(&value, InputOrigin::CallerSupplied)?;
+        let document = resources.documents().first().ok_or("missing document")?;
+        let other_document = other_resources.documents().first().ok_or("missing second document")?;
+        let sequence = |text| TreeNode::new(TreeValue::Sequence(vec![TreeNode::string(text)]));
+        let before = sequence("private");
+        let after = sequence("private");
+        let equal_content = sequence("private");
+        let changed = sequence("changed");
+        let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+        let mut proofs = PreservationSourceProofs::new(document, &document.original, &processing);
+        assert!(proofs.sequence_eq(&before, &after)?);
+        let retained = processing.charged_payload_bytes();
+        assert_eq!(retained, size_of::<(&TreeNode, &TreeNode)>());
+        assert!(proofs.sequence_eq(&before, &after)?);
+        assert_eq!(processing.charged_payload_bytes(), retained);
+        assert!(proofs.sequence_eq(&before, &equal_content)?);
+        assert_eq!(processing.charged_payload_bytes(), retained * 2);
+        assert_eq!(proofs.completed_sequences.len(), 2);
+        assert!(!proofs.sequence_eq(&before, &changed)?);
+        assert_eq!(proofs.completed_sequences.len(), 2);
+        for bound_document in [document, other_document] {
+            let lowered = NativeOperationBudget::new(NativeProcessingLimits {
+                max_processing_units: 0,
+                ..NativeProcessingLimits::default()
+            });
+            let mut next_pass = PreservationSourceProofs::new(bound_document, &bound_document.original, &lowered);
+            assert!(next_pass.completed_sequences.is_empty());
+            let error = next_pass
+                .sequence_eq(&before, &after)
+                .err()
+                .ok_or("proof escaped pass")?;
+            assert_eq!(error.code, FindingCode::LimitExceeded);
+            assert!(lowered.exhausted());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn proof_storage_partial_comparison_and_cache_hits_obey_sticky_limits() -> TestResult {
+        let resources = parse(&crd(&serde_json::json!({})), InputOrigin::CallerSupplied)?;
+        let document = resources.documents().first().ok_or("missing document")?;
+        let before = TreeNode::new(TreeValue::Sequence(vec![TreeNode::string("private")]));
+        let after = before.clone();
+        for limits in [
+            NativeProcessingLimits {
+                max_payload_bytes: size_of::<(&TreeNode, &TreeNode)>() - 1,
+                ..NativeProcessingLimits::default()
+            },
+            NativeProcessingLimits {
+                max_processing_units: 5,
+                ..NativeProcessingLimits::default()
+            },
+        ] {
+            let processing = NativeOperationBudget::new(limits);
+            let mut proofs = PreservationSourceProofs::new(document, &document.original, &processing);
+            let error = proofs
+                .sequence_eq(&before, &after)
+                .err()
+                .ok_or("incomplete proof retained")?;
+            assert_eq!(error.code, FindingCode::LimitExceeded);
+            assert!(error.path.is_none());
+            assert!(proofs.completed_sequences.is_empty());
+            assert!(proofs.sequence_eq(&before, &after).is_err());
+        }
+        for payload_failure in [false, true] {
+            let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+            let mut proofs = PreservationSourceProofs::new(document, &document.original, &processing);
+            assert!(proofs.sequence_eq(&before, &after)?);
+            let limits = processing.limits();
+            let failure = if payload_failure {
+                processing.payload(limits.max_payload_bytes, Phase::Generation)
+            } else {
+                processing.work(limits.max_processing_units, Phase::Generation)
+            };
+            assert!(failure.is_err());
+            let error = proofs
+                .sequence_eq(&before, &after)
+                .err()
+                .ok_or("cached proof bypassed exhaustion")?;
+            assert_eq!(error.code, FindingCode::LimitExceeded);
+            assert!(error.path.is_none());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn sequence_proofs_preserve_mapping_order_and_duplicate_key_semantics() -> TestResult {
+        let resources = parse(&crd(&serde_json::json!({})), InputOrigin::CallerSupplied)?;
+        let document = resources.documents().first().ok_or("missing document")?;
+        let before = TreeNode::new(TreeValue::Sequence(vec![TreeNode::mapping(vec![
+            ("a".into(), TreeNode::string("first")),
+            ("b".into(), TreeNode::string("second")),
+        ])]));
+        let after = TreeNode::new(TreeValue::Sequence(vec![TreeNode::mapping(vec![
+            ("b".into(), TreeNode::string("second")),
+            ("a".into(), TreeNode::string("first")),
+        ])]));
+        let ambiguous = TreeNode::new(TreeValue::Sequence(vec![TreeNode::mapping(vec![
+            ("duplicate".into(), TreeNode::string("first")),
+            ("duplicate".into(), TreeNode::string("second")),
+        ])]));
+        let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+        let mut proofs = PreservationSourceProofs::new(document, &document.original, &processing);
+        assert!(proofs.sequence_eq(&before, &after)?);
+        assert!(!proofs.sequence_eq(&ambiguous, &ambiguous)?);
+        assert!(!proofs.sequence_eq(&ambiguous, &ambiguous)?);
+        assert_eq!(proofs.completed_sequences.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn cached_ancestor_still_compares_each_final_leaf() -> TestResult {
+        let resources = parse(
+            &crd(&serde_json::json!({"p": {"vendor": "x".repeat(4096)}})),
+            InputOrigin::CallerSupplied,
+        )?;
+        let document = resources.documents().first().ok_or("missing document")?;
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_processing_units: 50_000,
+            ..NativeProcessingLimits::default()
+        });
+        let mut proofs = PreservationSourceProofs::new(document, &document.original, &processing);
+        let path = vendor_path("p")?;
+        assert!(preservation_source_position(&mut proofs, &path)?.is_some());
+        assert_eq!(proofs.completed_sequences.len(), 1);
+        let mut refused = false;
+        for _ in 0..8 {
+            if let Err(error) = preservation_source_position(&mut proofs, &path) {
+                assert_eq!(error.code, FindingCode::LimitExceeded);
+                assert!(error.path.is_none());
+                refused = true;
+                break;
+            }
+        }
+        assert!(
+            refused,
+            "leaf comparison must consume its payload visits after a cache hit"
+        );
+        assert!(processing.exhausted());
+        Ok(())
+    }
+
+    #[test]
+    fn declared_authored_input_remains_supplied_but_native_authoring_has_no_source_claim() -> TestResult {
+        let value = serde_json::json!({
+            "apiVersion": "v1", "kind": "Pod", "metadata": {"name": "sample"},
+            "spec": {"containers": [{"name": "main", "image": "image", "vendor": "private"}]}
+        });
+        let supplied = parse(&value, InputOrigin::Authored)?;
+        let document = supplied.documents().first().ok_or("missing document")?;
+        let path = FieldPath::parse("/spec/containers/0/vendor")?;
+        let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+        let mut proofs = PreservationSourceProofs::new(document, &document.original, &processing);
+        assert!(preservation_source_position(&mut proofs, &path)?.is_some());
+        let native = document
+            .resource::<crate::resources::workloads::Pod>()
+            .ok_or("missing Pod")?
+            .clone();
+        let target = TargetProfile::documented_defaults(crate::capability::KubernetesVersion::MAX);
+        let authored =
+            ResourceSet::from_authored(vec![native.into()], &target, &crate::source::AuthoringLimits::default())
+                .map_err(|_| "native authoring fixture")?;
+        let authored_document = authored.documents().first().ok_or("missing authored document")?;
+        assert_eq!(
+            authored_document.evidence.origin,
+            crate::source::EvidenceOrigin::NativeAuthored
+        );
+        let mut authored_proofs =
+            PreservationSourceProofs::new(authored_document, &authored_document.original, &processing);
+        assert_eq!(preservation_source_position(&mut authored_proofs, &path)?, None);
+        assert!(authored_proofs.completed_sequences.is_empty());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod admission_preparse_tests {
+    use super::*;
+
+    fn field(path: &'static str, merge: MergeStrategy, admission: FieldAdmission) -> FieldCapability {
+        FieldCapability {
+            path,
+            since: crate::capability::KubernetesVersion::MIN,
+            feature_gate: None,
+            removed: None,
+            deprecated: None,
+            admission,
+            merge,
+            semantic_note: None,
+        }
+    }
+
+    fn crd_schema_tree(schema: TreeNode) -> TreeNode {
+        TreeNode::mapping(vec![(
+            "spec".into(),
+            TreeNode::mapping(vec![(
+                "versions".into(),
+                TreeNode::new(TreeValue::Sequence(vec![TreeNode::mapping(vec![(
+                    "schema".into(),
+                    TreeNode::mapping(vec![("openAPIV3Schema".into(), schema)]),
+                )])])),
+            )]),
+        )])
+    }
+
+    fn crd_parent_patterns() -> Vec<GenerationPattern> {
+        [
+            ("", 0, MergeStrategy::Object),
+            ("/spec", 1, MergeStrategy::Object),
+            ("/spec/versions", 2, MergeStrategy::AtomicList),
+            ("/spec/versions/*/schema", 4, MergeStrategy::Object),
+        ]
+        .into_iter()
+        .map(|(pointer, depth, merge)| GenerationPattern { pointer, depth, merge })
+        .collect()
+    }
+
+    fn crd_gvk() -> crate::model::GroupVersionKind {
+        crate::model::GroupVersionKind {
+            group: Some("apiextensions.k8s.io".into()),
+            version: "v1".into(),
+            kind: "CustomResourceDefinition".into(),
+        }
+    }
+
+    #[test]
+    fn dynamically_admitted_schema_nodes_avoid_unneeded_static_scans() -> Result<(), Finding> {
+        let mut patterns = crd_parent_patterns();
+        patterns.extend((0..8192).map(|_| GenerationPattern {
+            pointer: "/absent",
+            depth: 1,
+            merge: MergeStrategy::Scalar,
+        }));
+        let limits = crate::source::ParseLimits::default();
+        let allowance = NativeProcessingLimits {
+            max_processing_units: 2048,
+            ..NativeProcessingLimits::default()
+        };
+        let tree = crd_schema_tree(TreeNode::mapping(vec![(
+            "properties".into(),
+            TreeNode::mapping(vec![(
+                "private~/雪".into(),
+                TreeNode::mapping(vec![("type".into(), TreeNode::string("string"))]),
+            )]),
+        )]));
+        let processing = NativeOperationBudget::new(allowance);
+        assert_eq!(
+            extension_generation_admission(&tree, &crd_gvk(), &patterns, &limits, &processing, false)?,
+            (false, false)
+        );
+        assert!(!processing.exhausted());
+        // The same finite allowance cannot scan the irrelevant static inventory
+        // for even one schema node. Its recursive schema admission is sufficient.
+        let static_control = NativeOperationBudget::new(allowance);
+        let path = FieldPath::parse("/spec/versions/0/schema/openAPIV3Schema")?;
+        let error = generation_static_admission(&patterns, &path, &static_control)
+            .err()
+            .ok_or_else(|| Finding::error(FindingCode::NativeFieldInvalid, Phase::Generation))?;
+        assert_eq!(error.code, FindingCode::LimitExceeded);
+        assert!(error.path.is_none());
+        assert!(static_control.exhausted());
+        assert!(
+            extension_generation_admission(&tree, &crd_gvk(), &patterns, &limits, &static_control.clone(), false,)
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn admitted_schema_parents_still_visit_unknown_and_protected_children() -> Result<(), Finding> {
+        let patterns = crd_parent_patterns();
+        let limits = crate::source::ParseLimits::default();
+        for (include, unknown, expected) in [
+            (true, false, (false, true)),
+            (false, false, (true, true)),
+            (true, true, (true, true)),
+        ] {
+            let mut fields = vec![(
+                "example".into(),
+                TreeNode::mapping(vec![("private~/雪".into(), TreeNode::string("protected-marker"))]),
+            )];
+            if unknown {
+                fields.push((
+                    "default".into(),
+                    TreeNode::mapping(vec![("private-unknown".into(), TreeNode::string("unknown-marker"))]),
+                ));
+            }
+            let tree = crd_schema_tree(TreeNode::mapping(vec![(
+                "properties".into(),
+                TreeNode::mapping(vec![("nested".into(), TreeNode::mapping(fields))]),
+            )]));
+            let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+            assert_eq!(
+                extension_generation_admission(&tree, &crd_gvk(), &patterns, &limits, &processing, include)?,
+                expected
+            );
+            assert!(!processing.exhausted());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn absent_patterns_borrow_exact_literals_and_charge_only_retained_metadata() -> Result<(), Finding> {
+        const POINTER: &str = "/absent/long~1escaped/雪~0name/another/unused/static/descendant";
+        let fields: Vec<_> = (0..1024)
+            .map(|_| field(POINTER, MergeStrategy::Scalar, FieldAdmission::Typed))
+            .collect();
+        let retained = fields.len() * size_of::<GenerationPattern>();
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_processing_units: 100_000,
+            max_payload_bytes: retained,
+            ..NativeProcessingLimits::default()
+        });
+        let patterns = generation_typed_paths(&fields, &processing)?;
+        assert_eq!(patterns.len(), fields.len());
+        assert!(
+            patterns
+                .iter()
+                .all(|pattern| { std::ptr::eq(pattern.pointer, POINTER) && pattern.depth == 7 })
+        );
+        assert_eq!(processing.charged_payload_bytes(), retained);
+        // Both consumers borrow this same retained cache; matching has no
+        // allocation even when every static descendant is absent.
+        let path = FieldPath(vec!["different".into()]);
+        assert!(!generation_static_admission(&patterns, &path, &processing)?);
+        assert!(!generation_pattern_prefix(&patterns[0], &path, 1, &processing)?);
+        assert_eq!(processing.charged_payload_bytes(), retained);
+        assert!(!processing.exhausted());
+        Ok(())
+    }
+
+    #[test]
+    fn borrowed_pointer_tokens_keep_empty_unicode_and_escape_equivalence() -> Result<(), Finding> {
+        for (pointer, segments) in [
+            ("", vec![]),
+            ("/", vec![""]),
+            ("//", vec!["", ""]),
+            ("/a~01", vec!["a~1"]),
+            ("/雪~1λ/~0~1", vec!["雪/λ", "~/"]),
+            ("/a~0~0/~1~01", vec!["a~~", "/~1"]),
+            ("/*suffix/~0*", vec!["*suffix", "~*"]),
+        ] {
+            let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+            let patterns = generation_typed_paths(
+                &[field(pointer, MergeStrategy::Scalar, FieldAdmission::Typed)],
+                &processing,
+            )?;
+            let path = FieldPath(segments.into_iter().map(str::to_owned).collect());
+            assert!(generation_static_admission(&patterns, &path, &processing)?);
+            assert!(!generation_static_admission(
+                &patterns,
+                &path.child("extra"),
+                &processing
+            )?);
+            if let Some(first) = path.0.first() {
+                let mut different = path.clone();
+                different.0[0] = format!("{first}different");
+                assert!(!generation_static_admission(&patterns, &different, &processing)?);
+            }
+        }
+        for pointer in ["non-pointer", "/~", "/~2", "/valid/~9", "/valid/~雪"] {
+            let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+            let patterns = generation_typed_paths(
+                &[field(pointer, MergeStrategy::Scalar, FieldAdmission::Typed)],
+                &processing,
+            )?;
+            assert!(patterns.is_empty());
+            assert!(!generation_static_admission(
+                &patterns,
+                &FieldPath::default(),
+                &processing
+            )?);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn unused_long_static_suffix_is_not_scanned_after_a_mismatch_or_prefix_boundary() -> Result<(), Finding> {
+        const POINTER: &str =
+            "/unmatched/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        let setup = NativeOperationBudget::new(NativeProcessingLimits::default());
+        let patterns = generation_typed_paths(&[field(POINTER, MergeStrategy::Scalar, FieldAdmission::Typed)], &setup)?;
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_processing_units: 4,
+            max_payload_bytes: 0,
+            ..NativeProcessingLimits::default()
+        });
+        let mismatch = FieldPath(vec!["different".into(), "f".repeat(80)]);
+        assert!(!generation_static_admission(&patterns, &mismatch, &processing)?);
+        assert!(!processing.exhausted());
+        assert_eq!(processing.charged_payload_bytes(), 0);
+
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_processing_units: 21,
+            max_payload_bytes: 0,
+            ..NativeProcessingLimits::default()
+        });
+        assert!(generation_pattern_prefix(
+            &patterns[0],
+            &FieldPath(vec!["unmatched".into()]),
+            1,
+            &processing,
+        )?);
+        assert!(!processing.exhausted());
+        assert_eq!(processing.charged_payload_bytes(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn visited_static_bytes_precharge_zero_and_lower_allowances_and_stay_terminal() -> Result<(), String> {
+        const POINTER: &str = "/spec/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        let setup = NativeOperationBudget::new(NativeProcessingLimits::default());
+        let patterns = generation_typed_paths(&[field(POINTER, MergeStrategy::Scalar, FieldAdmission::Typed)], &setup)
+            .map_err(|_| "pattern preparation failed")?;
+        let path = FieldPath(vec!["spec".into(), "f".repeat(80)]);
+        for units in [0, 32] {
+            let processing = NativeOperationBudget::new(NativeProcessingLimits {
+                max_processing_units: units,
+                max_payload_bytes: 0,
+                ..NativeProcessingLimits::default()
+            });
+            let error = generation_static_admission(&patterns, &path, &processing)
+                .err()
+                .ok_or("visited bytes exceeded the work allowance")?;
+            assert_eq!(error.code, FindingCode::LimitExceeded);
+            assert_eq!(error.phase, Phase::Generation);
+            assert!(error.path.is_none());
+            assert!(processing.exhausted());
+            assert!(generation_static_admission(&patterns, &path, &processing.clone()).is_err());
+            // Even a subsequent empty prefix cannot bypass shared exhaustion.
+            assert!(generation_pattern_prefix(&patterns[0], &FieldPath::default(), 0, &processing.clone()).is_err());
+            assert_eq!(processing.charged_payload_bytes(), 0);
+        }
+        assert!(!setup.exhausted());
+        Ok(())
+    }
+
+    #[test]
+    fn mismatched_private_suffix_stops_at_the_first_visited_byte_without_allocating() -> Result<(), Finding> {
+        let setup = NativeOperationBudget::new(NativeProcessingLimits::default());
+        let patterns = generation_typed_paths(
+            &[field("/spec/fixed", MergeStrategy::Scalar, FieldAdmission::Typed)],
+            &setup,
+        )?;
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_processing_units: 32,
+            max_payload_bytes: 0,
+            ..NativeProcessingLimits::default()
+        });
+        let path = FieldPath(vec!["spec".into(), "unvisited-private-suffix".repeat(2048)]);
+        assert!(!generation_static_admission(&patterns, &path, &processing)?);
+        assert_eq!(processing.charged_payload_bytes(), 0);
+        assert!(!processing.exhausted());
+        Ok(())
+    }
+
+    #[test]
+    fn retained_patterns_preserve_exact_wildcard_atomic_and_nonadmitting_cases() -> Result<(), Finding> {
+        let fields = [
+            field("", MergeStrategy::Object, FieldAdmission::Typed),
+            field("/metadata/labels/*", MergeStrategy::Scalar, FieldAdmission::Typed),
+            field("/spec/items", MergeStrategy::AtomicList, FieldAdmission::Typed),
+            field("/spec/map", MergeStrategy::Map, FieldAdmission::Typed),
+            field("/a~1b/~0name", MergeStrategy::Scalar, FieldAdmission::Typed),
+            field("/unsupported", MergeStrategy::Scalar, FieldAdmission::PreserveOnly),
+            field("/broken~2", MergeStrategy::Scalar, FieldAdmission::Typed),
+            field("non-pointer", MergeStrategy::Scalar, FieldAdmission::Typed),
+        ];
+        let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+        let patterns = generation_typed_paths(&fields, &processing)?;
+        assert_eq!(patterns.len(), 5);
+        let retained = processing.charged_payload_bytes();
+        for (pointer, expected) in [
+            ("", true),
+            ("/metadata", false),
+            ("/metadata/labels/name", true),
+            ("/metadata/labels/", true),
+            ("/metadata/labels/name/nested", false),
+            ("/spec/items", true),
+            ("/spec/items/0", true),
+            ("/spec/items/00", true),
+            ("/spec/items/184467440737095516160", true),
+            ("/spec/items/-1", false),
+            ("/spec/items/", false),
+            ("/spec/items/0/nested", false),
+            ("/spec/map/0", false),
+            ("/a~1b/~0name", true),
+            ("/a/b/~0name", false),
+            ("/unsupported", false),
+        ] {
+            let path = FieldPath::parse(pointer)?;
+            assert_eq!(generation_static_admission(&patterns, &path, &processing)?, expected);
+        }
+        assert_eq!(processing.charged_payload_bytes(), retained);
+        Ok(())
+    }
+
+    #[test]
+    fn wildcard_matching_charges_visited_bytes_without_allocating_or_reading_private_keys() -> Result<(), Finding> {
+        let setup = NativeOperationBudget::new(NativeProcessingLimits::default());
+        let patterns = generation_typed_paths(&[field("/s/*", MergeStrategy::Scalar, FieldAdmission::Typed)], &setup)?;
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_processing_units: 16,
+            max_payload_bytes: 0,
+            ..NativeProcessingLimits::default()
+        });
+        let path = FieldPath(vec!["s".into(), "unvisited-private-key".repeat(2048)]);
+        assert!(generation_static_admission(&patterns, &path, &processing)?);
+        assert!(!processing.exhausted());
+        assert_eq!(processing.charged_payload_bytes(), 0);
+        let error = generation_static_admission(&patterns, &path, &processing)
+            .err()
+            .ok_or_else(|| Finding::error(FindingCode::NativeFieldInvalid, Phase::Generation))?;
+        assert_eq!(error.code, FindingCode::LimitExceeded);
+        assert_eq!(error.phase, Phase::Generation);
+        assert!(error.path.is_none());
+        assert!(processing.exhausted());
+        assert!(!setup.exhausted());
+        Ok(())
+    }
+
+    #[test]
+    fn pattern_preparse_and_actual_long_comparisons_cannot_reset_the_terminal_budget() -> Result<(), String> {
+        let fields = [field("/spec/fixed", MergeStrategy::Scalar, FieldAdmission::Typed)];
+        for payload_limited in [false, true] {
+            let processing = NativeOperationBudget::new(NativeProcessingLimits {
+                max_payload_bytes: if payload_limited { 0 } else { 64 * 1024 * 1024 },
+                max_processing_units: if payload_limited { 64 * 1024 * 1024 } else { 0 },
+                ..NativeProcessingLimits::default()
+            });
+            let error = generation_typed_paths(&fields, &processing)
+                .err()
+                .ok_or("uncharged pattern preparation accepted")?;
+            assert_eq!(error.code, FindingCode::LimitExceeded);
+            assert!(error.path.is_none());
+            assert!(processing.exhausted());
+            assert!(generation_typed_paths(&fields, &processing.clone()).is_err());
+        }
+        let setup = NativeOperationBudget::new(NativeProcessingLimits::default());
+        let long_fields = [field(
+            "/spec/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            MergeStrategy::Scalar,
+            FieldAdmission::Typed,
+        )];
+        let patterns = generation_typed_paths(&long_fields, &setup).map_err(|_| "pattern preparation failed")?;
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_processing_units: 64,
+            ..NativeProcessingLimits::default()
+        });
+        let path = FieldPath(vec!["spec".into(), "f".repeat(80)]);
+        let error = generation_static_admission(&patterns, &path, &processing)
+            .err()
+            .ok_or("uncharged long key comparison accepted")?;
+        assert_eq!(error.code, FindingCode::LimitExceeded);
+        assert_eq!(error.phase, Phase::Generation);
+        assert!(error.path.is_none());
+        assert!(processing.exhausted());
+        assert!(generation_static_admission(&patterns, &path, &processing.clone()).is_err());
+        assert!(!setup.exhausted());
+        Ok(())
+    }
+}
+
+fn extension_generation_admission(
+    tree: &TreeNode,
+    gvk: &crate::model::GroupVersionKind,
+    typed_paths: &[GenerationPattern],
+    limits: &crate::source::ParseLimits,
+    processing: &NativeOperationBudget,
+    include_protected_schema_payload: bool,
+) -> Result<(bool, bool), Finding> {
+    let phase = Phase::Generation;
+    processing.payload_array::<(&TreeNode, FieldPath)>(1, phase)?;
+    let mut pending = Vec::new();
+    pending.try_reserve(1).map_err(|_| processing.fail(phase))?;
+    pending.push((tree, FieldPath::default()));
+    let mut has_unadmitted = false;
+    let mut has_protected_schema_payload = false;
+    while let Some((node, path)) = pending.pop() {
+        processing.work(1, phase)?;
+        if path.depth() > limits.max_depth {
+            return Err(processing.fail(phase));
+        }
+        if path.0.len() == 1 && matches!(path.0[0].as_str(), "apiVersion" | "kind") {
+            continue;
+        }
+        let schema_class = crate::resources::extensions::capabilities::schema_path_class(gvk, &path);
+        if schema_class == Some(crate::resources::extensions::capabilities::SchemaPathClass::ProtectedPayload) {
+            has_protected_schema_payload = true;
+        }
+        let dynamically_admitted = match schema_class {
+            Some(crate::resources::extensions::capabilities::SchemaPathClass::Typed) => true,
+            Some(crate::resources::extensions::capabilities::SchemaPathClass::ProtectedPayload) => {
+                include_protected_schema_payload
+            }
+            None => false,
+        };
+        // Dynamic admission proves only this node. Every child still passes its
+        // own protected/unknown checks; no static proof is needed for this node.
+        let admitted = dynamically_admitted || generation_static_admission(typed_paths, &path, processing)?;
+        match &node.value {
+            TreeValue::Mapping(entries) => {
+                if entries.is_empty() && !path.0.is_empty() && !admitted {
+                    has_unadmitted = true;
+                }
+                for (key, child) in entries {
+                    processing.work(1, phase)?;
+                    extension_admission_push_child(&mut pending, child, key, &path, limits, processing, phase)?;
+                }
+            }
+            TreeValue::Sequence(items) => {
+                if items.is_empty() && !admitted {
+                    has_unadmitted = true;
+                }
+                for (index, child) in items.iter().enumerate() {
+                    processing.work(1, phase)?;
+                    let key = index.to_string();
+                    processing.payload(key.len(), phase)?;
+                    extension_admission_push_child(&mut pending, child, &key, &path, limits, processing, phase)?;
+                }
+            }
+            _ if !admitted => has_unadmitted = true,
+            _ => {}
+        }
+    }
+    Ok((has_unadmitted, has_protected_schema_payload))
+}
+fn extension_admission_push_child<'a>(
+    pending: &mut Vec<(&'a TreeNode, FieldPath)>,
+    child: &'a TreeNode,
+    key: &str,
+    path: &FieldPath,
+    limits: &crate::source::ParseLimits,
+    processing: &NativeOperationBudget,
+    phase: Phase,
+) -> Result<(), Finding> {
+    let depth = path.0.len().checked_add(1).ok_or_else(|| processing.fail(phase))?;
+    if depth > limits.max_depth {
+        return Err(processing.fail(phase));
+    }
+    let path_bytes = path
+        .0
+        .iter()
+        .try_fold(key.len(), |total, segment| total.checked_add(segment.len()))
+        .ok_or_else(|| processing.fail(phase))?;
+    processing.work(depth.saturating_add(1), phase)?;
+    processing.work(path_bytes, phase)?;
+    processing.payload_array::<String>(depth, phase)?;
+    processing.payload(path_bytes, phase)?;
+    processing.payload_array::<(&TreeNode, FieldPath)>(1, phase)?;
+    if pending.len() == pending.capacity() {
+        // A growing Vec can relocate its existing frame metadata. Private path
+        // strings move by ownership; their bytes are not copied by Vec growth.
+        processing.work(
+            pending
+                .len()
+                .checked_mul(size_of::<(&TreeNode, FieldPath)>())
+                .ok_or_else(|| processing.fail(phase))?,
+            phase,
+        )?;
+    }
+    pending.try_reserve(1).map_err(|_| processing.fail(phase))?;
+    pending.push((child, path.child(key)));
+    Ok(())
+}
+
+#[cfg(test)]
+mod pending_frame_budget_tests {
+    use super::*;
+
+    #[test]
+    fn wide_pending_frames_fit_a_lowered_budget_and_keep_every_exact_path_and_node() -> Result<(), Finding> {
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_payload_bytes: 1024 * 1024,
+            max_processing_units: 1024 * 1024,
+            ..NativeProcessingLimits::default()
+        });
+        let parent = FieldPath::parse("/properties/~0private~1λ")?;
+        let child = TreeNode::new(TreeValue::Null);
+        let limits = crate::source::ParseLimits::default();
+        let mut pending = Vec::new();
+        for number in 0..4096 {
+            extension_admission_push_child(
+                &mut pending,
+                &child,
+                &format!("field_{number:04}"),
+                &parent,
+                &limits,
+                &processing,
+                Phase::Generation,
+            )?;
+        }
+        assert!(!processing.exhausted());
+        assert_eq!(pending.len(), 4096);
+        for (number, (saved, path)) in pending.iter().enumerate() {
+            assert!(std::ptr::eq(*saved, &raw const child));
+            assert_eq!(path.0[..parent.depth()], parent.0);
+            assert_eq!(path.0.last(), Some(&format!("field_{number:04}")));
+        }
+        assert_eq!(parent.depth(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn new_frame_and_capacity_growth_fail_atomically_with_a_shared_terminal_budget() -> Result<(), String> {
+        let child = TreeNode::new(TreeValue::Null);
+        let parent = FieldPath::default();
+        let limits = crate::source::ParseLimits::default();
+        for payload_limited in [false, true] {
+            let processing = NativeOperationBudget::new(NativeProcessingLimits {
+                max_payload_bytes: if payload_limited { 0 } else { 64 * 1024 * 1024 },
+                max_processing_units: if payload_limited { 64 * 1024 * 1024 } else { 0 },
+                ..NativeProcessingLimits::default()
+            });
+            let mut pending = Vec::new();
+            let error = extension_admission_push_child(
+                &mut pending,
+                &child,
+                "private",
+                &parent,
+                &limits,
+                &processing,
+                Phase::Generation,
+            )
+            .err()
+            .ok_or("uncharged frame accepted")?;
+            assert_eq!(error.code, FindingCode::LimitExceeded);
+            assert!(error.path.is_none());
+            assert!(pending.is_empty());
+            assert!(processing.exhausted());
+            assert!(
+                extension_admission_push_child(
+                    &mut pending,
+                    &child,
+                    "private",
+                    &parent,
+                    &limits,
+                    &processing.clone(),
+                    Phase::Generation,
+                )
+                .is_err()
+            );
+        }
+        let mut pending = Vec::with_capacity(4);
+        while pending.len() < pending.capacity() {
+            pending.push((&child, FieldPath::default()));
+        }
+        let retained = pending.len();
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            // The ordinary one-character path work fits; moving the actually
+            // retained frame metadata at capacity exhaustion does not.
+            max_processing_units: 8,
+            ..NativeProcessingLimits::default()
+        });
+        let error = extension_admission_push_child(
+            &mut pending,
+            &child,
+            "x",
+            &parent,
+            &limits,
+            &processing,
+            Phase::Generation,
+        )
+        .err()
+        .ok_or("uncharged capacity growth accepted")?;
+        assert_eq!(error.code, FindingCode::LimitExceeded);
+        assert!(error.path.is_none());
+        assert_eq!(pending.len(), retained);
+        assert!(
+            pending
+                .iter()
+                .all(|(node, path)| std::ptr::eq(*node, &raw const child) && path.0.is_empty())
+        );
+        assert!(processing.exhausted());
+        assert!(processing.clone().exhausted());
+        Ok(())
+    }
+}
+
 fn conflict() -> Finding {
     Finding::error(FindingCode::MergeConflict, Phase::Generation)
 }
@@ -1366,7 +3338,93 @@ fn unknown_descendants(raw: &TreeNode, known: &TreeNode, context: BudgetedMergeC
     }
     Ok(false)
 }
-/// Compare borrowed trees without constructing the uncharged mapping index used by `semantic_eq`.
+/// Sort borrowed mapping ordinals with fallible, actually visited comparisons.
+/// Equal keys retain source order so lookup still selects the last duplicate.
+fn semantic_mapping_index(
+    entries: &[(String, TreeNode)],
+    context: BudgetedMergeContext<'_>,
+) -> Result<Vec<usize>, Finding> {
+    let len = entries.len();
+    for _ in 0..2 {
+        context.processing.payload_array::<usize>(len, context.phase)?;
+        context.processing.work(len, context.phase)?;
+    }
+    let mut index = Vec::new();
+    index
+        .try_reserve_exact(len)
+        .map_err(|_| context.processing.fail(context.phase))?;
+    index.extend(0..len);
+    let mut scratch = Vec::new();
+    scratch
+        .try_reserve_exact(len)
+        .map_err(|_| context.processing.fail(context.phase))?;
+    scratch.resize(len, 0);
+    let mut width = 1_usize;
+    while width < len {
+        context.tick()?;
+        let mut start = 0;
+        while start < len {
+            context.tick()?;
+            let middle = start.saturating_add(width).min(len);
+            let end = middle.saturating_add(width).min(len);
+            let (mut left, mut right) = (start, middle);
+            for destination in &mut scratch[start..end] {
+                context.tick()?;
+                let take_left = if left == middle {
+                    false
+                } else if right == end {
+                    true
+                } else {
+                    let left_key = &entries[index[left]].0;
+                    let right_key = &entries[index[right]].0;
+                    context.processing.work(left_key.len(), context.phase)?;
+                    context.processing.work(right_key.len(), context.phase)?;
+                    left_key <= right_key
+                };
+                let source = if take_left { &mut left } else { &mut right };
+                *destination = index[*source];
+                *source += 1;
+            }
+            start = end;
+        }
+        std::mem::swap(&mut index, &mut scratch);
+        width = width
+            .checked_mul(2)
+            .ok_or_else(|| context.processing.fail(context.phase))?;
+    }
+    Ok(index)
+}
+
+fn semantic_mapping_lookup<'a>(
+    entries: &'a [(String, TreeNode)],
+    index: &[usize],
+    key: &str,
+    context: BudgetedMergeContext<'_>,
+) -> Result<Option<&'a TreeNode>, Finding> {
+    let (mut start, mut end) = (0, index.len());
+    while start < end {
+        context.tick()?;
+        let middle = start + (end - start) / 2;
+        let name = &entries[index[middle]].0;
+        context.processing.work(name.len(), context.phase)?;
+        context.processing.work(key.len(), context.phase)?;
+        if name.as_str() <= key {
+            start = middle + 1;
+        } else {
+            end = middle;
+        }
+    }
+    let Some(last) = start.checked_sub(1) else {
+        return Ok(None);
+    };
+    context.tick()?;
+    let (name, value) = &entries[index[last]];
+    context.processing.work(name.len(), context.phase)?;
+    context.processing.work(key.len(), context.phase)?;
+    Ok((name == key).then_some(value))
+}
+
+/// Compare borrowed trees using a charged mapping index, without cloning source values.
 pub(crate) fn merge_semantic_eq(
     left: &TreeNode,
     right: &TreeNode,
@@ -1378,20 +3436,9 @@ pub(crate) fn merge_semantic_eq(
             if left.len() != right.len() {
                 return Ok(false);
             }
+            let index = semantic_mapping_index(right, context)?;
             for (key, value) in left {
-                let mut found = None;
-                // semantic_eq's BTreeMap keeps the last duplicate mapping key.
-                for (name, other) in right.iter().rev() {
-                    context
-                        .processing
-                        .work(name.len().saturating_add(key.len()), context.phase)?;
-                    context.tick()?;
-                    if name == key {
-                        found = Some(other);
-                        break;
-                    }
-                }
-                let Some(other) = found else {
+                let Some(other) = semantic_mapping_lookup(right, &index, key, context)? else {
                     return Ok(false);
                 };
                 if !merge_semantic_eq(value, other, context)? {
@@ -1418,10 +3465,16 @@ pub(crate) fn merge_semantic_eq(
             Ok(left_tag == right_tag && merge_semantic_eq(left, right, context)?)
         }
         (TreeValue::String(left), TreeValue::String(right)) | (TreeValue::Number(left), TreeValue::Number(right)) => {
-            context
-                .processing
-                .work(left.len().saturating_add(right.len()), context.phase)?;
-            Ok(left == right)
+            if left.len() != right.len() {
+                return Ok(false);
+            }
+            for offset in 0..left.len() {
+                context.processing.work(2, context.phase)?;
+                if left.as_bytes()[offset] != right.as_bytes()[offset] {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
         }
         _ => Ok(left.value == right.value),
     }
@@ -2199,6 +4252,294 @@ fn same_observation_payload(
 #[cfg(test)]
 mod merge_processing_tests {
     use super::*;
+
+    fn equality_context(processing: &NativeOperationBudget, phase: Phase) -> BudgetedMergeContext<'_> {
+        BudgetedMergeContext {
+            native: MergeContext {
+                gvk: None,
+                target: None,
+            },
+            processing,
+            phase,
+        }
+    }
+
+    #[test]
+    fn scalar_equality_charges_only_visited_byte_pairs_and_preserves_exact_spelling() -> Result<(), Finding> {
+        let cases = [
+            (
+                TreeValue::String("a".into()),
+                TreeValue::String("private".repeat(4096)),
+                false,
+                1,
+            ),
+            (
+                TreeValue::String("abcd".into()),
+                TreeValue::String("zbcd".into()),
+                false,
+                3,
+            ),
+            (
+                TreeValue::String("abcd".into()),
+                TreeValue::String("abcz".into()),
+                false,
+                9,
+            ),
+            (
+                TreeValue::String("λ雪".into()),
+                TreeValue::String("λ雪".into()),
+                true,
+                11,
+            ),
+            (
+                TreeValue::String(String::new()),
+                TreeValue::String(String::new()),
+                true,
+                1,
+            ),
+            (TreeValue::Number("1".into()), TreeValue::Number("1.0".into()), false, 1),
+            (
+                TreeValue::Number("1234".into()),
+                TreeValue::Number("9234".into()),
+                false,
+                3,
+            ),
+            (
+                TreeValue::Number("1234".into()),
+                TreeValue::Number("1235".into()),
+                false,
+                9,
+            ),
+            (
+                TreeValue::Number("1.0".into()),
+                TreeValue::Number("1e0".into()),
+                false,
+                5,
+            ),
+            (
+                TreeValue::Number("1234".into()),
+                TreeValue::Number("1234".into()),
+                true,
+                9,
+            ),
+            (TreeValue::String("1".into()), TreeValue::Number("1".into()), false, 1),
+        ];
+        for (left, right, expected, units) in cases {
+            let left = TreeNode::new(left);
+            let right = TreeNode::new(right);
+            assert_eq!(left.semantic_eq(&right), expected);
+            let processing = NativeOperationBudget::new(NativeProcessingLimits {
+                max_processing_units: units,
+                max_payload_bytes: 0,
+                ..NativeProcessingLimits::default()
+            });
+            assert_eq!(
+                merge_semantic_eq(&left, &right, equality_context(&processing, Phase::Validation))?,
+                expected
+            );
+            assert!(!processing.exhausted());
+            assert_eq!(processing.charged_payload_bytes(), 0);
+            // Exactly the independent expected byte charge was consumed.
+            assert!(processing.work(1, Phase::Validation).is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn scalar_byte_visits_refuse_insufficient_and_already_exhausted_shared_budgets() -> Result<(), String> {
+        for (left, right, units) in [("private", "xrivate", 2), ("abcd", "abcz", 8), ("abcd", "abcd", 8)] {
+            let processing = NativeOperationBudget::new(NativeProcessingLimits {
+                max_processing_units: units,
+                max_payload_bytes: 0,
+                ..NativeProcessingLimits::default()
+            });
+            let shared = processing.clone();
+            let error = merge_semantic_eq(
+                &TreeNode::string(left),
+                &TreeNode::string(right),
+                equality_context(&processing, Phase::Validation),
+            )
+            .err()
+            .ok_or("uncharged scalar comparison accepted")?;
+            assert_eq!(error.code, FindingCode::LimitExceeded);
+            assert_eq!(error.phase, Phase::Validation);
+            assert!(error.path.is_none());
+            assert!(processing.exhausted());
+            assert!(shared.exhausted());
+            for right in ["", "longer"] {
+                let repeated = merge_semantic_eq(
+                    &TreeNode::string(""),
+                    &TreeNode::string(right),
+                    equality_context(&shared, Phase::Generation),
+                )
+                .err()
+                .ok_or("exhausted scalar shortcut accepted")?;
+                assert_eq!(repeated.code, FindingCode::LimitExceeded);
+                assert_eq!(repeated.phase, Phase::Generation);
+                assert!(repeated.path.is_none());
+            }
+            assert!(!format!("{error:?}").contains("private"));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn tagged_equality_keeps_tag_identity_and_child_kind_semantics() -> Result<(), Finding> {
+        let tagged =
+            |tag: &str, value: TreeValue| TreeNode::new(TreeValue::Tagged(tag.into(), Box::new(TreeNode::new(value))));
+        for (left_tag, right_tag, left, right, expected, units) in [
+            (
+                "!a",
+                "!b",
+                TreeValue::String("private".repeat(4096)),
+                TreeValue::String("private".repeat(4096)),
+                false,
+                5,
+            ),
+            (
+                "!a",
+                "!a",
+                TreeValue::Number("1".into()),
+                TreeValue::Number("1.0".into()),
+                false,
+                6,
+            ),
+            (
+                "!a",
+                "!a",
+                TreeValue::String("1".into()),
+                TreeValue::Number("1".into()),
+                false,
+                6,
+            ),
+            (
+                "!a",
+                "!a",
+                TreeValue::String("x".into()),
+                TreeValue::String("x".into()),
+                true,
+                8,
+            ),
+        ] {
+            let left = tagged(left_tag, left);
+            let right = tagged(right_tag, right);
+            assert_eq!(left.semantic_eq(&right), expected);
+            let processing = NativeOperationBudget::new(NativeProcessingLimits {
+                max_processing_units: units,
+                max_payload_bytes: 0,
+                ..NativeProcessingLimits::default()
+            });
+            assert_eq!(
+                merge_semantic_eq(&left, &right, equality_context(&processing, Phase::Validation))?,
+                expected
+            );
+            assert!(!processing.exhausted());
+            assert!(processing.work(1, Phase::Validation).is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn budgeted_mapping_equality_matches_order_and_last_duplicate_oracle() -> Result<(), Finding> {
+        let keys = ["a", "b", "a/b", "private-λ"];
+        let trees = (0..64)
+            .map(|mut pattern| {
+                TreeNode::mapping(
+                    (0..3)
+                        .map(|position| {
+                            let key = keys[pattern % keys.len()].to_owned();
+                            pattern /= keys.len();
+                            (key, TreeNode::new(TreeValue::Bool(position % 2 == 0)))
+                        })
+                        .collect(),
+                )
+            })
+            .collect::<Vec<_>>();
+        for left in &trees {
+            for right in &trees {
+                // Independent BTreeMap-based semantic oracle, including asymmetric
+                // duplicate-key behavior; it does not use our sorted ordinal index.
+                let expected = left.semantic_eq(right);
+                let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+                assert_eq!(
+                    merge_semantic_eq(left, right, equality_context(&processing, Phase::Validation))?,
+                    expected
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn wide_mapping_equality_fits_a_lowered_budget_without_reordering_source() -> Result<(), Finding> {
+        let left = TreeNode::mapping(
+            (0..1200)
+                .map(|number| (format!("field_{number:04}"), TreeNode::new(TreeValue::Null)))
+                .collect(),
+        );
+        let right = TreeNode::mapping(
+            (0..1200)
+                .rev()
+                .map(|number| (format!("field_{number:04}"), TreeNode::new(TreeValue::Null)))
+                .collect(),
+        );
+        let processing = NativeOperationBudget::new(NativeProcessingLimits {
+            max_processing_units: 2 * 1024 * 1024,
+            ..NativeProcessingLimits::default()
+        });
+        assert!(merge_semantic_eq(
+            &left,
+            &right,
+            equality_context(&processing, Phase::Generation)
+        )?);
+        assert!(!processing.exhausted());
+        assert_eq!(
+            left.as_mapping()
+                .and_then(|entries| entries.first())
+                .map(|entry| entry.0.as_str()),
+            Some("field_0000")
+        );
+        assert_eq!(
+            right
+                .as_mapping()
+                .and_then(|entries| entries.first())
+                .map(|entry| entry.0.as_str()),
+            Some("field_1199")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn mapping_index_allocations_and_long_comparisons_use_the_inherited_terminal_budget() -> Result<(), String> {
+        let tree = TreeNode::mapping(vec![
+            ("private-key".repeat(2048), TreeNode::new(TreeValue::Null)),
+            ("private-key-b".repeat(2048), TreeNode::new(TreeValue::Null)),
+        ]);
+        for payload_limited in [false, true] {
+            let processing = NativeOperationBudget::new(NativeProcessingLimits {
+                max_payload_bytes: if payload_limited { 0 } else { 64 * 1024 * 1024 },
+                max_processing_units: if payload_limited { 64 * 1024 * 1024 } else { 64 },
+                ..NativeProcessingLimits::default()
+            });
+            let cloned = processing.clone();
+            let error = merge_semantic_eq(&tree, &tree, equality_context(&processing, Phase::Validation))
+                .err()
+                .ok_or("uncharged mapping comparison accepted")?;
+            assert_eq!(error.code, FindingCode::LimitExceeded);
+            assert_eq!(error.phase, Phase::Validation);
+            assert!(error.path.is_none());
+            assert!(processing.exhausted());
+            assert!(cloned.exhausted());
+            let repeated = merge_semantic_eq(&tree, &tree, equality_context(&cloned, Phase::Generation))
+                .err()
+                .ok_or("exhausted mapping comparison accepted")?;
+            assert_eq!(repeated.code, FindingCode::LimitExceeded);
+            assert_eq!(repeated.phase, Phase::Generation);
+            assert!(repeated.path.is_none());
+            assert!(!format!("{error:?}").contains("private-key"));
+        }
+        Ok(())
+    }
 
     #[test]
     fn newly_inserted_mapping_keys_preflight_payload_before_copy() -> Result<(), String> {

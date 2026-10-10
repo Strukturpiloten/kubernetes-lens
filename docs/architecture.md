@@ -30,8 +30,9 @@ for validation, facts, observations and generation. Networking adds exact Servic
 subjects, named target-port supplier evidence, versionless GroupKind references and same-entry
 NetworkPolicy selector conjunctions. These are supplied-only relationships, with no controller,
 routing or policy-enforcement assertion. Five configuration/storage roots add protected configuration values, selected static Create checks
-and supplied-only storage/key relationships. Extension definitions and custom documents remain
-preservation-only with structured findings. The frozen compatibility ledger and all
+and supplied-only storage/key relationships. Extension definitions use six typed stable/historical API roots. Custom documents use source-bound
+caller-supplied CRD descriptors and bounded supported-subset offline checks, with explicit unsupported
+findings; this does not establish server admission or controller behavior. The frozen compatibility ledger and all
 named native conformance cells remain pending; focused code tests are separate evidence. See
 [ADR 0003](decisions/0003-offline-native-foundation.md) and the
 [foundation integration contract](foundation-api.md), supplemented by

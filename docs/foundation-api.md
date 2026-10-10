@@ -73,9 +73,8 @@ a typed List is not evidence of a delivered resource codec. `ResourceRegistratio
 provides exact delivered field pointers (use `*` for sequence/map items), gates, availability,
 admission and explicit merge keys. A parent field never prefix-admits arbitrary descendants.
 
-The fixed aggregator is `src/resources/mod.rs`. Its delivered slots are `workloads` and `networking`; planned slots are
-`configuration_storage`, `identity_access`, and `extensions`; their source modules/register calls
-are added only when actual cohort implementations exist. Each future file provides
+The fixed aggregator is `src/resources/mod.rs`. Its delivered slots are `workloads`, `networking`,
+`configuration_storage`, `access` and `extensions`, with actual native registrations. Each future file provides
 `pub(crate) fn register(&mut RegistryBuilder) -> Result<(), Finding>` and owns only its assigned
 native structs/fixtures/tests. No placeholder resource modules or dummy codecs are delivered.
 
@@ -319,3 +318,11 @@ Default Debug and output retain the protected boundary for text, binary and Secr
 ConfigMap key facts expose text-only and text/binary domains without revealing payloads.
 Supplied references never assert provisioned storage, an installed driver or a live binding.
 See [storage limits](storage.md) and [ADR 0010](decisions/0010-native-configuration-storage.md).
+
+## Extension definitions and custom documents
+
+The extension cohort supplies six stable/historical roots for three built-in kinds and an explicit
+source-bound custom-document contract. [ADR 0011](decisions/0011-source-bound-custom-resource-descriptors.md)
+and [extension support](extensions.md) define the exact offline schema subset, target requirements,
+private keyword provenance, cumulative budgets and stale-descriptor rejection. External operator
+prerequisites remain unverified. No callback, cluster discovery or controller execution occurs.
