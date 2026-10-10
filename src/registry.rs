@@ -3,7 +3,7 @@ use crate::{
     capability::{KindCapability, TargetProfile},
     diagnostic::{Finding, FindingCode, Phase},
     graph::ReferenceSink,
-    model::{GroupVersionKind, ResourceScope},
+    model::{GroupVersionKind, ResourceScope, SourceRef},
     source::{AuthoringLimits, ParseLimits, SourceEvidence},
     syntax::{EncodingBudget, SyntaxBuilder, TreeNode, TreeValue},
 };
@@ -51,6 +51,9 @@ pub(crate) struct FieldDecodeContext {
     pub(crate) limits: ParseLimits,
     pub(crate) processing: crate::processing::NativeOperationBudget,
     pub(crate) phase: Phase,
+    evidence: Option<SourceEvidence>,
+    source: Option<SourceRef>,
+    source_pointer: crate::FieldPath,
 }
 impl FieldDecodeContext {
     pub(crate) fn new(limits: ParseLimits, processing: crate::processing::NativeOperationBudget, phase: Phase) -> Self {
@@ -58,7 +61,33 @@ impl FieldDecodeContext {
             limits,
             processing,
             phase,
+            evidence: None,
+            source: None,
+            source_pointer: crate::FieldPath::default(),
         }
+    }
+    /// Attach only actual evidence at the sealed native decode boundary.
+    pub(crate) fn with_evidence(mut self, evidence: &SourceEvidence) -> Self {
+        self.evidence = Some(evidence.clone());
+        self
+    }
+    /// Attach source coordinates and a precharged pointer at the native decode boundary.
+    pub(crate) fn with_source_location(mut self, source: SourceRef, pointer: crate::FieldPath) -> Self {
+        self.source = Some(source);
+        self.source_pointer = pointer;
+        self
+    }
+    /// Encoding-only contexts cannot mint source bindings.
+    pub(crate) fn source_evidence(&self) -> Option<&SourceEvidence> {
+        self.evidence.as_ref()
+    }
+    /// Original source document coordinates, when decoding supplied input.
+    pub(crate) fn source_ref(&self) -> Option<SourceRef> {
+        self.source
+    }
+    /// Pointer to the resource root within its source document/List wrappers.
+    pub(crate) fn source_pointer(&self) -> &crate::FieldPath {
+        &self.source_pointer
     }
     #[cfg(test)]
     pub(crate) fn standalone() -> Self {
@@ -123,13 +152,17 @@ impl<'a> EncodeContext<'a> {
             authoring_snapshot: self.authoring_snapshot,
             budget: self.budget.clone(),
             limits: self.limits,
-            occurrences: Some(std::rc::Rc::new(std::cell::RefCell::new(BTreeMap::new()))),
+            occurrences: Some(std::rc::Rc::new(std::cell::RefCell::new(
+                crate::syntax::NativeOccurrences::new(),
+            ))),
         })
     }
     pub(crate) fn take_occurrences(&self) -> crate::syntax::NativeOccurrences {
         self.occurrences
             .as_ref()
-            .map_or_else(BTreeMap::new, |observer| std::mem::take(&mut *observer.borrow_mut()))
+            .map_or_else(crate::syntax::NativeOccurrences::new, |observer| {
+                std::mem::take(&mut *observer.borrow_mut())
+            })
     }
     pub(crate) fn observe(
         &self,
@@ -139,30 +172,11 @@ impl<'a> EncodeContext<'a> {
         let (Some(observer), Some(occurrence)) = (&self.occurrences, occurrence) else {
             return Ok(());
         };
-        let processing = self.budget.processing();
-        let phase = self.budget.phase();
-        processing.work(1, phase)?;
-        let mut table = observer.borrow_mut();
-        // Precharge a conservative bound for every retained key comparison before
-        // the BTreeMap lookup; path components are retained privately, never source IDs.
-        for key in table.keys() {
-            processing.work(1, phase)?;
-            for segment in key.0.iter().chain(&path.0) {
-                processing.work(segment.len().saturating_add(1), phase)?;
-            }
-        }
-        if table.contains_key(path) {
-            return Err(Finding::error(FindingCode::MergeConflict, phase).at_path(path.clone()));
-        }
-        processing.payload_array::<(crate::FieldPath, crate::syntax::NativeOccurrence)>(1, phase)?;
-        processing.payload_array::<String>(path.0.len(), phase)?;
-        for segment in &path.0 {
-            processing.payload(segment.len(), phase)?;
-            processing.work(segment.len(), phase)?;
-        }
-        table.insert(path.clone(), occurrence.clone());
-        Ok(())
+        observer
+            .borrow_mut()
+            .insert_in(path, occurrence, self.budget.processing(), self.budget.phase())
     }
+
     pub(crate) fn fields(&self, phase: Phase) -> FieldDecodeContext {
         FieldDecodeContext::new(self.limits, self.budget.processing().clone(), phase)
     }
@@ -955,5 +969,186 @@ mod scoped_occurrence_tests {
         let ctx = EncodeContext::in_operation(None, ParseLimits::default(), processing.clone());
         assert!(ctx.observed().is_err());
         assert!(processing.exhausted());
+    }
+    #[test]
+    fn occurrence_paths_are_exact_duplicate_conflicts_do_not_replace_source_tokens() -> Result<(), Finding> {
+        let base = EncodeContext::new(None);
+        let observed = base.observed()?;
+        let token = NativeOccurrence::new_in(base.budget.processing(), Phase::Generation)?;
+        let different = NativeOccurrence::new_in(base.budget.processing(), Phase::Generation)?;
+        let paths = [
+            crate::FieldPath::parse("/spec/a~1b")?,
+            crate::FieldPath::parse("/spec/a/b")?,
+            crate::FieldPath::parse("/spec/~0private-λ")?,
+            crate::FieldPath::parse("/spec/~0private-λ/")?,
+        ];
+        for path in &paths {
+            observed.observe(path, Some(&token))?;
+        }
+        let error = observed
+            .observe(&paths[0], Some(&different))
+            .err()
+            .ok_or_else(|| Finding::error(FindingCode::NativeFieldInvalid, Phase::Generation))?;
+        assert_eq!(error.code, FindingCode::MergeConflict);
+        assert_eq!(error.path.as_ref(), Some(&paths[0]));
+        let table = observed.take_occurrences();
+        assert_eq!(table.len(), paths.len());
+        for path in &paths {
+            assert!(
+                table
+                    .get(path)
+                    .is_some_and(|saved| saved.same(&token) && !saved.same(&different))
+            );
+        }
+        assert!(!format!("{error:?}").contains("private-λ"));
+        Ok(())
+    }
+
+    #[test]
+    fn insertion_copy_failure_is_terminal_shared_and_never_retains_an_uncharged_path() -> Result<(), Finding> {
+        for payload_limited in [false, true] {
+            let processing = NativeOperationBudget::new(NativeProcessingLimits {
+                max_processing_units: if payload_limited { 64 * 1024 * 1024 } else { 16 },
+                max_payload_bytes: if payload_limited { 128 } else { 64 * 1024 * 1024 },
+                ..NativeProcessingLimits::default()
+            });
+            let base = EncodeContext::in_operation(None, ParseLimits::default(), processing.clone());
+            let token = NativeOccurrence::new_in(&processing, Phase::Generation)?;
+            let observed = base.observed()?;
+            let path = crate::FieldPath(vec!["private-path".repeat(1024)]);
+            let error = observed
+                .observe(&path, Some(&token))
+                .err()
+                .ok_or_else(|| Finding::error(FindingCode::NativeFieldInvalid, Phase::Generation))?;
+            assert_eq!(error.code, FindingCode::LimitExceeded);
+            assert!(error.path.is_none());
+            assert!(processing.exhausted());
+            assert!(observed.take_occurrences().is_empty());
+            let cloned = observed.for_source(ParseLimits::default());
+            assert!(cloned.observe(&crate::FieldPath::default(), Some(&token)).is_err());
+            assert!(base.observed().is_err());
+            assert!(processing.exhausted());
+        }
+        Ok(())
+    }
+
+    fn wide_schema_crd() -> serde_json::Value {
+        let mut properties = serde_json::Map::new();
+        for number in 0..1200 {
+            properties.insert(format!("field_{number:04}"), serde_json::json!({"type":"string"}));
+        }
+        properties.insert(
+            "private".into(),
+            serde_json::json!({
+                "type":"string", "enum":["private-occurrence-marker"],
+                "x-private-extension":"private-occurrence-marker"
+            }),
+        );
+        let mut deep = serde_json::json!({"type":"string"});
+        for _ in 0..12 {
+            deep = serde_json::json!({"type":"object","properties":{"child":deep}});
+        }
+        properties.insert("deep".into(), deep);
+        serde_json::json!({
+            "apiVersion":"apiextensions.k8s.io/v1", "kind":"CustomResourceDefinition",
+            "metadata":{"name":"widgets.example.test"},
+            "spec":{"group":"example.test", "scope":"Namespaced",
+                "names":{"plural":"widgets","kind":"Widget"},
+                "versions":[{"name":"v1","served":true,"storage":true,
+                    "schema":{"openAPIV3Schema":{"type":"object","properties":properties}}}]}
+        })
+    }
+
+    #[test]
+    fn wide_deep_typed_schema_retains_every_original_occurrence_and_private_value() -> Result<(), String> {
+        use crate::{
+            capability::{KubernetesVersion, TargetProfile},
+            generation::{
+                ExplicitArtifactAccess, GenerationOptions, JsonShape, OpaqueFieldPolicy, OutputFormat, ProtectedOutput,
+            },
+            source::{DocumentFormat, InputOrigin, SourceId, SourceInput},
+        };
+        let original = wide_schema_crd();
+        let bytes = serde_json::to_vec(&original).map_err(|_| "synthetic schema JSON failed")?;
+        let set = crate::parse_source(
+            SourceInput {
+                id: SourceId(901),
+                format: DocumentFormat::Json,
+                origin: InputOrigin::CallerSupplied,
+                source_version: None,
+                bytes: &bytes,
+            },
+            &ParseLimits::default(),
+        )
+        .map_err(|_| "wide schema parse failed")?
+        .flatten_resources()
+        .map_err(|_| "wide typed schema decode failed")?;
+        let document = &set.documents()[0];
+        assert_eq!(document.source().source, SourceId(901));
+        assert!(
+            document
+                .resource::<crate::resources::extensions::CustomResourceDefinitionV1>()
+                .is_some()
+        );
+        let property_root = "/spec/versions/0/schema/openAPIV3Schema/properties";
+        for number in 0..1200 {
+            let path = crate::FieldPath::parse(&format!("{property_root}/field_{number:04}"))
+                .map_err(|_| "synthetic path failed")?;
+            assert!(document.original_occurrences.get(&path).is_some());
+        }
+        let context = EncodeContext::new(None).observed().map_err(|_| "observer failed")?;
+        let resource = document.resource.as_deref().ok_or("typed resource missing")?;
+        encode_in(resource, &context).map_err(|_| "wide known encoding failed")?;
+        let candidates = context.take_occurrences();
+        assert_eq!(candidates.len(), document.original_occurrences.len());
+        for path in document.original_occurrences.keys() {
+            let original_token = document
+                .original_occurrences
+                .get(path)
+                .ok_or("original token missing")?;
+            assert!(candidates.get(path).is_some_and(|token| token.same(original_token)));
+        }
+        assert!(!format!("{set:?}").contains("private-occurrence-marker"));
+        let target = TargetProfile::documented_defaults(KubernetesVersion::new(1, 37).map_err(|_| "target failed")?);
+        let denied_options = GenerationOptions {
+            json_shape: JsonShape::SingleResource,
+            opaque_fields: OpaqueFieldPolicy::PreserveWithFinding,
+            ..GenerationOptions::default()
+        };
+        let denied = crate::generate(&set, &target, OutputFormat::Json, &denied_options)
+            .err()
+            .ok_or("protected output unexpectedly accepted")?;
+        assert!(
+            denied
+                .iter()
+                .any(|finding| finding.code == FindingCode::ProtectedOutputDenied)
+                && denied.iter().all(|finding| finding.code != FindingCode::LimitExceeded),
+            "fixed privacy refusal codes/phases: {:?}",
+            denied
+                .iter()
+                .map(|finding| (finding.code, finding.phase))
+                .collect::<Vec<_>>()
+        );
+        let options = GenerationOptions {
+            json_shape: JsonShape::SingleResource,
+            protected_output: ProtectedOutput::Include,
+            opaque_fields: OpaqueFieldPolicy::PreserveWithFinding,
+            ..GenerationOptions::default()
+        };
+        let artifact = crate::generate(&set, &target, OutputFormat::Json, &options).map_err(|findings| {
+            format!(
+                "wide generation fixed codes/phases: {:?}",
+                findings
+                    .iter()
+                    .map(|finding| (finding.code, finding.phase))
+                    .collect::<Vec<_>>()
+            )
+        })?;
+        assert!(!format!("{artifact:?}").contains("private-occurrence-marker"));
+        let output: serde_json::Value =
+            serde_json::from_slice(artifact.reveal_bytes(&ExplicitArtifactAccess::explicitly_allow_raw_artifact()))
+                .map_err(|_| "generated schema JSON failed")?;
+        assert_eq!(output, original);
+        Ok(())
     }
 }

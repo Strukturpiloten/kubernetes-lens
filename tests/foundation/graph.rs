@@ -1,5 +1,157 @@
 //! Genuine sealed unit codecs exercise core contracts independently of delivered cohorts.
 use super::*;
+use crate::processing::{NativeOperationBudget, NativeProcessingLimits};
+
+#[test]
+fn projection_event_preflight_counts_wide_nodes_and_keys_without_retaining_copies() {
+    let tree = TreeNode::mapping(
+        (0..4096)
+            .map(|index| (format!("private-key-{index}"), TreeNode::new(TreeValue::Null)))
+            .collect(),
+    );
+    let events = 1 + 2 * 4096;
+    let processing = NativeOperationBudget::new(NativeProcessingLimits {
+        max_processing_units: events,
+        max_payload_bytes: 0,
+        ..NativeProcessingLimits::default()
+    });
+    let budget = GraphBudget::new(processing.clone());
+    assert_eq!(budget.remaining.get(), 1_000_000);
+    assert_eq!(ParseLimits::default().max_nodes, 500_000);
+    budget.remaining.set(events);
+    assert!(preflight_projection_events(&tree, &budget));
+    assert_eq!(budget.remaining.get(), 0);
+    assert!(!processing.exhausted());
+    assert_eq!(processing.charged_payload_bytes(), 0);
+    assert!(!preflight_projection_events(&TreeNode::new(TreeValue::Null), &budget));
+    assert!(processing.exhausted());
+}
+
+#[test]
+fn projection_event_preflight_keeps_deep_sequence_mapping_and_tag_wrapper_events() {
+    let mut tree = TreeNode::new(TreeValue::Null);
+    let mut events = 1;
+    for level in 0..48 {
+        tree = match level % 3 {
+            0 => {
+                events += 2;
+                TreeNode::mapping(vec![("private/key~λ".into(), tree)])
+            }
+            1 => {
+                events += 1;
+                TreeNode::new(TreeValue::Sequence(vec![tree]))
+            }
+            _ => {
+                events += 1;
+                TreeNode::new(TreeValue::Tagged("private-tag".repeat(32), Box::new(tree)))
+            }
+        };
+    }
+    let processing = NativeOperationBudget::new(NativeProcessingLimits {
+        max_processing_units: events,
+        max_payload_bytes: 0,
+        ..NativeProcessingLimits::default()
+    });
+    let budget = GraphBudget::new(processing.clone());
+    budget.remaining.set(events);
+    assert!(preflight_projection_events(&tree, &budget));
+    assert_eq!(events, 65);
+    assert_eq!(budget.remaining.get(), 0);
+    assert!(!processing.exhausted());
+    assert_eq!(processing.charged_payload_bytes(), 0);
+}
+
+#[test]
+fn projection_event_preflight_stops_on_first_work_or_event_failure_and_stays_terminal() {
+    let tree = TreeNode::new(TreeValue::Sequence(
+        (0..4096).map(|_| TreeNode::new(TreeValue::Null)).collect(),
+    ));
+    let processing = NativeOperationBudget::new(NativeProcessingLimits {
+        max_processing_units: 3,
+        ..NativeProcessingLimits::default()
+    });
+    let budget = GraphBudget::new(processing.clone());
+    let initial = budget.remaining.get();
+    assert!(!preflight_projection_events(&tree, &budget));
+    // Root and two children succeeded; the first refused child did not debit
+    // events and no up-front cost reserved the unvisited tail.
+    assert_eq!(budget.remaining.get(), initial - 3);
+    assert!(processing.exhausted());
+    assert!(budget.failed.get());
+    assert!(!budget.take(0));
+    assert!(!preflight_projection_events(&tree, &budget));
+    assert!(processing.clone().work(0, Phase::Validation).is_err());
+    assert_eq!(budget.remaining.get(), initial - 3);
+
+    let processing = NativeOperationBudget::new(NativeProcessingLimits::default());
+    let budget = GraphBudget::new(processing.clone());
+    budget.remaining.set(1);
+    let mapping = TreeNode::mapping(vec![("private-key".into(), tree)]);
+    assert!(!preflight_projection_events(&mapping, &budget));
+    assert_eq!(budget.remaining.get(), 0);
+    assert!(processing.exhausted());
+    assert!(!budget.take(0));
+    assert!(!preflight_projection_events(&mapping, &budget));
+}
+
+#[test]
+fn byte_rich_opaque_projection_preserves_shared_byte_work_payload_and_privacy_limits() -> TestResult {
+    const PRIVATE: &str = "private-graph-payload-marker";
+    let body = format!(
+        "{PRIVATE}{}",
+        "x".repeat(ParseLimits::default().max_scalar_bytes - PRIVATE.len())
+    );
+    let text = format!("apiVersion: v1\nkind: Thing\nmetadata: {{name: supplied}}\nspec: {{payload: {body}}}\n");
+    let resources = crate::parse_source(
+        SourceInput {
+            id: SourceId(99),
+            format: DocumentFormat::YamlStream,
+            origin: InputOrigin::Authored,
+            source_version: None,
+            bytes: text.as_bytes(),
+        },
+        &ParseLimits::default(),
+    )
+    .required()?
+    .flatten_resources()
+    .required()?;
+    assert_eq!(resources.documents.len(), 1);
+    let graph = resolve_references(&resources);
+    assert!(
+        !graph
+            .findings
+            .iter()
+            .any(|finding| finding.code == FindingCode::LimitExceeded)
+    );
+    assert!(graph.edges.is_empty());
+    assert!(!format!("{graph:?}").contains(PRIVATE));
+    for payload_limited in [false, true] {
+        let graph = resolve_references_with_context(
+            &resources,
+            &ReferenceContext {
+                processing: Some(NativeProcessingLimits {
+                    max_processing_units: if payload_limited { 64 * 1024 * 1024 } else { 128 },
+                    max_payload_bytes: if payload_limited { 2048 } else { 64 * 1024 * 1024 },
+                    ..NativeProcessingLimits::default()
+                }),
+                ..ReferenceContext::default()
+            },
+        );
+        let limits: Vec<_> = graph
+            .findings
+            .iter()
+            .filter(|finding| finding.code == FindingCode::LimitExceeded)
+            .collect();
+        assert_eq!(limits.len(), 1);
+        assert!(limits[0].path.is_none());
+        assert!(!format!("{graph:?}").contains(PRIVATE));
+    }
+    assert_eq!(
+        resources.sources()[0].reveal_raw(&crate::source::ExplicitSourceAccess::explicitly_allow_raw_source()),
+        text.as_bytes()
+    );
+    Ok(())
+}
 
 #[test]
 fn current_role_evidence_binds_each_exact_effective_source() -> TestResult {
@@ -1196,8 +1348,23 @@ fn versionless_native_refs_use_group_kind_scope_name_and_never_prefer_served_ver
         &ReferenceContext::default(),
         &target,
     );
+    let is_caller_edge = |edge: &ResolvedReference| {
+        edge.reference.from == reference.from
+            && edge.reference.path == reference.path
+            && matches!(edge.reference.target, ReferenceTarget::GroupKindName { .. })
+    };
+    let mut caller_edges = graph.edges.iter().filter(|edge| is_caller_edge(edge));
+    let caller_edge = caller_edges.next().required()?;
+    assert!(caller_edges.next().is_none());
+    for resource in [ResourceId(1), ResourceId(2), ResourceId(3)] {
+        assert!(graph.edges.iter().any(|edge| {
+            edge.reference.from == resource
+                && edge.reference.relation == RelationshipKind::Operator
+                && edge.resolution == Resolution::External(ExternalRefKind::Operator)
+        }));
+    }
     assert_eq!(
-        graph.edges[0].resolution,
+        caller_edge.resolution,
         Resolution::ResolvedSubjects(vec![GraphSubject::Object {
             resource: ResourceId(1)
         }])
@@ -1216,9 +1383,17 @@ fn versionless_native_refs_use_group_kind_scope_name_and_never_prefer_served_ver
     )
     .required()?;
     resources.documents_mut()[5].set_field_from_source(path("/metadata/name"), patch)?;
-    let graph = resolve_supplied_references_for_target(&resources, &[reference], &ReferenceContext::default(), &target);
+    let graph = resolve_supplied_references_for_target(
+        &resources,
+        std::slice::from_ref(&reference),
+        &ReferenceContext::default(),
+        &target,
+    );
+    let mut caller_edges = graph.edges.iter().filter(|edge| is_caller_edge(edge));
+    let caller_edge = caller_edges.next().required()?;
+    assert!(caller_edges.next().is_none());
     assert_eq!(
-        graph.edges[0].resolution,
+        caller_edge.resolution,
         Resolution::Ambiguous(vec![ResourceId(1), ResourceId(5)])
     );
     Ok(())

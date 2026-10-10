@@ -2,6 +2,7 @@
 pub mod access;
 pub mod common;
 pub mod configuration_storage;
+pub mod extensions;
 pub mod networking;
 pub mod workloads;
 use crate::{
@@ -33,5 +34,6 @@ pub(crate) fn registry() -> Result<RegistryBuilder, Vec<Finding>> {
     access::roots::register(&mut registry).map_err(|e| vec![e])?;
     networking::roots::register(&mut registry).map_err(|e| vec![e])?;
     configuration_storage::register(&mut registry).map_err(|e| vec![e])?;
+    extensions::roots::register(&mut registry).map_err(|e| vec![e])?;
     Ok(registry)
 }

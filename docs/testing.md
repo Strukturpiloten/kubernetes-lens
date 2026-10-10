@@ -82,3 +82,11 @@ API validation or runtime commands. Corpus bytes remain in caller-owned public c
 destinations; metadata and scripts remain excluded from the Cargo package. Actual package-list
 verification and the final complete gate remain required during primary integration. Passing
 preparation/admission tests does not satisfy the pending #14 native acceptance or #2 runtime cells.
+
+Extension development checks use `cargo test --locked --lib --test extensions
+--test extensions_final_corrections`. Tests independently cover typed stable/beta roots,
+source-free generation, schema subset outcomes, descriptor replay/staleness, target mismatch,
+exact private keyword/List paths and terminal budget exhaustion. Current source/profile guards
+are in `schemas/capabilities/extensions-code-evidence.json`; the complete policy gate rejects
+stale/omitted source bindings and fabricated native claims. Official custom corpus, server
+admission, webhook/controller and native-profile conformance remain pending.

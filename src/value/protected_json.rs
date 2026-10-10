@@ -343,6 +343,89 @@ impl ProtectedJsonValue {
         let tree = self.encode(&ctx, &FieldPath::default())?;
         ctx.budget.snapshot(&tree).map_err(private_error)
     }
+
+    /// Count canonical JSON output bytes without serializing or allocating a snapshot.
+    /// The caller's existing processing session is charged for every retained occurrence.
+    pub(crate) fn retained_json_len_in(&self, ctx: &FieldDecodeContext) -> Result<usize, Finding> {
+        fn string_len(value: &str, ctx: &FieldDecodeContext) -> Result<usize, Finding> {
+            let mut len = 2usize;
+            for byte in value.bytes() {
+                ctx.processing.work(1, ctx.phase)?;
+                let escaped = match byte {
+                    b'"' | b'\\' | b'\x08' | b'\x0c' | b'\n' | b'\r' | b'\t' => 2,
+                    0..=0x1f => 6,
+                    _ => 1,
+                };
+                len = len.checked_add(escaped).ok_or_else(|| ctx.processing.fail(ctx.phase))?;
+            }
+            Ok(len)
+        }
+
+        fn count(
+            value: &ProtectedJsonValue,
+            index: usize,
+            depth: usize,
+            ctx: &FieldDecodeContext,
+        ) -> Result<usize, Finding> {
+            if depth > ctx.limits.max_depth {
+                return Err(ctx.processing.fail(ctx.phase));
+            }
+            ctx.processing.work(1, ctx.phase)?;
+            let node = value.node(index).ok_or_else(|| ctx.processing.fail(ctx.phase))?;
+            match node {
+                JsonNode::Null | JsonNode::Boolean(true) => Ok(4),
+                JsonNode::Boolean(false) => Ok(5),
+                JsonNode::Number(number) => {
+                    let len = number.native_lexeme().len();
+                    ctx.processing.work(len, ctx.phase)?;
+                    Ok(len)
+                }
+                JsonNode::String(text) => string_len(text, ctx),
+                JsonNode::Array(children) => {
+                    let separators = children.len().saturating_sub(1);
+                    let mut len = 2usize
+                        .checked_add(separators)
+                        .ok_or_else(|| ctx.processing.fail(ctx.phase))?;
+                    for child in children {
+                        len = len
+                            .checked_add(count(value, *child, depth + 1, ctx)?)
+                            .ok_or_else(|| ctx.processing.fail(ctx.phase))?;
+                    }
+                    Ok(len)
+                }
+                JsonNode::Object(entries) => {
+                    let separators = entries.len().saturating_sub(1);
+                    let mut len = 2usize
+                        .checked_add(separators)
+                        .ok_or_else(|| ctx.processing.fail(ctx.phase))?;
+                    for (key, child) in entries {
+                        len = len
+                            .checked_add(string_len(key, ctx)?)
+                            .and_then(|len| len.checked_add(1))
+                            .and_then(|len| len.checked_add(count(value, *child, depth + 1, ctx).ok()?))
+                            .ok_or_else(|| ctx.processing.fail(ctx.phase))?;
+                    }
+                    Ok(len)
+                }
+            }
+        }
+
+        let shape = self
+            .0
+            .nodes
+            .get(self.root())
+            .ok_or_else(|| ctx.processing.fail(ctx.phase))?
+            .shape;
+        if shape.nodes > ctx.limits.max_nodes
+            || shape.events > ctx.limits.max_events
+            || shape.depth > ctx.limits.max_depth
+            || shape.bytes > ctx.limits.max_input_bytes
+            || shape.scalar > ctx.limits.max_scalar_bytes
+        {
+            return Err(ctx.processing.fail(ctx.phase));
+        }
+        count(self, self.root(), 1, ctx)
+    }
     /// Compare exact JSON values within retained and caller-lowered processing ceilings.
     /// # Errors
     /// Refuses exhausted cumulative comparison limits; no native-schema parity is implied.

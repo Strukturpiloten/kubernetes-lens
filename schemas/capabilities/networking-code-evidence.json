@@ -4,7 +4,7 @@
   "issue": 10,
   "canonical_ledger": {
     "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
-    "sha256": "5a9a11aedd2a4b4dec2587923dc0357fb7ea40209302f8dab3bc007e845388f6"
+    "sha256": "37e926f6e9d40fea1086808656864dc81ae98fc6799edfde7628e0571aac518a"
   },
   "roots": [
     {
@@ -140,14 +140,14 @@
   ],
   "field_selection_rule": "Catalogue pointers define requested inventory; typed codec capability members and selected validators establish only admitted local field behavior. Context/opaque outcomes remain visible; a catalogue row is not native API evidence.",
   "source_sha256": {
-    "src/capability.rs": "15a973ef0ef34325165e1a1258c886ddb5ca01618a5c6d1a0e32a22e91f2d69d",
-    "src/generation.rs": "6905882e1672641c1007d00d1f29e3a7fb6c181d1a56baebe4e9828f4f329527",
-    "src/graph.rs": "d4f5bc2c8b9a2ce0dafd90663795b1eb3fa54f7f2a224580e1312de92f9ce3c8",
-    "src/model.rs": "4e66307f90d065836c86837de3db7c94cd484784ff2cb35d9b1a182a40233636",
-    "src/registry.rs": "71bf00721a16773a22aeddc78dd6f0a1d1f39df994aa09bbad2d1a6bcff47b25",
+    "src/capability.rs": "dd9a69ee48aee45a5638fb38be7988c7c6d02ad0c176f697245ecf8a8a40ed40",
+    "src/generation.rs": "b4e5963e6a926f50ad290cbaf731caefde2878368052f190f9996fdd6d2d1366",
+    "src/graph.rs": "a8f0a202afdd6ba9f10d20bd43f4899de4f04a37063975aea23525184f5cda9f",
+    "src/model.rs": "f263ebfbafd45927081f1c094c705a6e5d5ab6b124a0f09d93b321fde85cbcd9",
+    "src/registry.rs": "5e03c877fbbb689c5122be45a1403f0bf4615e53a2d3ed043d7d8c363fcd2bab",
     "src/resources/common/native_helpers.rs": "ac2b96b49c9dad81ea2164406662370b1e5c87d894f476a7731d3dbf206474ba",
     "src/resources/common.rs": "3f29b27b3b8891ef1d8443dc2109a292c5e8ccdefe95d3b318afdd31446d11d6",
-    "src/resources/mod.rs": "deb430974ca47d73009f51790b817c1fb93195238d9fd641d28e30db4aa08405",
+    "src/resources/mod.rs": "6ac20bfc6dd7331f444b24d157f913a29c394c7e18d45f3f784c7ec603cc014e",
     "src/resources/networking/capabilities.rs": "8a2a6351fb89f3c8c3fa15fa615f72961d988bef1d1e31688dafb465784a8312",
     "src/resources/networking/facts.rs": "0830b170963720c7a565728b8867932cc3a8e1025bf7b846172fb9dc4da54d04",
     "src/resources/networking/required.rs": "0d0c3f3e95ea000df6be91cc3f153f6bc913c5473eeca70b78dc1d87f24a1099",
@@ -265,5 +265,40 @@
     "PreferClose is the finite selected trafficDistribution enum; PreferSameZone remains retained but unadmitted and blocks native emission.",
     "Generic opaque preservation is explicit and cannot admit unsupported known enum values or prove native conformance.",
     "KubernetesLens does not acquire resources from live clusters."
+  ],
+  "prior_source_bindings": [
+    {
+      "issue": 13,
+      "source_sha256": {
+        "src/capability.rs": "15a973ef0ef34325165e1a1258c886ddb5ca01618a5c6d1a0e32a22e91f2d69d",
+        "src/generation.rs": "6905882e1672641c1007d00d1f29e3a7fb6c181d1a56baebe4e9828f4f329527",
+        "src/graph.rs": "d4f5bc2c8b9a2ce0dafd90663795b1eb3fa54f7f2a224580e1312de92f9ce3c8",
+        "src/model.rs": "4e66307f90d065836c86837de3db7c94cd484784ff2cb35d9b1a182a40233636",
+        "src/registry.rs": "71bf00721a16773a22aeddc78dd6f0a1d1f39df994aa09bbad2d1a6bcff47b25",
+        "src/resources/common/native_helpers.rs": "ac2b96b49c9dad81ea2164406662370b1e5c87d894f476a7731d3dbf206474ba",
+        "src/resources/common.rs": "3f29b27b3b8891ef1d8443dc2109a292c5e8ccdefe95d3b318afdd31446d11d6",
+        "src/resources/mod.rs": "deb430974ca47d73009f51790b817c1fb93195238d9fd641d28e30db4aa08405",
+        "src/resources/networking/capabilities.rs": "8a2a6351fb89f3c8c3fa15fa615f72961d988bef1d1e31688dafb465784a8312",
+        "src/resources/networking/facts.rs": "0830b170963720c7a565728b8867932cc3a8e1025bf7b846172fb9dc4da54d04",
+        "src/resources/networking/required.rs": "0d0c3f3e95ea000df6be91cc3f153f6bc913c5473eeca70b78dc1d87f24a1099",
+        "src/resources/networking/roots.rs": "93ce3e9e3da01f6094f6798c6d9afb1f1827106468847fd6bc7774a99102e0cb",
+        "src/resources/networking/types.rs": "bd48bc9cb0bec166ded6363c585a61dcb2a37366e6e1706fddc55364e9588812",
+        "src/resources/networking/validation/ip_context.rs": "8b390629814bb36ef868f2db8c5597d53496497809269a67331e9a8a621bff9c",
+        "src/resources/networking/validation/processing_tests.rs": "7a78ec2aeb794eaf4e12b265c002f68371cdaa249ffc7a57164b20b54d3ac081",
+        "src/resources/networking/validation.rs": "a9b8a47eb412054c9a76cf1b1162fdfefdf1561c5be1ffade27285ba85d81a22",
+        "src/resources/networking.rs": "2797fbf66ac9b8ab7788c4eb88a3f71faa84f14c8eaa84f23e85e294e09b4873",
+        "src/value.rs": "a8517e40b01c39bc373e4530c63abd699e7f0d7cbe3edf3f01b21efc014d69db",
+        "tests/networking/authoring.rs": "99cdbf70f33fb8ed7ca94018d81466929e322ae22f67d1baef165f679bb6dc33",
+        "tests/networking/availability.rs": "f13e2f5ca8a6008ff48789cb5e1d2bdfce7a38f9a0711edf2805770652dd9f82",
+        "tests/networking/native.rs": "88d8637e575bb19ca3259cecd3b2f731e6954f5c3a99a97f39008655a460b5bf",
+        "tests/networking/preservation.rs": "c70d132ef0bd13db9e58ea4694c8029f14ddafc2c7ce48892c77bf78aceebc6d",
+        "tests/networking/processing.rs": "741978c305f0bd96662eb8af05308ab78e1b3d0029136060d55d699990c440df",
+        "tests/networking/references.rs": "025c9f79c1447016d82aca8aefc7ba8f01b64e18daa36073fdacf091ada99c21",
+        "tests/networking/static_contract.rs": "9428f0abab8677199ccba9913e1dc19019026643e5cb115073925632bcfe14bf",
+        "tests/networking.rs": "a66f0e0684999f84f56cc9413706159fc6de16ee6e9c4be745c9a68214634fdd"
+      },
+      "native_conformance": "pending",
+      "status": "prior_static_source_bindings_not_current_validation"
+    }
   ]
 }

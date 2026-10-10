@@ -14,7 +14,7 @@ ADR/migration decision. Publication remains separately authorized after the comp
 Private raw input/output, diagnostic redaction, finite target selection, unknown retention,
 null-versus-absence, current identity recomputation and preservation-versus-admission are public
 behavior boundaries. Sealed codec internals are crate-private integration contracts. Source-backed
-schema descriptors are not delivered native capability. Renderer execution is deferred; finite
+schema descriptors establish only their reviewed offline supported-subset contract in ADR 0011. Renderer execution is deferred; finite
 renderer identifiers do not freeze an invocation, artifact-tree or supervisor API.
 
 The issue-nine unpublished API intentionally changes selector members to Presence values with a
@@ -66,3 +66,10 @@ presence and unknown source data. Selected `immutable` fields follow the frozen 
 profile (typed from 1.21). PV/PVC validation requires explicit Create intent for reviewed
 operation-specific rules; static validity does not prove binding, scheduling or driver behavior.
 See [ADR 0010](decisions/0010-native-configuration-storage.md).
+
+[ADR 0011](decisions/0011-source-bound-custom-resource-descriptors.md) adds six typed extension
+roots, family-correct borrowed schema helpers and source-bound custom-document descriptors.
+Positive graph evidence requires the same current supplied set, effective CRD/schema, custom document
+and explicit target profile. Stale, cross-set, unsupported or exhausted checks cannot establish a
+positive dependency. Unknown schema/CEL/defaulting/conversion and controller behavior remain explicit
+limitations. See [extension support](extensions.md); API-server and official corpus evidence are pending.

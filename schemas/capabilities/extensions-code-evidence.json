@@ -1,0 +1,141 @@
+{
+  "format": 1,
+  "status": "typed-native-static-code-present-native-profiles-pending",
+  "issue": 13,
+  "canonical_ledger": {
+    "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
+    "sha256": "37e926f6e9d40fea1086808656864dc81ae98fc6799edfde7628e0571aac518a"
+  },
+  "roots": [
+    {
+      "kind": "CustomResourceDefinition",
+      "api_version": "apiextensions.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/32/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/extensions/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "CustomResourceDefinition",
+      "api_version": "apiextensions.k8s.io/v1beta1",
+      "selected_field_catalogue_pointer": "/resources/32/proposed_admitted_api_profiles/1",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.21"
+        }
+      ],
+      "code_registration": "src/resources/extensions/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "MutatingWebhookConfiguration",
+      "api_version": "admissionregistration.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/33/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/extensions/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "MutatingWebhookConfiguration",
+      "api_version": "admissionregistration.k8s.io/v1beta1",
+      "selected_field_catalogue_pointer": "/resources/33/proposed_admitted_api_profiles/1",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.21"
+        }
+      ],
+      "code_registration": "src/resources/extensions/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "ValidatingWebhookConfiguration",
+      "api_version": "admissionregistration.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/34/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/extensions/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "ValidatingWebhookConfiguration",
+      "api_version": "admissionregistration.k8s.io/v1beta1",
+      "selected_field_catalogue_pointer": "/resources/34/proposed_admitted_api_profiles/1",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.21"
+        }
+      ],
+      "code_registration": "src/resources/extensions/roots.rs",
+      "native_case_status": "pending"
+    }
+  ],
+  "field_selection_rule": "Exact frozen root fields plus reviewed dynamic CRD-schema admission; unsupported schema keywords and unknown fields remain findings, never generic admission.",
+  "source_sha256": {
+    "src/capability.rs": "dd9a69ee48aee45a5638fb38be7988c7c6d02ad0c176f697245ecf8a8a40ed40",
+    "src/generation.rs": "b4e5963e6a926f50ad290cbaf731caefde2878368052f190f9996fdd6d2d1366",
+    "src/graph.rs": "a8f0a202afdd6ba9f10d20bd43f4899de4f04a37063975aea23525184f5cda9f",
+    "src/model.rs": "f263ebfbafd45927081f1c094c705a6e5d5ab6b124a0f09d93b321fde85cbcd9",
+    "src/registry.rs": "5e03c877fbbb689c5122be45a1403f0bf4615e53a2d3ed043d7d8c363fcd2bab",
+    "src/resources/extensions.rs": "5aea65a697f2c8a7aafc7ad40cf0bf581ca6121acef6565e00167dcd738a377c",
+    "src/resources/extensions/capabilities.rs": "d1a3de0591f1ff769c43dbfe3e888a90cfd8579d150001085b014c228b489e85",
+    "src/resources/extensions/custom_documents.rs": "8dd1694ae4de33181969a315206eb62f236a68b5c7e46bb6bd7c9f7c1cf6baf9",
+    "src/resources/extensions/helpers.rs": "5f64260fa9f7d10b31a7a13e81bfde9c97f22c97e3de29711d3792b9ac209935",
+    "src/resources/extensions/roots.rs": "2499cd69314ef20d76d49a3a3e5afd21763d70c4ef467c7b7fff3bafcfcffdf6",
+    "src/resources/extensions/schema.rs": "13d575d30d960b0509689ada200ed7b0106b39fd9eae9e662bc86f26ee6ac8b4",
+    "src/resources/extensions/schema/arena.rs": "c687f32f7e0753bd0c56eb67d69b8aa0d56e4d986abc0181882e9c2d4d497fd8",
+    "src/resources/extensions/schema/arena/evaluator.rs": "ba188764086bc918d3058a66bc94b7fb1c22991a25c78b18c50d4cf675c8fa0c",
+    "src/resources/extensions/test_support.rs": "fa5c99588e35754997a6f77ffd7080e27b855a8f7bb911094f920c4c9cbbccb6",
+    "src/resources/extensions/validation.rs": "f7e8313ff6be00800bfa6cf66d7647eb16a0b49c3a23acd58a76fadf702ec0a2",
+    "src/resources/mod.rs": "6ac20bfc6dd7331f444b24d157f913a29c394c7e18d45f3f784c7ec603cc014e",
+    "src/value/protected_json.rs": "f04719257e5d29e957942639fbc6a770ba677f8f60528ec56d8e1d378fa68d9a",
+    "tests/extensions.rs": "69366f20d42c9d816594805f1c0f03067b2a637fb051fccf238cef3ca61efec1",
+    "tests/extensions_final_corrections.rs": "c73fd1b63cd633ed89d851c6734769871c20d62ae1cb5479814d85514eb9c2fb"
+  },
+  "independent_extension_tests": [
+    "tests/extensions.rs",
+    "tests/extensions_final_corrections.rs"
+  ],
+  "custom_document_contract": {
+    "authority": "exact current supplied resource set, source, effective CRD, schema, custom document and target profile",
+    "supported_subset": "bounded offline schema checking only; unsupported schema, CEL, conversion and controller behavior produce unavailable outcomes",
+    "official_kinds": [
+      "Cluster",
+      "Pooler",
+      "Backup",
+      "ScheduledBackup",
+      "Grafana",
+      "GrafanaDashboard",
+      "GrafanaDatasource"
+    ],
+    "official_case_status": "pending"
+  },
+  "conformance": {
+    "supported_kubernetes_versions": [],
+    "api_server": "pending",
+    "runtime": "pending",
+    "controller_webhook": "pending",
+    "official_corpus": "pending",
+    "native_kind_profiles": "pending"
+  },
+  "limitations": [
+    "No server admission, schema pruning/defaulting, CEL execution, conversion-webhook invocation or controller behavior is asserted.",
+    "Focused original-candidate tests are not validation of this integrated source or native-profile conformance."
+  ]
+}

@@ -58,6 +58,11 @@ impl fmt::Debug for ReferenceScope {
 /// Native reference payload with redacted Debug.
 #[derive(Clone)]
 pub enum ReferenceTarget {
+    /// Exact selected version nested inside the actual supplied CRD document.
+    SuppliedCustomResourceVersion {
+        /// Sealed source-bound descriptor emitted by custom-document analysis.
+        descriptor: crate::resources::extensions::custom_documents::SuppliedCustomResourceDescriptor,
+    },
     /// Exact object with a closed admitted native predicate and explicit optionality.
     CheckedObject {
         /// Exact expected GVK.
@@ -285,11 +290,14 @@ pub struct ReferenceGraph {
     pub edges: Vec<ResolvedReference>,
     /// Safe missing/ambiguity/cycle findings.
     pub findings: Vec<Finding>,
+    /// Source-bound custom-document outcomes and successful selected-version descriptors.
+    pub custom_documents: Vec<crate::resources::extensions::custom_documents::CustomDocumentGraphRecord>,
     target: Option<std::sync::Arc<GraphTargetWitness>>,
 }
 struct WorkingGraph {
     edges: Vec<ResolvedReference>,
     findings: crate::processing::ProcessingReport,
+    custom_documents: Vec<crate::resources::extensions::custom_documents::CustomDocumentGraphRecord>,
     target: Option<std::sync::Arc<GraphTargetWitness>>,
 }
 impl WorkingGraph {
@@ -303,6 +311,7 @@ impl WorkingGraph {
         ReferenceGraph {
             edges: self.edges,
             findings: self.findings.into_vec(),
+            custom_documents: self.custom_documents,
             target: self.target,
         }
     }
@@ -458,6 +467,9 @@ fn reference_candidate(
     candidate: &ResourceIdentity,
 ) -> Result<bool, SafeReason> {
     Ok(match target {
+        ReferenceTarget::SuppliedCustomResourceVersion { descriptor } => {
+            id == descriptor.crd_resource_id() && candidate.gvk == *descriptor.crd_gvk()
+        }
         ReferenceTarget::Exact { gvk: Some(gvk), name } => {
             candidate.gvk.group == gvk.group && candidate.gvk.kind == gvk.kind && candidate.name.value() == Some(name)
         }
@@ -1396,6 +1408,25 @@ struct ProjectionBatch {
     facts: BTreeMap<ResourceId, Vec<NativeFact>>,
     failed: BTreeMap<ResourceId, ResourceIdentity>,
 }
+/// Charge one graph event for each visited node (including tagged wrappers)
+/// and each mapping key, before visiting children. Scalar/key/tag bytes are
+/// not read here: inherited projection primitives still charge their scans and
+/// copies. Original trees already satisfy retained syntax/depth limits; this
+/// short-circuiting walk allocates no traversal buffers and stops on exhaustion.
+fn preflight_projection_events(node: &crate::syntax::TreeNode, budget: &GraphBudget) -> bool {
+    use crate::syntax::TreeValue;
+    if !budget.take(1) {
+        return false;
+    }
+    match &node.value {
+        TreeValue::Mapping(entries) => entries
+            .iter()
+            .all(|(_, child)| budget.take(1) && preflight_projection_events(child, budget)),
+        TreeValue::Sequence(items) => items.iter().all(|child| preflight_projection_events(child, budget)),
+        TreeValue::Tagged(_, child) => preflight_projection_events(child, budget),
+        TreeValue::Null | TreeValue::Bool(_) | TreeValue::String(_) | TreeValue::Number(_) => true,
+    }
+}
 fn project_documents(
     resources: &ResourceSet,
     target: Option<&crate::capability::TargetProfile>,
@@ -1413,7 +1444,7 @@ fn project_documents(
         if graph.findings.failed() {
             break;
         }
-        if !budget.take(tree_cost(&document.original)) {
+        if !preflight_projection_events(&document.original, budget) {
             failed.insert(document.id, document.original_identity.clone());
             graph
                 .findings
@@ -1696,6 +1727,9 @@ impl GraphIndex<'_> {
                     ReferenceTarget::Exact { gvk: Some(gvk), .. } | ReferenceTarget::Owner { gvk, .. } => {
                         identity.gvk.group == gvk.group && identity.gvk.kind == gvk.kind
                     }
+                    ReferenceTarget::SuppliedCustomResourceVersion { descriptor } => {
+                        identity.gvk == *descriptor.crd_gvk()
+                    }
                     ReferenceTarget::LabelSelector { kinds, .. } => {
                         kinds.iter().any(|kind| kind.as_str() == identity.gvk.kind)
                     }
@@ -1710,6 +1744,65 @@ impl GraphIndex<'_> {
                         self.context,
                         self.projections,
                     )
+                }
+            }
+        }
+    }
+}
+fn current_custom_descriptor(
+    index: &GraphIndex<'_>,
+    reference: &Reference,
+    records: &[crate::resources::extensions::custom_documents::CustomDocumentGraphRecord],
+) -> bool {
+    let ReferenceTarget::SuppliedCustomResourceVersion { descriptor } = &reference.target else {
+        return true;
+    };
+    for record in records {
+        if !index.budget.take(1) {
+            return false;
+        }
+        if record.resource_id() != reference.from {
+            continue;
+        }
+        if !index.budget.take(index.resources.documents().len()) {
+            return false;
+        }
+        let (Some(current), Some(document)) = (
+            record.descriptor(),
+            index
+                .resources
+                .documents()
+                .iter()
+                .find(|document| document.id == reference.from),
+        ) else {
+            return false;
+        };
+        return document
+            .field_decode_context(&index.budget.processing, Phase::Analysis)
+            .and_then(|fields| descriptor.matches_current(current, &fields))
+            .unwrap_or(false);
+    }
+    false
+}
+fn contribute_custom_descriptor(
+    reference: &Reference,
+    resolution: &Resolution,
+    index: &GraphIndex<'_>,
+    evidence: &mut Vec<FactEvidence>,
+) {
+    if matches!(resolution, Resolution::Resolved(_)) {
+        if let ReferenceTarget::SuppliedCustomResourceVersion { descriptor } = &reference.target {
+            let resource = descriptor.resource_id();
+            for path in [descriptor.version_path(), descriptor.schema_path()] {
+                if let Some(field) = contribution(
+                    index.budget,
+                    index.resources,
+                    index.projections,
+                    index.witness,
+                    GraphSubject::Object { resource },
+                    path.clone(),
+                ) {
+                    evidence.push(field);
                 }
             }
         }
@@ -1737,7 +1830,11 @@ fn resolve_edges(index: &GraphIndex<'_>, references: Vec<Reference>, graph: &mut
         .into_iter()
         .collect::<Vec<_>>();
         let mut resolution = if budget.take(1) {
-            index.resolve_reference(&reference, &mut evidence)
+            if current_custom_descriptor(index, &reference, &graph.custom_documents) {
+                index.resolve_reference(&reference, &mut evidence)
+            } else {
+                Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence))
+            }
         } else {
             graph
                 .findings
@@ -1759,6 +1856,7 @@ fn resolve_edges(index: &GraphIndex<'_>, references: Vec<Reference>, graph: &mut
                 evidence.push(field);
             }
         }
+        contribute_custom_descriptor(&reference, &resolution, index, &mut evidence);
         if budget.failed.get() {
             resolution = Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
         }
@@ -1802,6 +1900,47 @@ fn resolve_edges(index: &GraphIndex<'_>, references: Vec<Reference>, graph: &mut
     }
 }
 
+fn collect_custom_documents(
+    resources: &ResourceSet,
+    target: Option<&crate::capability::TargetProfile>,
+    budget: &GraphBudget,
+    collector: &mut BoundedReferences<'_>,
+    graph: &mut WorkingGraph,
+) {
+    if !budget.processing.exhausted() && !budget.failed.get() {
+        match crate::resources::extensions::custom_documents::check_custom_documents_in(
+            resources,
+            target,
+            &budget.processing,
+        ) {
+            Ok(results) => {
+                if budget.take(results.len())
+                    && budget
+                        .processing
+                        .payload_array::<crate::resources::extensions::custom_documents::CustomDocumentGraphRecord>(
+                            results.len(),
+                            Phase::Analysis,
+                        )
+                        .is_ok()
+                    && graph.custom_documents.try_reserve(results.len()).is_ok()
+                {
+                    for result in results {
+                        graph.custom_documents.push(result.graph_record());
+                        collector.push(result.controller_prerequisite());
+                        if let Some(reference) = result.crd_version_reference() {
+                            collector.push(reference);
+                        }
+                    }
+                } else {
+                    graph
+                        .findings
+                        .push(Finding::error(FindingCode::LimitExceeded, Phase::Analysis));
+                }
+            }
+            Err(finding) => graph.findings.push(finding),
+        }
+    }
+}
 fn analyze(
     resources: &ResourceSet,
     supplied: Option<&[Reference]>,
@@ -1814,6 +1953,7 @@ fn analyze(
     let mut graph = WorkingGraph {
         edges: Vec::new(),
         findings: crate::processing::ProcessingReport::new(processing, Phase::Analysis),
+        custom_documents: Vec::new(),
         target: witness.clone(),
     };
     graph
@@ -1845,6 +1985,7 @@ fn analyze(
         facts,
         failed,
     } = project_documents(resources, target, supplied.is_none(), &mut collector, &mut graph);
+    collect_custom_documents(resources, target, &budget, &mut collector, &mut graph);
     if let Some(refs) = supplied {
         for reference in refs {
             if collector.exhausted() {

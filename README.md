@@ -11,7 +11,8 @@ use the same bounded native contracts. Networking covers Service, Endpoints, End
 Ingress, IngressClass and NetworkPolicy across ten served roots, with finite validation and
 supplied-only graph evidence. Typed configuration and storage support adds ConfigMap, Secret, PersistentVolumeClaim,
 PersistentVolume and StorageClass; see [storage support and limits](docs/storage.md).
-Extension definitions remain preservation-only. No Kubernetes
+Typed extension definitions and source-bound custom-document schema checks are available; see
+[extension support and limits](docs/extensions.md). No Kubernetes
 minor, renderer or runtime conformance is claimed. Renderer execution and live cluster operations
 are not delivered. See [workload support and limits](docs/workloads.md),
 [access support and limits](docs/access.md) and [networking support and limits](docs/networking.md).
