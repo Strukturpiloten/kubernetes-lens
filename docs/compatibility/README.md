@@ -59,6 +59,13 @@ from authored absence or materialized as desired-state defaults.
 
 ## Native processing and protected data
 
+The networking contract corrects the previously missing `Service v1 /spec/loadBalancerClass`
+feature binding using its already frozen official `ServiceLoadBalancerClass` source. Typed
+selection begins at stable Kubernetes 1.24; schema presence in 1.21–1.23 does not admit it,
+including with an explicitly enabled gate. Gate-control removal in 1.26 leaves the stable field
+available. Its 54 exact version/default/on/off cases remain pending native evidence. No field,
+value or API whitelist was expanded; Service type and update-context validation remain separate.
+
 Inputs include individual YAML/JSON resources, YAML streams, generic Lists and registered typed
 Lists. Preserve collection metadata/order, raw syntax evidence, source positions and explicit
 null/absence distinctions. Malformed, duplicate, ambiguous and truncated inputs have actionable

@@ -486,7 +486,7 @@ impl fmt::Debug for LabelSelector {
     }
 }
 pub(crate) fn dns_subdomain(value: &str) -> bool {
-    !value.is_empty() && value.len() <= 253 && value.split('.').all(dns_label)
+    qualified_label_prefix(value)
 }
 pub(crate) fn dns_label(value: &str) -> bool {
     !value.is_empty()

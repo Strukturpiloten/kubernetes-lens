@@ -1,0 +1,452 @@
+{
+  "format": "local_access_code_evidence_v1",
+  "status": "offline_code_obligations_only",
+  "issue": 12,
+  "canonical_ledger": {
+    "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
+    "sha256": "5a9a11aedd2a4b4dec2587923dc0357fb7ea40209302f8dab3bc007e845388f6"
+  },
+  "native_source_witnesses": {
+    "path": "docs/evidence/access-native-specification.json",
+    "sha256": "adcd2249e81f777ff61043cb8d95cde84f5eb72d1994a070faadb5d4f733d327"
+  },
+  "roots": [
+    {
+      "kind": "Namespace",
+      "api_version": "v1",
+      "selected_field_catalogue_pointer": "/resources/19/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "ServiceAccount",
+      "api_version": "v1",
+      "selected_field_catalogue_pointer": "/resources/20/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "Role",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/21/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "RoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/22/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "ClusterRole",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/23/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "ClusterRoleBinding",
+      "api_version": "rbac.authorization.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/24/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "HorizontalPodAutoscaler",
+      "api_version": "autoscaling/v1",
+      "selected_field_catalogue_pointer": "/resources/25/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "HorizontalPodAutoscaler",
+      "api_version": "autoscaling/v2",
+      "selected_field_catalogue_pointer": "/resources/25/proposed_admitted_api_profiles/1",
+      "expected_availability_ranges": [
+        {
+          "from": "1.23",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "HorizontalPodAutoscaler",
+      "api_version": "autoscaling/v2beta1",
+      "selected_field_catalogue_pointer": "/resources/25/proposed_admitted_api_profiles/2",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.24"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "HorizontalPodAutoscaler",
+      "api_version": "autoscaling/v2beta2",
+      "selected_field_catalogue_pointer": "/resources/25/proposed_admitted_api_profiles/3",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.25"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1",
+      "selected_field_catalogue_pointer": "/resources/26/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.21",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "PodDisruptionBudget",
+      "api_version": "policy/v1beta1",
+      "selected_field_catalogue_pointer": "/resources/26/proposed_admitted_api_profiles/1",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.24"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "ResourceQuota",
+      "api_version": "v1",
+      "selected_field_catalogue_pointer": "/resources/27/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "LimitRange",
+      "api_version": "v1",
+      "selected_field_catalogue_pointer": "/resources/28/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "PriorityClass",
+      "api_version": "scheduling.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/29/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "RuntimeClass",
+      "api_version": "node.k8s.io/v1",
+      "selected_field_catalogue_pointer": "/resources/30/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.37"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "RuntimeClass",
+      "api_version": "node.k8s.io/v1beta1",
+      "selected_field_catalogue_pointer": "/resources/30/proposed_admitted_api_profiles/1",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.24"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    },
+    {
+      "kind": "PodSecurityPolicy",
+      "api_version": "policy/v1beta1",
+      "selected_field_catalogue_pointer": "/resources/31/proposed_admitted_api_profiles/0",
+      "expected_availability_ranges": [
+        {
+          "from": "1.20",
+          "through": "1.24"
+        }
+      ],
+      "code_registration": "src/resources/access/roots.rs",
+      "native_case_status": "pending"
+    }
+  ],
+  "field_selection_rule": "Only canonical selected root pointers and recursively selected helpers; no prefix admission. Native case coverage remains pending.",
+  "source_sha256": {
+    "src/capability.rs": "359f7ee36b36f548af7dd4755db2eb17e82ac6eb8071880847035622ce89d9d6",
+    "src/generation.rs": "8aa8a5b4c6e9c6df937cd7c38c42ccba34965b4be55fc8eb601cd53077c2bfaa",
+    "src/graph.rs": "a92cc434978d1d00cb6b6dc1f8f953f12bab0830a52d8a74eb5597c963019fa3",
+    "src/model.rs": "d903c5fbcd992329bd61108d4af557fb7466edfef4f453a498045385c06a4c68",
+    "src/registry.rs": "71bf00721a16773a22aeddc78dd6f0a1d1f39df994aa09bbad2d1a6bcff47b25",
+    "src/resources/access.rs": "4f693b89c2736250531e593f460692403b8994cfd0ea838af45c3c7ffcff787d",
+    "src/resources/access/capabilities.rs": "e16f6bba49d6e5c54e1beaa4ce6f3e0f958fe6231446e9f9d8c9b8263b7e6c80",
+    "src/resources/access/facts.rs": "fdb5726b0fe5278421c7ba2ac379ed2eb4a42061d1dbbea5fb2da426c6e117fc",
+    "src/resources/access/hpa.rs": "cd39ec2cac7b25da54681ec272cb8ebaa193628046f6e2be27759a301cd28f62",
+    "src/resources/access/policy.rs": "7aee204d2fd44d5d0b996f782b595d5a5ba630e880c85e72d86f9c272540c3bd",
+    "src/resources/access/processing_tests.rs": "8787b2b5799c37116f39ffb6dd323bb285dc4be30d4876748fece3b3baf90b73",
+    "src/resources/access/quantity_rules.rs": "1c90804a80cb7e9e4865318c26ba0b4ad3f5d8f5ff4c800584d8334219cb0d65",
+    "src/resources/access/rbac.rs": "2427a64749ab673aabb2ff467b4b37cfb5cc957339d90ed19708cb18f581aef3",
+    "src/resources/access/required.rs": "7b1edba0a7df6030f341b32319b8a6304a8e80c720ea5e64132e74e367f52e98",
+    "src/resources/access/resource_names.rs": "bf539e7c945682348a3c4fbe2075de98e1fc5030ad99052a3554b484033ba586",
+    "src/resources/access/roots.rs": "a05e9906e13248e045293c38f4a6966c97da5bc82c80b89b530b5b8672738690",
+    "src/resources/access/types.rs": "d18e9b8ce621c54985bcb741e6e376bd8c15fecd5458f0149141e97755910a2b",
+    "src/resources/access/validation.rs": "28aae8ca6708b988fd92038d7d4773b121133429db721f1b63ad1188c65f654d",
+    "src/resources/common.rs": "3f29b27b3b8891ef1d8443dc2109a292c5e8ccdefe95d3b318afdd31446d11d6",
+    "src/resources/common/native_helpers.rs": "ac2b96b49c9dad81ea2164406662370b1e5c87d894f476a7731d3dbf206474ba",
+    "src/resources/mod.rs": "8d3c80fd2d281fa5f8129cdfbaa06bdff4630dd38eb81734d7b0c02d555cdfb6",
+    "src/value.rs": "d738ce545fd20a86891ef16e2aba6cd403a787de05ba23b085928bd357bf10db",
+    "src/value/native_quantity.rs": "91bae8b0fc21dca7bbb2e8b999feb82cdcec5542b98b69c68448c211e8fb524c",
+    "tests/access.rs": "17ebf77e7b67ff3c5a8b4b92fcc2a1a1ebd54a9107f95b30b538976ead13f605",
+    "tests/access/native_rules.rs": "cf1398d98312befac341366bff7681d31a0555e0400f873dc7612c556b04be85"
+  },
+  "independent_access_tests": [
+    "every_concrete_root_has_native_authoring_lists_fixed_points_and_api_boundaries",
+    "private_unknowns_survive_typed_edits_and_protected_output_requires_explicit_access",
+    "rbac_scope_subjects_and_aggregation_are_distinct_supplied_relationships",
+    "pdb_budgets_and_source_api_empty_selector_semantics_remain_distinct",
+    "pdb_selectors_keep_incomplete_pod_evidence_partial_and_recheck_effective_edits",
+    "hpa_unions_replica_bounds_and_missing_scale_predicates_are_visible",
+    "gate_and_version_boundaries_win_over_optional_hpa_and_policy_values",
+    "hpa_metric_gate_selects_container_resource_without_gating_ordinary_metrics",
+    "both_pdb_policy_values_follow_field_availability_and_stable_only_admission",
+    "scale_to_zero_gate_matches_numeric_zero_without_coercing_strings",
+    "fail_index_action_retains_its_value_predicate_gate",
+    "hpa_utilization_preserves_positive_int32_targets_above_one_hundred",
+    "rbac_external_subject_namespace_is_preserved_without_namespaced_user_resolution",
+    "hpa_missing_or_malformed_api_never_becomes_a_kindless_same_name_lookup",
+    "historical_host_path_prefixes_preserve_spelling_and_reject_parent_components",
+    "runtime_tolerations_preserve_empty_defaults_and_require_exists_for_empty_keys",
+    "service_account_reference_values_are_preserved_without_invented_admission_errors",
+    "rbac_service_account_subject_names_use_the_total_subdomain_envelope",
+    "policy_rule_strings_are_retained_separately_from_native_array_and_scope_rules",
+    "hpa_target_types_preserve_native_permissive_leaves_and_actual_source_requirements",
+    "beta1_object_conversion_retains_both_values_and_requires_positive_target_value",
+    "signed_priority_reserved_values_and_runtime_handler_have_independent_rules",
+    "quota_limit_selected_arithmetic_and_historical_policy_boundaries_are_distinct",
+    "exact_root_observations_preserve_lifecycle_and_aggregated_rules",
+    "source_free_budgets_and_native_failures_keep_exact_resource_attribution",
+    "actual_namespace_and_service_account_obey_lower_public_operation_limits",
+    "actual_service_account_unknown_reports_stop_at_the_inherited_report_limit",
+    "historical_policy_strategy_rules_and_ranges_follow_the_reviewed_floor",
+    "historical_policy_capabilities_are_literal_conflicts_without_a_whitelist",
+    "native_rules::hpa_target_api_create_boundary_keeps_native_parser_and_unspecified_context_distinct",
+    "native_rules::quota_scopes_apply_only_native_conflicts_cardinality_and_standard_resource_rules",
+    "native_rules::quota_scope_versions_and_reviewed_gate_defaults_are_independent",
+    "native_rules::limit_range_supplied_integral_relationships_have_exact_failure_paths",
+    "native_rules::limit_range_non_overcommit_pod_and_pvc_rules_do_not_invent_defaults",
+    "native_rules::source_free_limit_range_validation_keeps_cumulative_work_and_terminal_privacy",
+    "native_rules::source_free_limit_range_invalid_relationship_is_attributed_without_defaults",
+    "native_rules::hpa_metric_identifiers_use_path_segments_across_actual_served_api_forms",
+    "native_rules::hpa_object_metric_reference_api_is_create_context_but_always_allows_core_group",
+    "native_rules::hpa_resource_names_and_container_labels_keep_native_source_rules_distinct",
+    "native_rules::unsupported_selectors_preserve_private_output_and_explicit_graph_outcomes",
+    "native_rules::invalid_binding_groups_and_role_kinds_never_resolve_positive_same_name_identities",
+    "native_rules::runtime_toleration_uniqueness_uses_raw_tuple_and_ignores_seconds_in_both_input_paths",
+    "native_rules::admitted_resource_names_and_native_integer_quantity_domain_are_distinct",
+    "native_rules::empty_native_policy_collections_are_distinct_from_absent_or_null_values",
+    "native_rules::limit_range_type_accepts_only_native_kinds_or_qualified_extension_names",
+    "native_rules::historical_security_policy_checks_native_escalation_drivers_and_runtime_names"
+  ],
+  "selected_native_checks": [
+    {
+      "id": "hpa-target-create-context",
+      "code": "src/resources/access/hpa.rs",
+      "versions": "1.20-1.37; API check Create-specific from1.34",
+      "test": "native_rules::hpa_target_api_create_boundary_keeps_native_parser_and_unspecified_context_distinct"
+    },
+    {
+      "id": "quota-native-scopes",
+      "code": "src/resources/access/policy.rs",
+      "versions": "CrossNamespacePodAffinity gated1.21-1.23, unconditional1.24+; VolumeAttributesClass1.33+",
+      "test": "native_rules::quota_scopes_apply_only_native_conflicts_cardinality_and_standard_resource_rules"
+    },
+    {
+      "id": "quota-scope-gates",
+      "code": "src/resources/access/policy.rs",
+      "versions": "1.20-1.37 finite feature resolver",
+      "test": "native_rules::quota_scope_versions_and_reviewed_gate_defaults_are_independent"
+    },
+    {
+      "id": "limit-range-supplied-order",
+      "code": "src/resources/access/quantity_rules.rs",
+      "versions": "1.20-1.37 conservative nonnegative integral int64 domain",
+      "test": "native_rules::limit_range_supplied_integral_relationships_have_exact_failure_paths"
+    },
+    {
+      "id": "limit-range-non-overcommit-type-bounds",
+      "code": "src/resources/access/quantity_rules.rs",
+      "versions": "1.20-1.37",
+      "test": "native_rules::limit_range_non_overcommit_pod_and_pvc_rules_do_not_invent_defaults"
+    },
+    {
+      "id": "limit-range-source-free-attribution",
+      "code": "src/resources/access/quantity_rules.rs",
+      "versions": "1.20-1.37",
+      "test": "native_rules::source_free_limit_range_invalid_relationship_is_attributed_without_defaults"
+    },
+    {
+      "id": "limit-range-cumulative-processing",
+      "code": "src/resources/access/quantity_rules.rs",
+      "versions": "operation-wide session, not native conformance",
+      "test": "native_rules::source_free_limit_range_validation_keeps_cumulative_work_and_terminal_privacy"
+    },
+    {
+      "id": "empty-toleration-operator",
+      "code": "src/resources/access/policy.rs",
+      "versions": "1.20-1.37; empty means Equal",
+      "test": "runtime_tolerations_preserve_empty_defaults_and_require_exists_for_empty_keys"
+    },
+    {
+      "id": "hpa-metric-identities",
+      "code": "src/resources/access/hpa.rs",
+      "versions": "1.20-1.37 served-root ranges; static-source checks only",
+      "test": "native_rules::hpa_metric_identifiers_use_path_segments_across_actual_served_api_forms"
+    },
+    {
+      "id": "hpa-object-core-reference",
+      "code": "src/resources/access/hpa.rs",
+      "versions": "1.20-1.37 served-root ranges; static-source checks only",
+      "test": "native_rules::hpa_object_metric_reference_api_is_create_context_but_always_allows_core_group"
+    },
+    {
+      "id": "hpa-container-resources",
+      "code": "src/resources/access/hpa.rs",
+      "versions": "1.20-1.37 served-root ranges; static-source checks only",
+      "test": "native_rules::hpa_resource_names_and_container_labels_keep_native_source_rules_distinct"
+    },
+    {
+      "id": "selector-unsupported-preservation",
+      "code": "src/resources/access/validation.rs",
+      "versions": "1.20-1.37 served-root ranges; static-source checks only",
+      "test": "native_rules::unsupported_selectors_preserve_private_output_and_explicit_graph_outcomes"
+    },
+    {
+      "id": "rbac-foreign-group-identity",
+      "code": "src/resources/access/facts.rs",
+      "versions": "1.20-1.37 served-root ranges; static-source checks only",
+      "test": "native_rules::invalid_binding_groups_and_role_kinds_never_resolve_positive_same_name_identities"
+    },
+    {
+      "id": "runtime-raw-toleration-uniqueness",
+      "code": "src/resources/access/policy.rs",
+      "versions": "1.20-1.37 served-root ranges; static-source checks only",
+      "test": "native_rules::runtime_toleration_uniqueness_uses_raw_tuple_and_ignores_seconds_in_both_input_paths"
+    },
+    {
+      "id": "resource-names-integer-milli-domain",
+      "code": "src/resources/access/resource_names.rs",
+      "versions": "1.20-1.37 served-root ranges; static-source checks only",
+      "test": "native_rules::admitted_resource_names_and_native_integer_quantity_domain_are_distinct"
+    },
+    {
+      "id": "native-nonempty-collections",
+      "code": "src/resources/access/rbac.rs",
+      "versions": "1.20-1.37 served-root ranges; static-source checks only",
+      "test": "native_rules::empty_native_policy_collections_are_distinct_from_absent_or_null_values"
+    },
+    {
+      "id": "limit-range-qualified-types",
+      "code": "src/resources/access/policy.rs",
+      "versions": "1.20-1.37 served-root ranges; static-source checks only",
+      "test": "native_rules::limit_range_type_accepts_only_native_kinds_or_qualified_extension_names"
+    },
+    {
+      "id": "historical-psp-reviewed-leaves",
+      "code": "src/resources/access/policy.rs",
+      "versions": "1.20-1.37 served-root ranges; static-source checks only",
+      "test": "native_rules::historical_security_policy_checks_native_escalation_drivers_and_runtime_names"
+    }
+  ],
+  "conformance": {
+    "supported_kubernetes_versions": [],
+    "field_cases": "pending",
+    "native_kind_scenarios": "pending",
+    "tool_commands": "pending",
+    "api_server": "pending",
+    "runtime": "pending"
+  },
+  "limitations": [
+    "Scale subresource, metrics, effective RBAC permissions, policy/quota enforcement and controller reconciliation are external prerequisites.",
+    "LimitRange native fractional, negative and capped arithmetic, rounded ratio ceiling and implicit defaults remain preserved with explicit unresolved findings.",
+    "Quota aggregation/resource-consumption semantics are not inferred from scope admission.",
+    "Historical PSP native string capabilities outside reviewed predicates remain unadmitted; no PSA equivalence or enforcement.",
+    "Local code cases are not API-server or runtime evidence.",
+    "RuntimeClass hugepage page-size, divisibility and companion CPU/memory checks remain explicit unadmitted semantics.",
+    "Integer resources use only exact nonnegative integral milli-units fitting int64; finer fractions, native rounding/capping and overflow remain explicit unadmitted semantics."
+  ]
+}

@@ -218,6 +218,11 @@ agreement across every admitted profile. Effective classification uses that sour
 otherwise the explicit target, otherwise the same all-profile agreement. Source-version retention
 does not establish validation against the source server.
 
+The observation expectation table retains the original report, ledger and witness hashes.
+A separate evaluation-ledger binding authenticates later networking-only corrections through
+unchanged schema-profile and exact API/root-status projections. This proves observation-basis
+equivalence; it does not create a new historical report or native-conformance result.
+
 ListMetadata observation removal applies only to `resourceVersion`, `selfLink`, `continue` and
 `remainingItemCount`. ObjectMetadata-shaped neighbors and arbitrary wrapper `status` remain
 preserved and subject to ordinary admission/privacy rules. Edited observations remain classified

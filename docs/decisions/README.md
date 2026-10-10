@@ -10,4 +10,6 @@
 | [0007](0007-finite-volume-access-modes.md)           | Accepted                  | Finite access modes and original supplied-occurrence preservation        |
 | [0008](0008-exact-protected-json.md)                 | Accepted                  | Exact JSON numbers, bounded protected arenas and private snapshot errors |
 
+| [0009](0009-native-access-policy.md) | Accepted | Typed access/policy and finite native admission versus controller semantics |
+
 Add a new numbered ADR when an accepted decision changes; preserve and supersede historical decisions.

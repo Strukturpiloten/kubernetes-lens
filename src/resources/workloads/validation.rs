@@ -12,7 +12,7 @@ use crate::{
     },
     registry::{FindingSink, ValidationContext},
     syntax::TreeValue,
-    value::{IntOrString, Presence, Protected, Quantity},
+    value::{IntOrString, Presence, Protected, Quantity, label_key, label_value},
 };
 use std::collections::BTreeSet;
 
@@ -1234,7 +1234,7 @@ fn validate_native_items(
         );
     }
     if path.0.iter().rev().nth(1).is_some_and(|p| p == "tolerations") {
-        enumeration(node, "operator", &["Equal", "Exists"], path, out);
+        enumeration(node, "operator", &["", "Equal", "Exists"], path, out);
         enumeration(
             node,
             "effect",
@@ -1245,8 +1245,14 @@ fn validate_native_items(
         if text(node, "operator") == Some("Exists") && text(node, "value").is_some_and(|s| !s.is_empty()) {
             invalid(&path.child("value"), out);
         }
-        if text(node, "key") == Some("") && text(node, "operator") != Some("Exists") {
+        if text(node, "key").is_none_or(str::is_empty) && text(node, "operator") != Some("Exists") {
             invalid(&path.child("operator"), out);
+        }
+        if text(node, "key").is_some_and(|key| !key.is_empty() && !label_key(key)) {
+            invalid(&path.child("key"), out);
+        }
+        if text(node, "value").is_some_and(|value| !label_value(value)) {
+            invalid(&path.child("value"), out);
         }
         if present(node, "tolerationSeconds") && text(node, "effect") != Some("NoExecute") {
             invalid(&path.child("tolerationSeconds"), out);

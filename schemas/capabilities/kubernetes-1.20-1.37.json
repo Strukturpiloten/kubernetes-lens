@@ -12864,7 +12864,15 @@
                   "1.37"
                 ]
               },
-              "native_constraints": [],
+              "native_constraints": [
+                {
+                  "rule": "feature_gate",
+                  "gate": "ServiceLoadBalancerClass",
+                  "selection": "stable_only",
+                  "gated_values": null,
+                  "unconditional_values": []
+                }
+              ],
               "schema_required_profile_ids": []
             },
             {
@@ -80164,7 +80172,7 @@
           "native_constraints": [
             {
               "rule": "enum",
-              "values": ["Equal", "Exists"],
+              "values": ["", "Equal", "Exists"],
               "other_values": "preserve_only"
             },
             {
@@ -118295,6 +118303,23 @@
       "source_id": "PodOverhead",
       "variants": [true],
       "contexts": [{}],
+      "typed_selection": "selected_expected_pending",
+      "propagation": "Every admitted root path reaching helper; all named PodSpec/JobSpec template bindings"
+    },
+    {
+      "id": "602491c5825370d8",
+      "kind": "Service",
+      "api_version": "v1",
+      "pointer": "/spec/loadBalancerClass",
+      "gate": "ServiceLoadBalancerClass",
+      "selection": "stable_only",
+      "source_id": "ServiceLoadBalancerClass",
+      "variants": ["example.com/internal-vip"],
+      "contexts": [
+        {
+          "type": "LoadBalancer"
+        }
+      ],
       "typed_selection": "selected_expected_pending",
       "propagation": "Every admitted root path reaching helper; all named PodSpec/JobSpec template bindings"
     }

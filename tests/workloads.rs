@@ -122,6 +122,73 @@ fn all_pod_bindings(spec: &serde_json::Value) -> TestResult<Vec<(ResourceSet, St
 }
 
 #[test]
+fn toleration_empty_defaults_and_key_requirements_propagate_through_every_pod_binding() -> TestResult<()> {
+    use serde_json::json;
+    for (toleration, valid) in [
+        (
+            json!({"key":"example.org/node","operator":"","effect":"","value":"selected"}),
+            true,
+        ),
+        (json!({"key":"node","effect":""}), true),
+        (json!({"key":"","operator":"Exists","effect":""}), true),
+        (json!({"operator":"Exists"}), true),
+        (json!({}), false),
+        (json!({"operator":"Equal"}), false),
+        (json!({"key":""}), false),
+        (json!({"key":"","operator":"Equal"}), false),
+        (json!({"key":"bad/key/extra","operator":"Exists"}), false),
+        (json!({"key":"node","value":"bad value"}), false),
+    ] {
+        let spec = json!({"containers":[{"name":"web","image":"example/web:v1"}],"tolerations":[toleration]});
+        for (set, pointer, first) in all_pod_bindings(&spec)? {
+            let last = if set.documents()[0].resource::<CronJobV1Beta1>().is_some() {
+                24
+            } else {
+                37
+            };
+            for minor in [first, last] {
+                let profile = target(minor)?;
+                let findings = validate_for_target(&set, &profile);
+                assert_eq!(
+                    findings
+                        .iter()
+                        .any(|finding| finding.code == FindingCode::NativeFieldInvalid),
+                    !valid,
+                    "{pointer} {minor}: {findings:?}"
+                );
+                let options = GenerationOptions {
+                    json_shape: JsonShape::SingleResource,
+                    opaque_fields: OpaqueFieldPolicy::PreserveWithFinding,
+                    protected_output: ProtectedOutput::Include,
+                    ..GenerationOptions::default()
+                };
+                if valid {
+                    let artifact = generate(&set, &profile, OutputFormat::Json, &options).required()?;
+                    let bytes = artifact.reveal_bytes(&ExplicitArtifactAccess::explicitly_allow_raw_artifact());
+                    let emitted: serde_json::Value = serde_json::from_slice(bytes)?;
+                    assert_eq!(emitted.pointer(&format!("{pointer}/tolerations/0")), Some(&toleration));
+                    let reparsed = resources(std::str::from_utf8(bytes)?)?;
+                    assert!(
+                        !validate_for_target(&reparsed, &profile)
+                            .iter()
+                            .any(|finding| finding.code == FindingCode::NativeFieldInvalid)
+                    );
+                } else {
+                    assert!(
+                        generate(&set, &profile, OutputFormat::Json, &options)
+                            .err()
+                            .required()?
+                            .iter()
+                            .any(|finding| finding.code == FindingCode::NativeFieldInvalid)
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn named_ports_follow_native_grammar_in_every_pod_binding() -> TestResult<()> {
     use serde_json::json;
     for name in [

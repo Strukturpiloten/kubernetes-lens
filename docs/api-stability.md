@@ -49,3 +49,8 @@ Presence<Vec<String>> to Presence<AccessModes>. Construct selected modes with th
 EstablishedVolumeAccessMode enum. Decoded selected() inspection returns completeness and
 original indexes together; unsupported strings require ExplicitSourceAccess. Copied partial
 holders cannot authorize source-free authoring or destination preservation.
+
+The access/policy cohort adds eighteen concrete API roots with typed authoring, supplied references
+and finite native validation. HPA Create rules are operation-specific; arbitrary grouped targets do
+not establish a scale subresource. LimitRange comparisons expose their conservative native arithmetic
+boundary, while unresolved rounding/defaulting remains explicit. See [ADR 0009](decisions/0009-native-access-policy.md).
