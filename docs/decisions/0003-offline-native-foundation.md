@@ -50,3 +50,9 @@ test-only codecs exercise these interfaces without publishing fake production ca
 Unfulfilled lint expectations remain enabled, so integration must remove the expectations as
 real cohort implementations begin using each item. Exact locations and ownership are recorded
 in the foundation API document.
+
+## Renderer milestone refinement
+
+[ADR 0012](0012-explicit-offline-renderer-selection.md) supersedes the no-renderer-execution
+milestone only: explicit offline execution requires caller selection and provisioned isolation.
+Native parsing remains subprocess-free, and independent conformance evidence remains required.

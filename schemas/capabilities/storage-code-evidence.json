@@ -77,7 +77,7 @@
   "source_sha256": {
     "src/capability.rs": "dd9a69ee48aee45a5638fb38be7988c7c6d02ad0c176f697245ecf8a8a40ed40",
     "src/diagnostic.rs": "5ac5cab660f3bccee70057940dab03a671d676b4c18176d428bb9e0ef5e37f30",
-    "src/generation.rs": "9074d5a5c832fdb67e0d72e96e1d27e2c3379577da9906a79dd07f54f567c133",
+    "src/generation.rs": "0a77cef12270c044d51ea97618616e64293fa36d485f572960dceea09a118a58",
     "src/graph.rs": "cde872fb4ff06a993e17c3f48541a11a21b4be12385611c4567f61b6079d3405",
     "src/model.rs": "e241166e68679275cfabddca496e08fad5bf708afa7525946217d97fc9a42561",
     "src/registry.rs": "5e03c877fbbb689c5122be45a1403f0bf4615e53a2d3ed043d7d8c363fcd2bab",

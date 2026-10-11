@@ -289,6 +289,12 @@ const binaryOwners = actual.filter((row) => row.dep.depName === "base64");
 assert.equal(binaryOwners.length, 1, "native binary pin has exactly one owner");
 assert.equal(binaryOwners[0].manager, "cargo");
 assert.equal(binaryOwners[0].dep.currentValue, "=0.22.1");
+const rendererPins = ["nix", "rustix", "command-fds", "close_fds", "sha2"];
+for (const name of rendererPins) {
+  const owners = actual.filter((row) => row.dep.depName === name);
+  assert.equal(owners.length, 1, `${name} renderer pin has exactly one owner`);
+  assert.equal(owners[0].manager, "cargo");
+}
 const withoutCargo = structuredClone(config);
 withoutCargo.enabledManagers = withoutCargo.enabledManagers.filter(
   (manager) => manager !== "cargo",
@@ -506,6 +512,21 @@ try {
     absentBinary,
     "replacement refuses a missing dependency instead of modifying another pin",
   );
+  const rendererRow = actual.find((row) => row.dep.depName === "nix");
+  const rendererOriginal = files.get(rendererRow.file);
+  await fs.writeFile(path.join(scratch, rendererRow.file), rendererOriginal);
+  const rendererUpgrade = {
+    ...rendererRow.extraction, ...rendererRow.dep, manager: "cargo", packageFile: rendererRow.file,
+    depIndex: rendererRow.extraction.deps.indexOf(rendererRow.dep), newValue: "=0.31.3",
+  };
+  const rendererUpdated = await doAutoReplace(rendererUpgrade, rendererOriginal, false);
+  assert(rendererUpdated && rendererUpdated !== rendererOriginal);
+  const rendererAfter = await cargo.extractPackageFile(rendererUpdated, rendererRow.file, {});
+  assert.equal(rendererAfter.deps[rendererUpgrade.depIndex].currentValue, "=0.31.3");
+  assert(rendererUpdated.includes('features = ["ptrace", "process", "signal", "user", "fs", "time"], optional = true'));
+  const absentRenderer = rendererOriginal.replace(/^nix =.*\n/m, "");
+  await fs.writeFile(path.join(scratch, rendererRow.file), absentRenderer);
+  assert.equal(await doAutoReplace(rendererUpgrade, absentRenderer, false), absentRenderer);
   const imageRow = actual.find((row) => row.dep.datasource === "docker");
   const originalImage = files.get(imageRow.file);
   await fs.mkdir(path.join(scratch, path.dirname(imageRow.file)), {
@@ -584,6 +605,13 @@ for (const updateType of ["minor", "patch", "pin", "digest", "pinDigest"]) {
   assert.equal(binary.automerge, false);
   assert.equal(binary.dependencyDashboardApproval, true);
   assert.equal(binary.minimumReleaseAge, "3 days");
+  for (const name of rendererPins) {
+    const renderer = await policy({ manager: "cargo", datasource: "crate", depName: name, updateType });
+    assert.equal(renderer.groupName, "Supervised renderer dependencies");
+    assert.equal(renderer.automerge, false);
+    assert.equal(renderer.dependencyDashboardApproval, true);
+    assert.equal(renderer.minimumReleaseAge, "3 days");
+  }
   const toolchain = await policy({
     manager: "rust-toolchain",
     datasource: "rust-version",
@@ -719,6 +747,11 @@ assert.equal(
   "negative rule-order mutation exposes unsafe timezone updates",
 );
 assert.throws(() => assert.equal(unsafeTimezone.automerge, false));
+for (const name of rendererPins) {
+  const renderer = await policy({ manager: "cargo", datasource: "crate", depName: name, updateType: "patch" }, reordered);
+  assert.equal(renderer.automerge, true, "negative rule-order mutation exposes unsafe renderer updates");
+  assert.throws(() => assert.equal(renderer.automerge, false));
+}
 const unsafeImage = await policy(
   {
     manager: "custom.regex",

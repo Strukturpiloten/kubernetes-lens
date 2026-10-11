@@ -1,20 +1,23 @@
 # Decision index
 
-| Decision                                             | Status                         | Contract                                                                    |
-| ---------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------- |
-| [0001](0001-independent-unpublished-bootstrap.md)    | Partly superseded by 0003      | Independent unpublished bootstrap with shared tooling ownership             |
-| [0002](0002-frozen-native-compatibility-contract.md) | Refined by 0007                | Frozen native versions, fields, predicates and pending evidence             |
-| [0003](0003-offline-native-foundation.md)            | Partly superseded by 0004      | Offline foundation, private evidence and sealed admission                   |
-| [0004](0004-native-authoring-facts-observations.md)  | Refined by 0005, 0006 and 0007 | Bounded typed authoring, effective facts and reviewed observations          |
-| [0005](0005-native-networking-relations.md)          | Accepted                       | Closed networking relations and stable topology observation preservation    |
-| [0006](0006-shared-native-processing.md)             | Accepted                       | Shared processing sessions, protected bytes and supplied quantity order     |
-| [0007](0007-finite-volume-access-modes.md)           | Accepted                       | Finite access modes and original supplied-occurrence preservation           |
-| [0008](0008-exact-protected-json.md)                 | Accepted                       | Exact JSON numbers, bounded protected arenas and private snapshot errors    |
-| [0009](0009-native-access-policy.md)                 | Accepted                       | Typed access/policy and finite native admission versus controller semantics |
+| Decision                                             | Status                          | Contract                                                                    |
+| ---------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------- |
+| [0001](0001-independent-unpublished-bootstrap.md)    | Partly superseded by 0003       | Independent unpublished bootstrap with shared tooling ownership             |
+| [0002](0002-frozen-native-compatibility-contract.md) | Refined by 0007                 | Frozen native versions, fields, predicates and pending evidence             |
+| [0003](0003-offline-native-foundation.md)            | Partly superseded by 0004, 0012 | Offline foundation, private evidence and sealed admission                   |
+| [0004](0004-native-authoring-facts-observations.md)  | Refined by 0005, 0006 and 0007  | Bounded typed authoring, effective facts and reviewed observations          |
+| [0005](0005-native-networking-relations.md)          | Accepted                        | Closed networking relations and stable topology observation preservation    |
+| [0006](0006-shared-native-processing.md)             | Accepted                        | Shared processing sessions, protected bytes and supplied quantity order     |
+| [0007](0007-finite-volume-access-modes.md)           | Accepted                        | Finite access modes and original supplied-occurrence preservation           |
+| [0008](0008-exact-protected-json.md)                 | Accepted                        | Exact JSON numbers, bounded protected arenas and private snapshot errors    |
+| [0009](0009-native-access-policy.md)                 | Accepted                        | Typed access/policy and finite native admission versus controller semantics |
 
 | [0010](0010-native-configuration-storage.md) | Accepted | Typed protected configuration and finite storage validation versus runtime behavior |
 | [0011](0011-source-bound-custom-resource-descriptors.md) | Accepted | Source-bound custom-resource descriptors and supplied-only graph dependencies |
 
+| [0012](0012-explicit-offline-renderer-selection.md) | Refined by 0014 | Explicit offline renderer selection and protected generated projects |
 | [0013](0013-native-naming-and-source-identity.md) | Accepted | Exact bounded source identity and selected native naming versus server generation |
+
+| [0014](0014-renderer-operation-deadline-and-cancellation.md) | Accepted source contract | Original caller total end, private owned-parent cancellation and unproved-cleanup quarantine |
 
 Add a new numbered ADR when an accepted decision changes; preserve and supersede historical decisions.

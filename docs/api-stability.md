@@ -14,8 +14,9 @@ ADR/migration decision. Publication remains separately authorized after the comp
 Private raw input/output, diagnostic redaction, finite target selection, unknown retention,
 null-versus-absence, current identity recomputation and preservation-versus-admission are public
 behavior boundaries. Sealed codec internals are crate-private integration contracts. Source-backed
-schema descriptors establish only their reviewed offline supported-subset contract in ADR 0011. Renderer execution is deferred; finite
-renderer identifiers do not freeze an invocation, artifact-tree or supervisor API.
+schema descriptors establish only their reviewed offline supported-subset contract in ADR 0011. The unpublished `formats` API adds explicit versioned invocation plans, protected artifact trees and
+an opt-in Linux supervisor under [ADR 0012](decisions/0012-explicit-offline-renderer-selection.md).
+Ordinary parsing and native generation remain subprocess-free; these APIs may change before publication.
 
 The issue-nine unpublished API intentionally changes selector members to Presence values with a
 private unknown holder, source origin to EvidenceOrigin, and adds opaque typed authoring, explicit
@@ -80,3 +81,15 @@ struct shape stay unchanged. Exhaustive FindingCode matches add NativeNamingUnve
 remediation distinguishes historical prefix compatibility from operation context. Invalid or
 unverified naming cannot provide positive target graph evidence; no-profile supplied equality
 is not native validation. Broader private spelling still requires explicit protected artifact output.
+
+[ADR 0014](decisions/0014-renderer-operation-deadline-and-cancellation.md) adds opaque
+`RendererOperationControl`, cloneable `RendererCancellationToken` and the explicitly
+selected `SupervisedRenderer::execute_with_control` method. Existing construction and
+`OfflineRenderer::execute` retain the documented legacy v1 execution-plus-cleanup
+contract; they cannot represent an earlier caller total end. Migrate callers needing
+that bound by constructing the control from the original absolute `Instant` before
+queue/setup and retaining its token, rather than creating a fresh duration per stage.
+`FailureCause::Cancelled` is additive; exhaustive matches must handle it. V2 header,
+descriptor and journal retain both immutable monotonic ends; old brokers reject v2
+without fallback. Private supervisor control is not a public cancellation/recovery API.
+These changes establish source contracts, not actual kernel or official-tool conformance.

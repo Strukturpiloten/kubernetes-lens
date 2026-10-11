@@ -16,3 +16,8 @@ formats, runs the complete gate after the final edit, independently reviews and 
 head. Failures or incomplete checks block commit/push/PR. The primary owns Git/GitHub writes and
 exact-head merge safeguards; workers cannot perform them. Follow repository protections without
 admin override. External settings that could not be read or changed are tracked in #16.
+
+Packaging includes the renderer Rust sources, focused source-only tests and `docs/formats.md`.
+The helper and gate binaries require `supervised-renderer`; provisioning the system broker remains
+an explicit consumer operation. Packaging is not publication, deployment, official tool acceptance
+or live containment evidence. All existing complete-gate and separate-publication requirements apply.

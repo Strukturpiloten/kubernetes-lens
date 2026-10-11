@@ -13,8 +13,8 @@ supplied-only graph evidence. Typed configuration and storage support adds Confi
 PersistentVolume and StorageClass; see [storage support and limits](docs/storage.md).
 Typed extension definitions and source-bound custom-document schema checks are available; see
 [extension support and limits](docs/extensions.md). No Kubernetes
-minor, renderer or runtime conformance is claimed. Renderer execution and live cluster operations
-are not delivered. See [workload support and limits](docs/workloads.md),
+minor, renderer or runtime conformance is claimed. Explicit offline renderer plans, protected generated charts/projects, and an opt-in Linux supervisor
+are delivered; see [renderer interfaces](docs/formats.md). Live cluster operations are not delivered. See [workload support and limits](docs/workloads.md),
 [access support and limits](docs/access.md) and [networking support and limits](docs/networking.md).
 See the [foundation API and integration contract](docs/foundation-api.md).
 Shared native-processing limits now cover cumulative charged payload/work and diagnostic reports.

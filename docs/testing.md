@@ -96,3 +96,37 @@ and cover all 35 kinds/48 API profiles across admitted minors and removal bounda
 actual native source, authoring, edits, protected output and supplied graph projection. The naming
 source/contract/code evidence remains distinct from API-server, generated-name and runtime
 acceptance. Historical research hashes are immutable; current source guards bind candidate code.
+
+Renderer integration tests in `tests/formats.rs` exercise supplied snapshots, finite command/profile
+admission, cumulative generation and resource association, private artifact access, explicit
+variations, lifecycle findings, and bounded local v1beta1 `vars`. They invoke no official tools.
+`tests/supervised_renderer.rs` is enabled only with the optional Linux `supervised-renderer` feature;
+its source-level refusal tests do not establish live isolation or cold-cache resource fit.
+Run the complete repository gate after integration; focused tests do not replace it.
+
+The renderer/naming bridge regression checks private native RBAC names and unverified custom
+workload names through both artifact generators: denied output, explicit exact-name preservation,
+retained redacted native warnings, and refusal of inferred typed parameters. Existing reordered-root,
+List association and cumulative overlay-budget regressions remain required after integration.
+
+Renderer #38 focused validation is `cargo test --locked --features supervised-renderer
+--lib --test supervised_renderer`. Pure controls cover conservative absolute-end
+conversion, ten-second cleanup reservation inside total, cap/expiry/overflow/version
+refusal, clone cancellation, write-half-only cancellation with retained read-half,
+late cancellation after available output, immutable journal/descriptor boundaries,
+owned unreaped child kill decisions, exact wait acknowledgement and missing/wrong
+reap refusal, cancellation between output chunks and after native acknowledgement,
+unchanged recovery expiry, tracer terminal-before-parent ordering, and fixed creation
+guard/activation-lag/complete STOP and FINAL waits, 250ms per timer accuracy and
+activation rounding arithmetic. Recovery also tests persisted 15s cleanup expiry
+at 15s and refusal at 16s under an unchanged 30s total, including a complete
+interrupted pending write while live cleanup is unset. Complete/partial/malformed/
+foreign pending admission, repeated promotion, widening refusal and validated-live
+fallback preserve the earliest deadline and authority. Local
+socket-pair tests and modeled parent/kernel outcomes invoke no official renderer,
+broker service, runtime provisioning or cluster. They do not establish actual kernel
+containment, native parent reap, cold-cache behavior, installed-manager timer effects
+or interrupted recovery. All original 90 renderer cells, three graph cases, two target
+patches and full unchanged CNPG default-render obligations remain required. Run the
+complete repository gate only under the primary's shared-slot authorization after the
+final source edit; focused source/model checks never replace it.

@@ -10,7 +10,7 @@
     "scripts/fixtures/native_acceptance.py": "ed086715e3f66986b49c1409c22317f6eeee857dc0625e74123f49f6ffbab340",
     "scripts/test-compatibility-ledger.py": "4ac9dab41a29608baa10ef816b4a2cb2623657baa3cae6970d33b806ac2acb17",
     "src/diagnostic.rs": "5ac5cab660f3bccee70057940dab03a671d676b4c18176d428bb9e0ef5e37f30",
-    "src/generation.rs": "9074d5a5c832fdb67e0d72e96e1d27e2c3379577da9906a79dd07f54f567c133",
+    "src/generation.rs": "0a77cef12270c044d51ea97618616e64293fa36d485f572960dceea09a118a58",
     "src/graph.rs": "cde872fb4ff06a993e17c3f48541a11a21b4be12385611c4567f61b6079d3405",
     "src/model.rs": "e241166e68679275cfabddca496e08fad5bf708afa7525946217d97fc9a42561",
     "src/resources/common.rs": "4181861d0d7813af28ac077e862aae887d5928e6d4c8c1aa6d115fdc6488ccbb",
