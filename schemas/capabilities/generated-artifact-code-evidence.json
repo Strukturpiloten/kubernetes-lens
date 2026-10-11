@@ -1,0 +1,24 @@
+{
+  "format": "local_generated_artifact_code_evidence_v1",
+  "issue": 43,
+  "decision": "docs/decisions/0017-generated-native-artifact-bytes.md",
+  "artifact_profile": "generated-native-artifacts-v1",
+  "ordinary_native_generation_unchanged": true,
+  "native_conformance": false,
+  "renderer_execution": false,
+  "full_corpus_seals": false,
+  "authority": "local source/API contract coverage only",
+  "tests": [
+    "generated_literal_bytes_match_independent_project_contract",
+    "generated_values_schema_and_defaults_are_sorted_and_exact",
+    "generated_json_preserves_raw_numbers_unicode_and_collection_order",
+    "generated_associations_follow_original_sources_after_document_reordering",
+    "flattened_nested_lists_retain_full_original_associations",
+    "zero_roots_and_empty_wrappers_keep_validation_and_explicit_flatten_policy",
+    "grouped_container_patches_use_original_array_order_and_refuse_duplicate_leaves",
+    "generated_observations_follow_caller_intent_without_implicit_stripping",
+    "static_crds_use_global_six_digit_ordinals_and_custom_crd_names_stay_templates",
+    "multiple_overlays_share_one_cumulative_processing_allowance",
+    "custom_group_workload_names_never_admit_values_or_overlays"
+  ]
+}

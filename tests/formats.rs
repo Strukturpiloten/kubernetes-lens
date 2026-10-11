@@ -642,13 +642,13 @@ fn generated_chart_literals_are_quoted_and_values_are_finite_and_deterministic()
         &chart,
         vec!["helm-3.22.0".into(), "helm-4.3.0".into()],
     )?;
-    let template = String::from_utf8(file(&tree, "templates/0000.yaml")?)?;
-    assert!(template.contains("{{ .Values.replicas | toJson }}"));
+    let template = String::from_utf8(file(&tree, "templates/resources.yaml")?)?;
+    assert!(template.contains("{{ toJson (index .Values \"replicas\") }}"));
     assert!(template.contains("{{ print \"\\\"{{ lookup"));
-    assert_eq!(file(&tree, "values.yaml")?, b"---\n{\"replicas\":2}\n");
+    assert_eq!(file(&tree, "values.yaml")?, b"{\"replicas\":2}\n");
     assert_eq!(
-        file(&tree, "templates/0000.yaml")?,
-        file(&again, "templates/0000.yaml")?
+        file(&tree, "templates/resources.yaml")?,
+        file(&again, "templates/resources.yaml")?
     );
     let schema: serde_json::Value = serde_json::from_slice(&file(&tree, "values.schema.json")?)?;
     assert_eq!(schema["additionalProperties"], false);
@@ -884,7 +884,7 @@ fn generated_quantity_defaults_and_overlay_errors_preserve_native_lexemes() -> T
         &intent,
         vec!["helm-4.3.0".into()],
     )?;
-    assert_eq!(file(&output, "values.yaml")?, b"---\n{\"cpu\":\"250m\"}\n");
+    assert_eq!(file(&output, "values.yaml")?, b"{\"cpu\":\"250m\"}\n");
     let invalid = vec![KustomizeOverlay {
         name: "test".into(),
         variations: vec![WorkloadVariation {
@@ -1075,7 +1075,7 @@ fn generated_parameters_and_overlays_bind_native_resource_ids_across_reordered_r
             &chart,
             vec!["helm-4.3.0".into()],
         )?;
-        let defaults: serde_json::Value = serde_json::from_slice(&file(&helm, "values.yaml")?[4..])?;
+        let defaults: serde_json::Value = serde_json::from_slice(&file(&helm, "values.yaml")?)?;
         assert_eq!(defaults["replicas"], 7);
         assert_eq!(defaults["image"], "example/selected:v7");
         assert_selected_templates(&helm, first_name, first_ns)?;
@@ -1119,13 +1119,13 @@ fn generated_parameters_and_overlays_bind_native_resource_ids_across_reordered_r
 
 fn assert_selected_templates(helm: &formats::ArtifactTree, first_name: &str, first_ns: &str) -> TestResult {
     let mut seen = [0; 2];
-    for index in 0..2 {
-        let template = String::from_utf8(file(helm, &format!("templates/{index:04}.yaml"))?)?;
-        let rendered = template
-            .replace("{{ .Values.replicas | toJson }}", "77")
-            .replace("{{ .Values.image | toJson }}", "\"example/edited:v8\"");
-        let rendered = decode_template_literals(&rendered)?;
-        let root: serde_json::Value = serde_json::from_str(&rendered[4..])?;
+    let template = String::from_utf8(file(helm, "templates/resources.yaml")?)?;
+    let rendered = template
+        .replace("{{ toJson (index .Values \"replicas\") }}", "77")
+        .replace("{{ toJson (index .Values \"image\") }}", "\"example/edited:v8\"");
+    let rendered = decode_template_literals(&rendered)?;
+    for document in rendered.split("---\n").filter(|document| !document.trim().is_empty()) {
+        let root: serde_json::Value = serde_json::from_str(document)?;
         let chosen = root["metadata"]["name"] == first_name && root["metadata"]["namespace"] == first_ns;
         seen[usize::from(chosen)] += 1;
         assert_eq!(root["spec"]["replicas"], if chosen { 77 } else { 2 });
@@ -1388,7 +1388,7 @@ fn native_private_and_unverified_names_survive_explicit_renderer_artifacts_only(
             assert!(!format!("{artifact:?}").contains(expected_name));
         }
         // These checks inspect protected literal artifacts, never execute Helm or Kustomize.
-        let template = String::from_utf8(file(&helm, "templates/0000.yaml")?)?;
+        let template = String::from_utf8(file(&helm, "templates/resources.yaml")?)?;
         let decoded = decode_template_literals(&template)?;
         let helm_root: serde_json::Value =
             serde_json::from_str(decoded.strip_prefix("---\n").ok_or("template document marker")?)?;
@@ -1416,6 +1416,498 @@ fn native_private_and_unverified_names_survive_explicit_renderer_artifacts_only(
             assert_eq!(refusal.code, FormatCode::UnsupportedVariation);
             assert_eq!(refusal.code.as_str(), "unsupported-semantic-conversion");
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn generated_literal_bytes_match_independent_project_contract() -> TestResult {
+    // Repository-authored literals; no product serializer supplies the expected bytes.
+    let source = r#"{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"literal-config"},"data":{"script":"{{ .Values.pwn }}","unicode":"é\n"}}"#;
+    let imported = import(source, RenderedKind::Manifest)?;
+    let intent = HelmChartOptions {
+        name: "literal-config".into(),
+        version: "0.1.0".into(),
+        parameters: Vec::new(),
+        hooks: HookPolicy::Reject,
+    };
+    let helm = formats::generate_chart(
+        imported.resources(),
+        &target()?,
+        &options(),
+        &intent,
+        vec!["helm-4.3.0".into()],
+    )?;
+    assert_eq!(
+        file(&helm, "Chart.yaml")?,
+        b"{\"apiVersion\":\"v2\",\"name\":\"literal-config\",\"type\":\"application\",\"version\":\"0.1.0\"}\n"
+    );
+    assert_eq!(file(&helm, "values.yaml")?, b"{}\n");
+    assert_eq!(file(&helm, "values.schema.json")?, b"{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"additionalProperties\":false,\"properties\":{},\"required\":[],\"type\":\"object\"}\n");
+    let expected = concat!(
+        "---\n",
+        r#"{ {{ print "\"apiVersion\"" }}:{{ print "\"v1\"" }},{{ print "\"data\"" }}:{ {{ print "\"script\"" }}:{{ print "\"{{ .Values.pwn }}\"" }},{{ print "\"unicode\"" }}:{{ print "\"é\\n\"" }} },{{ print "\"kind\"" }}:{{ print "\"ConfigMap\"" }},{{ print "\"metadata\"" }}:{ {{ print "\"name\"" }}:{{ print "\"literal-config\"" }} } }"#,
+        "\n"
+    );
+    assert_eq!(file(&helm, "templates/resources.yaml")?, expected.as_bytes());
+    assert_eq!(
+        helm.files(&ExplicitArtifactAccess::explicitly_allow_raw_artifact())
+            .count(),
+        4
+    );
+    Ok(())
+}
+
+#[test]
+fn generated_json_preserves_raw_numbers_unicode_and_collection_order() -> TestResult {
+    let source = r#"{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"raw"},"unknown":{"number":9007199254740993,"zero":-0,"scale":1.2300e+2},"string":"{{ .Values.pwn }}\n\t\u0000é\u2028\u2029\u007f<>&/","null_value":null,"array":[3,1,2]}"#;
+    let imported = import(source, RenderedKind::Manifest)?;
+    let base = formats::generate_kustomize(
+        imported.resources(),
+        &target()?,
+        &options(),
+        &[],
+        vec!["kustomize-5.8.3".into()],
+    )?;
+    let expected = concat!(
+        "---\n",
+        r#"{"apiVersion":"v1","array":[3,1,2],"kind":"ConfigMap","metadata":{"name":"raw"},"null_value":null,"string":"{{ .Values.pwn }}\n\t\u0000é"#,
+        "\u{2028}\u{2029}\u{7f}",
+        r#"<>&/","unknown":{"number":9007199254740993,"scale":1.2300e+2,"zero":-0}}"#,
+        "\n"
+    );
+    assert_eq!(file(&base, "base/resources.yaml")?, expected.as_bytes());
+    let helm = formats::generate_chart(
+        imported.resources(),
+        &target()?,
+        &options(),
+        &chart(),
+        vec!["helm-4.3.0".into()],
+    )?;
+    let template = String::from_utf8(file(&helm, "templates/resources.yaml")?)?;
+    assert!(template.contains("\\u007f"));
+    assert!(!template.contains('\u{7f}'));
+    let decoded = decode_template_literals(&template)?;
+    assert!(decoded.contains("\"scale\":1.2300e+2"));
+    assert!(decoded.contains("\"zero\":-0"));
+    Ok(())
+}
+
+#[test]
+fn generated_associations_follow_original_sources_after_document_reordering() -> TestResult {
+    use kubernetes_lens::{model::ResourceSet, parse_source};
+    let inputs = [(82, "z", "ns"), (41, "a", "ns")]
+        .into_iter()
+        .map(|(id, name, namespace)| {
+            let bytes =
+                format!("apiVersion: v1\nkind: ConfigMap\nmetadata: {{name: {name}, namespace: {namespace}}}\n");
+            parse_source(
+                SourceInput {
+                    id: SourceId(id),
+                    format: DocumentFormat::YamlStream,
+                    origin: InputOrigin::Authored,
+                    source_version: None,
+                    bytes: bytes.as_bytes(),
+                },
+                &ParseLimits::default(),
+            )
+            .map_err(|_| "parse failure")
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut resources = ResourceSet::from_inputs(inputs).map_err(|_| "resource set failure")?;
+    let ids: Vec<_> = resources
+        .documents()
+        .iter()
+        .map(kubernetes_lens::model::ResourceDocument::id)
+        .collect();
+    resources.documents_mut().reverse();
+    let artifact =
+        formats::generate_kustomize(&resources, &target()?, &options(), &[], vec!["kustomize-5.8.3".into()])?;
+    let associations = artifact.emitted_resources();
+    assert_eq!(associations.len(), 2);
+    for (ordinal, source) in [82, 41].into_iter().enumerate() {
+        assert_eq!(associations[ordinal].ordinal(), ordinal);
+        assert_eq!(associations[ordinal].resource_id(), ids[ordinal]);
+        assert_eq!(associations[ordinal].source().source, SourceId(source));
+        assert_eq!(associations[ordinal].source().document_index, 0);
+        assert!(associations[ordinal].collection().is_none());
+    }
+    let base = String::from_utf8(file(&artifact, "base/resources.yaml")?)?;
+    assert!(base.find("\"name\":\"z\"") < base.find("\"name\":\"a\""));
+    let native = kubernetes_lens::generation::generate(
+        &resources,
+        &target()?,
+        kubernetes_lens::generation::OutputFormat::Yaml,
+        &options(),
+    )
+    .map_err(|_| "native generation failure")?;
+    let native = std::str::from_utf8(native.reveal_bytes(&ExplicitArtifactAccess::explicitly_allow_raw_artifact()))?;
+    assert!(native.find("\"name\":\"a\"") < native.find("\"name\":\"z\""));
+    Ok(())
+}
+
+#[test]
+fn flattened_nested_lists_retain_full_original_associations() -> TestResult {
+    let source = r#"{"apiVersion":"v1","kind":"List","metadata":{"labels":{"trace":"public"}},"items":[{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"z","namespace":"one"},"data":{"value":"first"}},{"apiVersion":"v1","kind":"List","items":[{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"a","namespace":"two"},"data":{"value":"second"}}]}]}"#;
+    let imported = import(source, RenderedKind::Manifest)?;
+    let mut selected = options();
+    selected.collections = kubernetes_lens::generation::CollectionOutput::Flatten;
+    let artifact = formats::generate_kustomize(
+        imported.resources(),
+        &target()?,
+        &selected,
+        &[],
+        vec!["kustomize-5.8.3".into()],
+    )?;
+    let expected = concat!(
+        "---\n",
+        r#"{"apiVersion":"v1","data":{"value":"first"},"kind":"ConfigMap","metadata":{"name":"z","namespace":"one"}}"#,
+        "\n---\n",
+        r#"{"apiVersion":"v1","data":{"value":"second"},"kind":"ConfigMap","metadata":{"name":"a","namespace":"two"}}"#,
+        "\n"
+    );
+    assert_eq!(file(&artifact, "base/resources.yaml")?, expected.as_bytes());
+    for (association, original) in artifact
+        .emitted_resources()
+        .iter()
+        .zip(imported.resources().documents())
+    {
+        assert_eq!(association.resource_id(), original.id());
+        assert_eq!(association.source(), original.source());
+        assert_eq!(association.collection(), original.collection());
+    }
+    assert_eq!(
+        artifact.emitted_resources()[1]
+            .collection()
+            .map(|path| path.items.len()),
+        Some(2)
+    );
+    assert!(artifact.native_findings().iter().any(|finding| finding.code
+        == kubernetes_lens::FindingCode::CollectionFieldRemoved
+        && finding.wrapper.is_some()));
+    Ok(())
+}
+
+#[test]
+fn zero_roots_and_empty_wrappers_keep_validation_and_explicit_flatten_policy() -> TestResult {
+    let empty = kubernetes_lens::model::ResourceSet::from_inputs(Vec::new()).map_err(|_| "empty resource set")?;
+    let helm = formats::generate_chart(&empty, &target()?, &options(), &chart(), vec!["helm-4.3.0".into()])?;
+    assert_eq!(
+        file(&helm, "templates/resources.yaml")?,
+        b"{{/* native-artifact-bytes-v1: zero roots */}}\n"
+    );
+    assert!(helm.emitted_resources().is_empty());
+    let base = formats::generate_kustomize(&empty, &target()?, &options(), &[], vec!["kustomize-5.8.3".into()])?;
+    assert_eq!(
+        file(&base, "base/kustomization.yaml")?,
+        b"{\"apiVersion\":\"kustomize.config.k8s.io/v1beta1\",\"kind\":\"Kustomization\",\"resources\":[]}\n"
+    );
+    assert!(file(&base, "base/resources.yaml").is_err());
+    for source in [
+        "apiVersion: v1\nkind: List\nitems: []\nx-private: secret\n",
+        "apiVersion: batch/v1beta1\nkind: CronJobList\nitems: []\n",
+    ] {
+        let imported = import(source, RenderedKind::Manifest)?;
+        let mut selected = options();
+        selected.collections = kubernetes_lens::generation::CollectionOutput::Flatten;
+        if source.contains("secret") {
+            selected.protected_output = ProtectedOutput::Deny;
+        }
+        let refusal = error(formats::generate_chart(
+            imported.resources(),
+            &target()?,
+            &selected,
+            &chart(),
+            vec!["helm-4.3.0".into()],
+        ))?;
+        assert!(!refusal.native_findings.is_empty());
+        assert!(refusal.native_findings.iter().any(|finding| finding.wrapper.is_some()));
+        if source.contains("CronJobList") {
+            assert!(
+                refusal
+                    .native_findings
+                    .iter()
+                    .any(|finding| finding.code == kubernetes_lens::FindingCode::UnavailableApi)
+            );
+            let supported = TargetProfile::documented_defaults(KubernetesVersion::new(1, 24)?);
+            assert!(
+                formats::generate_chart(
+                    imported.resources(),
+                    &supported,
+                    &selected,
+                    &chart(),
+                    vec!["helm-4.3.0".into()]
+                )
+                .is_ok()
+            );
+        }
+    }
+    let opaque = import(
+        "apiVersion: v1\nkind: List\nitems: []\nx-private: secret\n",
+        RenderedKind::Manifest,
+    )?;
+    let mut blocked = options();
+    blocked.collections = kubernetes_lens::generation::CollectionOutput::Flatten;
+    blocked.opaque_fields = OpaqueFieldPolicy::Block;
+    let refusal = error(formats::generate_chart(
+        opaque.resources(),
+        &target()?,
+        &blocked,
+        &chart(),
+        vec!["helm-4.3.0".into()],
+    ))?;
+    assert!(
+        refusal.native_findings.iter().any(
+            |finding| finding.code == kubernetes_lens::FindingCode::OpaqueOutputDenied && finding.wrapper.is_some()
+        )
+    );
+    let imported = import("apiVersion: v1\nkind: List\nitems: []\n", RenderedKind::Manifest)?;
+    assert_eq!(
+        error(formats::generate_chart(
+            imported.resources(),
+            &target()?,
+            &options(),
+            &chart(),
+            vec!["helm-4.3.0".into()]
+        ))?
+        .code,
+        FormatCode::UnsupportedVariation
+    );
+    let mut selected = options();
+    selected.collections = kubernetes_lens::generation::CollectionOutput::Flatten;
+    assert!(
+        formats::generate_chart(
+            imported.resources(),
+            &target()?,
+            &selected,
+            &chart(),
+            vec!["helm-4.3.0".into()]
+        )?
+        .emitted_resources()
+        .is_empty()
+    );
+    Ok(())
+}
+
+#[test]
+fn grouped_container_patches_use_original_array_order_and_refuse_duplicate_leaves() -> TestResult {
+    use formats::{ResourceQuantity, ResourceSide};
+    let source = r#"{"apiVersion":"v1","kind":"Pod","metadata":{"name":"demo"},"spec":{"containers":[{"name":"first","image":"example/first:v1","resources":{"requests":{"cpu":"250m","memory":"64Mi"}}},{"name":"second","image":"example/second:v1","resources":{"requests":{"cpu":"125m"}}}]}}"#;
+    let imported = import(source, RenderedKind::Manifest)?;
+    let id = imported.resources().documents()[0].id();
+    let quantity = |container: &str, value: &str| WorkloadVariation {
+        resource: id,
+        field: WorkloadField::Quantity {
+            container: container.into(),
+            side: ResourceSide::Requests,
+            resource: ResourceQuantity::Cpu,
+        },
+        value: NativeValue::Quantity(value.into()),
+    };
+    let overlay = KustomizeOverlay {
+        name: "test".into(),
+        variations: vec![
+            quantity("second", "750m"),
+            WorkloadVariation {
+                resource: id,
+                field: WorkloadField::Image {
+                    container: "first".into(),
+                },
+                value: NativeValue::Image("example/first:v2".into()),
+            },
+            quantity("first", "500m"),
+        ],
+    };
+    let artifact = formats::generate_kustomize(
+        imported.resources(),
+        &target()?,
+        &options(),
+        &[overlay],
+        vec!["kustomize-5.8.3".into()],
+    )?;
+    let expected = concat!(
+        "---\n",
+        r#"{"apiVersion":"v1","kind":"Pod","metadata":{"name":"demo"},"spec":{"containers":[{"image":"example/first:v2","name":"first","resources":{"requests":{"cpu":"500m"}}},{"name":"second","resources":{"requests":{"cpu":"750m"}}}]}}"#,
+        "\n"
+    );
+    assert_eq!(file(&artifact, "overlays/test/patches.yaml")?, expected.as_bytes());
+    let base = String::from_utf8(file(&artifact, "base/resources.yaml")?)?;
+    assert!(base.contains("\"memory\":\"64Mi\""));
+    assert!(base.contains("\"cpu\":\"250m\""));
+    for second in ["500m", "750m"] {
+        let duplicate = KustomizeOverlay {
+            name: "duplicate".into(),
+            variations: vec![quantity("first", "500m"), quantity("first", second)],
+        };
+        assert_eq!(
+            error(formats::generate_kustomize(
+                imported.resources(),
+                &target()?,
+                &options(),
+                &[duplicate],
+                vec!["kustomize-5.8.3".into()]
+            ))?
+            .code,
+            FormatCode::UnsupportedVariation
+        );
+    }
+    for (source, container) in [
+        (source.replace("\"name\":\"second\"", "\"name\":\"first\""), "first"),
+        (
+            source.replace("\"image\":\"example/first:v1\"", "\"image\":null"),
+            "first",
+        ),
+    ] {
+        let imported = import(&source, RenderedKind::Manifest)?;
+        let overlay = KustomizeOverlay {
+            name: "invalid".into(),
+            variations: vec![WorkloadVariation {
+                resource: imported.resources().documents()[0].id(),
+                field: WorkloadField::Image {
+                    container: container.into(),
+                },
+                value: NativeValue::Image("example/new:v2".into()),
+            }],
+        };
+        assert!(
+            formats::generate_kustomize(
+                imported.resources(),
+                &target()?,
+                &options(),
+                &[overlay],
+                vec!["kustomize-5.8.3".into()]
+            )
+            .is_err()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn generated_observations_follow_caller_intent_without_implicit_stripping() -> TestResult {
+    let source = "apiVersion: v1\nkind: Pod\nmetadata: {name: observed, resourceVersion: '42'}\nspec:\n  containers: [{name: main, image: example/app:v1}]\nstatus: {phase: Running}\n";
+    let imported = import(source, RenderedKind::Manifest)?;
+    let retained = formats::generate_kustomize(
+        imported.resources(),
+        &target()?,
+        &options(),
+        &[],
+        vec!["kustomize-5.8.3".into()],
+    )?;
+    let base = String::from_utf8(file(&retained, "base/resources.yaml")?)?;
+    assert!(base.contains("\"resourceVersion\":\"42\""));
+    assert!(base.contains("\"status\":{\"phase\":\"Running\"}"));
+    let mut authored = options();
+    authored.intent = kubernetes_lens::generation::OutputIntent::AuthoredIntent;
+    let stripped = formats::generate_kustomize(
+        imported.resources(),
+        &target()?,
+        &authored,
+        &[],
+        vec!["kustomize-5.8.3".into()],
+    )?;
+    let base = String::from_utf8(file(&stripped, "base/resources.yaml")?)?;
+    assert!(!base.contains("resourceVersion"));
+    assert!(!base.contains("status"));
+    assert!(!stripped.native_findings().is_empty());
+    Ok(())
+}
+
+#[test]
+fn static_crds_use_global_six_digit_ordinals_and_custom_crd_names_stay_templates() -> TestResult {
+    let crd = r#"{"apiVersion":"apiextensions.k8s.io/v1","kind":"CustomResourceDefinition","metadata":{"name":"notes.demo.example"},"spec":{"group":"demo.example","names":{"kind":"Note","plural":"notes"},"scope":"Namespaced","versions":[{"name":"v1","schema":{"openAPIV3Schema":{"properties":{"spec":{"properties":{"title":{"type":"string"}},"type":"object"}},"type":"object"}},"served":true,"storage":true}]}}"#;
+    let first = "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: first}\n";
+    let custom = "apiVersion: example.test/v1\nkind: CustomResourceDefinition\nmetadata: {name: custom}\nx-private: '{{ .Values.pwn }}'\n";
+    let imported = import(&format!("{first}---\n{crd}\n---\n{custom}"), RenderedKind::Manifest)?;
+    let helm = formats::generate_chart(
+        imported.resources(),
+        &target()?,
+        &options(),
+        &chart(),
+        vec!["helm-4.3.0".into()],
+    )?;
+    assert_eq!(file(&helm, "crds/000001.yaml")?, format!("---\n{crd}\n").as_bytes());
+    assert_eq!(helm.emitted_resources()[1].ordinal(), 1);
+    assert_eq!(
+        helm.emitted_resources()[1].resource_id(),
+        imported.resources().documents()[1].id()
+    );
+    assert!(file(&helm, "crds/000000.yaml").is_err());
+    assert!(file(&helm, "crds/000002.yaml").is_err());
+    let template = String::from_utf8(file(&helm, "templates/resources.yaml")?)?;
+    assert_eq!(template.matches("---\n").count(), 2);
+    assert!(template.contains("{{ .Values.pwn }}"));
+    let only = import(crd, RenderedKind::Manifest)?;
+    let chart = formats::generate_chart(
+        only.resources(),
+        &target()?,
+        &options(),
+        &chart(),
+        vec!["helm-4.3.0".into()],
+    )?;
+    assert_eq!(
+        file(&chart, "templates/resources.yaml")?,
+        b"{{/* native-artifact-bytes-v1: zero roots */}}\n"
+    );
+    assert_eq!(chart.emitted_resources().len(), 1);
+    Ok(())
+}
+
+#[test]
+fn generated_values_schema_and_defaults_are_sorted_and_exact() -> TestResult {
+    let imported = import(DEPLOYMENT, RenderedKind::Manifest)?;
+    let id = imported.resources().documents()[0].id();
+    let mut intent = chart();
+    intent.parameters = vec![
+        HelmParameter {
+            name: "z_image".into(),
+            resource: id,
+            field: WorkloadField::Image {
+                container: "main".into(),
+            },
+        },
+        HelmParameter {
+            name: "a_replicas".into(),
+            resource: id,
+            field: WorkloadField::Replicas,
+        },
+    ];
+    let artifact = formats::generate_chart(
+        imported.resources(),
+        &target()?,
+        &options(),
+        &intent,
+        vec!["helm-4.3.0".into()],
+    )?;
+    assert_eq!(
+        file(&artifact, "values.yaml")?,
+        b"{\"a_replicas\":2,\"z_image\":\"example/app:v1\"}\n"
+    );
+    let expected = concat!(
+        r#"{"$schema":"http://json-schema.org/draft-07/schema#","additionalProperties":false,"properties":{"a_replicas":{"maximum":2147483647,"minimum":0,"type":"integer"},"z_image":{"maxLength":1024,"minLength":1,"type":"string"}},"required":["a_replicas","z_image"],"type":"object"}"#,
+        "\n"
+    );
+    assert_eq!(file(&artifact, "values.schema.json")?, expected.as_bytes());
+    for changed in [false, true] {
+        let mut selected = options();
+        selected.processing = Some(kubernetes_lens::processing::NativeProcessingLimits {
+            max_payload_bytes: if changed { 64 * 1024 * 1024 } else { 0 },
+            max_processing_units: if changed { 0 } else { 64 * 1024 * 1024 },
+            ..kubernetes_lens::processing::NativeProcessingLimits::default()
+        });
+        let refusal = error(formats::generate_chart(
+            imported.resources(),
+            &target()?,
+            &selected,
+            &intent,
+            vec!["helm-4.3.0".into()],
+        ))?;
+        assert!(
+            refusal
+                .native_findings
+                .iter()
+                .any(|finding| finding.code == kubernetes_lens::FindingCode::LimitExceeded)
+        );
     }
     Ok(())
 }

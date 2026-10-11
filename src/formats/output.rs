@@ -1,16 +1,16 @@
 use super::{
     ExecutionBounds, FormatCode, FormatError, HelmContext, LocalFile, ProjectLimits, ProjectSnapshot, RenderCommand,
-    RenderProvenance, RenderRequest, Result, ToolSelection, input::lifecycle, json, ledger, yaml,
+    RenderProvenance, RenderRequest, Result, ToolSelection, artifact_encoding, input::lifecycle, ledger,
 };
 use crate::{
     ResourceId,
     capability::TargetProfile,
     diagnostic::{FieldPath, Phase},
     generation::{self, ExplicitArtifactAccess, GenerationOptions, OutputFormat},
-    model::ResourceSet,
+    model::{CollectionPath, ResourceSet, SourceRef},
     processing::NativeOperationBudget,
-    source::{AuthoringLimits, InputOrigin, ParseLimits, SourceId},
-    syntax::{EncodingBudget, TreeNode, TreeValue},
+    source::{InputOrigin, ParseLimits, SourceId},
+    syntax::{TreeNode, TreeValue},
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -170,6 +170,37 @@ impl fmt::Debug for KustomizeOverlay {
             .finish_non_exhaustive()
     }
 }
+/// Original input association for one successfully emitted native root.
+/// This is coordinate metadata, not native admission or external provenance authority.
+#[derive(Debug)]
+pub struct EmittedResourceAssociation {
+    ordinal: usize,
+    resource: ResourceId,
+    source: SourceRef,
+    collection: Option<CollectionPath>,
+}
+impl EmittedResourceAssociation {
+    /// Zero-based global emitted ordinal, including statically emitted CRDs.
+    #[must_use]
+    pub const fn ordinal(&self) -> usize {
+        self.ordinal
+    }
+    /// Original input-local resource ID; never a reparsed or generated allocation ID.
+    #[must_use]
+    pub const fn resource_id(&self) -> ResourceId {
+        self.resource
+    }
+    /// Immutable original source argument/document coordinates.
+    #[must_use]
+    pub const fn source(&self) -> SourceRef {
+        self.source
+    }
+    /// Full original outer-to-inner List/item path, when supplied in a List.
+    #[must_use]
+    pub const fn collection(&self) -> Option<&CollectionPath> {
+        self.collection.as_ref()
+    }
+}
 /// Protected deterministic in-memory regular files. This type never writes or executes them.
 pub struct ArtifactTree {
     files: BTreeMap<String, Vec<u8>>,
@@ -177,8 +208,16 @@ pub struct ArtifactTree {
     native_findings: Vec<crate::Finding>,
     profile_ids: Vec<String>,
     chart: bool,
+    emitted_resources: Vec<EmittedResourceAssociation>,
 }
 impl ArtifactTree {
+    /// Original associations in source argument, document and depth-first List-item order.
+    /// Empty output has no associations. Static CRDs retain their global emitted ordinals.
+    #[must_use]
+    pub fn emitted_resources(&self) -> &[EmittedResourceAssociation] {
+        &self.emitted_resources
+    }
+
     /// Native generation findings, including explicit opaque/observation outcomes.
     #[must_use]
     pub fn native_findings(&self) -> &[crate::Finding] {
@@ -329,23 +368,42 @@ fn profiles(command: RenderCommand, ids: &[String]) -> Result<()> {
     }
     Ok(())
 }
+struct GeneratedTrees {
+    trees: Vec<TreeNode>,
+    limits: ParseLimits,
+    processing: NativeOperationBudget,
+}
 fn trees(
     resources: &ResourceSet,
     target: &TargetProfile,
     options: &GenerationOptions,
     processing: &NativeOperationBudget,
-) -> Result<(crate::parser::ParsedInput, Vec<ResourceId>, Vec<crate::Finding>)> {
+) -> Result<(GeneratedTrees, Vec<ResourceId>, Vec<crate::Finding>)> {
     let (artifact, ids) =
         generation::generate_associated_in(resources, target, OutputFormat::Yaml, options, processing)
             .map_err(FormatError::native)?;
     let native_findings = artifact.findings().to_vec();
     let limits = inherited_limits(resources, processing);
-    let input = parsed_in(
-        artifact.reveal_bytes(&ExplicitArtifactAccess::explicitly_allow_raw_artifact()),
-        SourceId(0),
-        &limits,
-        processing,
-    )?;
+    // Empty Lists were fully validated above; an empty stream is not a parser document.
+    let input = if ids.is_empty() {
+        GeneratedTrees {
+            trees: Vec::new(),
+            limits,
+            processing: processing.clone(),
+        }
+    } else {
+        let parsed = parsed_in(
+            artifact.reveal_bytes(&ExplicitArtifactAccess::explicitly_allow_raw_artifact()),
+            SourceId(0),
+            &limits,
+            processing,
+        )?;
+        GeneratedTrees {
+            trees: parsed.trees,
+            limits: parsed.limits,
+            processing: parsed.processing,
+        }
+    };
     if input.trees.len() != ids.len()
         || ids.len() != resources.documents().len()
         || !resources.lists().is_empty() && options.collections != generation::CollectionOutput::Flatten
@@ -389,16 +447,45 @@ fn parsed_in(
     )
     .map_err(FormatError::native)
 }
-fn encoded(tree: &TreeNode, input: &crate::parser::ParsedInput) -> Result<Vec<u8>> {
-    EncodingBudget::in_operation(
-        AuthoringLimits {
-            parser: input.limits,
-            ..AuthoringLimits::default()
-        },
-        input.processing.clone(),
-    )
-    .snapshot(tree)
-    .map_err(|e| FormatError::native(vec![e]))
+fn encoded(tree: &TreeNode, input: &GeneratedTrees) -> Result<Vec<u8>> {
+    artifact_encoding::json(tree, &input.processing)
+}
+fn mapping_file(tree: &TreeNode, processing: &NativeOperationBudget) -> Result<Vec<u8>> {
+    let mut bytes = artifact_encoding::json(tree, processing)?;
+    artifact_encoding::append(&mut bytes, b"\n", processing)?;
+    Ok(bytes)
+}
+fn mapping(entries: impl IntoIterator<Item = (&'static str, TreeNode)>) -> TreeNode {
+    TreeNode::mapping(entries.into_iter().map(|(key, value)| (key.into(), value)).collect())
+}
+fn association(
+    resources: &ResourceSet,
+    ids: &[ResourceId],
+    processing: &NativeOperationBudget,
+) -> Result<Vec<EmittedResourceAssociation>> {
+    processing
+        .payload_array::<EmittedResourceAssociation>(ids.len(), Phase::Generation)
+        .map_err(|finding| FormatError::native(vec![finding]))?;
+    let mut result = Vec::new();
+    for (ordinal, resource) in ids.iter().copied().enumerate() {
+        processing
+            .work(resources.documents().len(), Phase::Generation)
+            .map_err(|finding| FormatError::native(vec![finding]))?;
+        let document = &resources.documents()[resource_index(resources, resource)?];
+        if let Some(path) = document.collection() {
+            processing
+                .payload_array::<(crate::model::ListId, usize)>(path.items.len(), Phase::Generation)
+                .and_then(|()| processing.work(path.items.len(), Phase::Generation))
+                .map_err(|finding| FormatError::native(vec![finding]))?;
+        }
+        result.push(EmittedResourceAssociation {
+            ordinal,
+            resource,
+            source: document.source(),
+            collection: document.collection().cloned(),
+        });
+    }
+    Ok(result)
 }
 fn typed_workload(api: Option<&str>, kind: &str, document: &crate::model::ResourceDocument) -> bool {
     use crate::resources::workloads::{
@@ -421,7 +508,12 @@ fn field_path(
     tree: &TreeNode,
     document: &crate::model::ResourceDocument,
     field: &WorkloadField,
+    processing: &NativeOperationBudget,
 ) -> Result<Vec<String>> {
+    processing
+        .payload_array::<String>(10, Phase::Generation)
+        .and_then(|()| processing.payload(256, Phase::Generation))
+        .map_err(|finding| FormatError::native(vec![finding]))?;
     let kind = tree
         .get("kind")
         .and_then(TreeNode::as_str)
@@ -458,6 +550,10 @@ fn field_path(
         .get("containers")
         .and_then(TreeNode::as_sequence)
         .ok_or_else(|| FormatError::new(FormatCode::UnsupportedVariation))?;
+    processing
+        .payload_array::<(usize, &TreeNode)>(containers.len(), Phase::Generation)
+        .and_then(|()| processing.work(containers.len(), Phase::Generation))
+        .map_err(|finding| FormatError::native(vec![finding]))?;
     let matches: Vec<_> = containers
         .iter()
         .enumerate()
@@ -519,6 +615,7 @@ fn artifact(
     native_findings: Vec<crate::Finding>,
     profile_ids: Vec<String>,
     chart: bool,
+    emitted_resources: Vec<EmittedResourceAssociation>,
 ) -> Result<ArtifactTree> {
     let total = files.values().try_fold(0usize, |v, b| {
         v.checked_add(b.len())
@@ -533,6 +630,7 @@ fn artifact(
         native_findings,
         profile_ids,
         chart,
+        emitted_resources,
     })
 }
 /// Generate a new chart with finite explicit values, safe literal data and separate CRD/hook policy.
@@ -559,11 +657,19 @@ pub fn generate_chart(
     }
     let processing = resources.operation(options.processing);
     let (input, ids, native_findings) = trees(resources, target, options, &processing)?;
+    processing
+        .payload(4096, Phase::Generation)
+        .and_then(|()| processing.work(4096, Phase::Generation))
+        .map_err(|finding| FormatError::native(vec![finding]))?;
     let mut selected = BTreeMap::new();
     let mut names = BTreeSet::new();
     let mut values = Vec::new();
-    let mut properties = serde_json::Map::new();
+    let mut properties = Vec::new();
     for parameter in &chart.parameters {
+        processing
+            .payload(4096, Phase::Generation)
+            .and_then(|()| processing.work(4096, Phase::Generation))
+            .map_err(|finding| FormatError::native(vec![finding]))?;
         if !parameter_name(&parameter.name) || !names.insert(&parameter.name) {
             return Err(FormatError::new(FormatCode::UnsupportedVariation));
         }
@@ -573,6 +679,7 @@ pub fn generate_chart(
             &input.trees[index],
             &resources.documents()[document_index],
             &parameter.field,
+            &processing,
         )?;
         let value = at(&input.trees[index], &path)?;
         if value.as_str().is_some_and(|v| v.is_empty() || v.len() > 1024) {
@@ -586,105 +693,139 @@ pub fn generate_chart(
         if selected.insert((index, path), parameter.name.clone()).is_some() {
             return Err(FormatError::new(FormatCode::UnsupportedVariation));
         }
+        processing
+            .tree_copy(value, Phase::Generation)
+            .map_err(|finding| FormatError::native(vec![finding]))?;
         values.push((parameter.name.clone(), value.clone()));
-        properties.insert(
+        properties.push((
             parameter.name.clone(),
             if parameter.field == WorkloadField::Replicas {
-                serde_json::json!({"type":"integer","minimum":0,"maximum":i32::MAX})
+                mapping([
+                    ("type", TreeNode::string("integer")),
+                    ("minimum", TreeNode::new(TreeValue::Number("0".into()))),
+                    ("maximum", TreeNode::new(TreeValue::Number(i32::MAX.to_string()))),
+                ])
             } else {
-                serde_json::json!({"type":"string","minLength":1,"maxLength":1024})
+                mapping([
+                    ("type", TreeNode::string("string")),
+                    ("minLength", TreeNode::new(TreeValue::Number("1".into()))),
+                    ("maxLength", TreeNode::new(TreeValue::Number("1024".into()))),
+                ])
             },
-        );
+        ));
     }
     let mut findings = vec![FormatCode::ProvenanceLimited];
+    let mut files = chart_metadata(chart, values, properties, names, &processing)?;
+    let emitted_resources = association(resources, &ids, &processing)?;
+    write_chart_templates(
+        resources,
+        &input,
+        &ids,
+        &selected,
+        &mut files,
+        &mut findings,
+        chart.hooks,
+    )?;
+    artifact(files, findings, native_findings, profile_ids, true, emitted_resources)
+}
+fn chart_metadata(
+    chart: &HelmChartOptions,
+    values: Vec<(String, TreeNode)>,
+    properties: Vec<(String, TreeNode)>,
+    names: BTreeSet<&String>,
+    processing: &NativeOperationBudget,
+) -> Result<BTreeMap<String, Vec<u8>>> {
     let mut files = BTreeMap::new();
     let api = ledger()?["input_output_contracts"]["helm_values_v1"]["chart_api_version"]
         .as_str()
         .ok_or_else(|| FormatError::new(FormatCode::InvalidProfile))?;
     files.insert(
         "Chart.yaml".into(),
-        yaml(&serde_json::json!({"apiVersion":api,"name":chart.name,"version":chart.version,"type":"application"}))?,
+        mapping_file(
+            &mapping([
+                ("apiVersion", TreeNode::string(api)),
+                ("name", TreeNode::string(&chart.name)),
+                ("version", TreeNode::string(&chart.version)),
+                ("type", TreeNode::string("application")),
+            ]),
+            processing,
+        )?,
     );
-    files.insert("values.yaml".into(), {
-        let mut out = b"---\n".to_vec();
-        out.extend(encoded(&TreeNode::mapping(values), &input)?);
-        out.push(b'\n');
-        out
-    });
-    files.insert("values.schema.json".into(), json(&serde_json::json!({"$schema":"http://json-schema.org/draft-07/schema#","type":"object","additionalProperties":false,"required":names,"properties":properties}))?);
+    files.insert(
+        "values.yaml".into(),
+        mapping_file(&TreeNode::mapping(values), processing)?,
+    );
+    files.insert(
+        "values.schema.json".into(),
+        mapping_file(
+            &mapping([
+                ("$schema", TreeNode::string("http://json-schema.org/draft-07/schema#")),
+                ("type", TreeNode::string("object")),
+                ("additionalProperties", TreeNode::new(TreeValue::Bool(false))),
+                (
+                    "required",
+                    TreeNode::new(TreeValue::Sequence(names.into_iter().map(TreeNode::string).collect())),
+                ),
+                ("properties", TreeNode::mapping(properties)),
+            ]),
+            processing,
+        )?,
+    );
+    Ok(files)
+}
+fn write_chart_templates(
+    resources: &ResourceSet,
+    input: &GeneratedTrees,
+    ids: &[ResourceId],
+    selected: &artifact_encoding::SelectedFields,
+    files: &mut BTreeMap<String, Vec<u8>>,
+    findings: &mut Vec<FormatCode>,
+    hooks: HookPolicy,
+) -> Result<()> {
+    let processing = &input.processing;
+    let mut templates = Vec::new();
     for (index, tree) in input.trees.iter().enumerate() {
-        lifecycle(tree, &mut findings);
-        if findings.contains(&FormatCode::HookLifecycle) && chart.hooks == HookPolicy::Reject {
+        lifecycle(tree, findings);
+        if findings.contains(&FormatCode::HookLifecycle) && hooks == HookPolicy::Reject {
             return Err(FormatError::new(FormatCode::UnsupportedExtension));
         }
-        let crd = tree.get("kind").and_then(TreeNode::as_str) == Some("CustomResourceDefinition");
-        let mut out = b"---\n".to_vec();
+        let document = &resources.documents()[resource_index(resources, ids[index])?];
+        let crd = matches!(
+            tree.get("apiVersion").and_then(TreeNode::as_str),
+            Some("apiextensions.k8s.io/v1")
+        ) && document
+            .resource::<crate::resources::extensions::CustomResourceDefinitionV1>()
+            .is_some()
+            || matches!(
+                tree.get("apiVersion").and_then(TreeNode::as_str),
+                Some("apiextensions.k8s.io/v1beta1")
+            ) && document
+                .resource::<crate::resources::extensions::CustomResourceDefinitionV1beta1>()
+                .is_some();
+        let mut out = Vec::new();
+        artifact_encoding::append(&mut out, b"---\n", processing)?;
         if crd {
-            out.extend(encoded(tree, &input)?);
+            artifact_encoding::append(&mut out, &encoded(tree, input)?, processing)?;
+            artifact_encoding::append(&mut out, b"\n", processing)?;
+            files.insert(format!("crds/{index:06}.yaml"), out);
         } else {
-            template(tree, index, &mut Vec::new(), &selected, &mut out, &input)?;
+            artifact_encoding::append(
+                &mut out,
+                &artifact_encoding::template(tree, index, selected, processing)?,
+                processing,
+            )?;
+            artifact_encoding::append(&mut out, b"\n", processing)?;
+            artifact_encoding::append(&mut templates, &out, processing)?;
         }
-        out.push(b'\n');
-        files.insert(
-            format!("{}/{index:04}.yaml", if crd { "crds" } else { "templates" }),
-            out,
-        );
     }
-    artifact(files, findings, native_findings, profile_ids, true)
-}
-fn template(
-    tree: &TreeNode,
-    index: usize,
-    path: &mut Vec<String>,
-    selected: &BTreeMap<(usize, Vec<String>), String>,
-    out: &mut Vec<u8>,
-    input: &crate::parser::ParsedInput,
-) -> Result<()> {
-    if let Some(name) = selected.get(&(index, path.clone())) {
-        out.extend(format!("{{{{ .Values.{name} | toJson }}}}").as_bytes());
-        return Ok(());
+    if templates.is_empty() {
+        artifact_encoding::append(
+            &mut templates,
+            b"{{/* native-artifact-bytes-v1: zero roots */}}\n",
+            processing,
+        )?;
     }
-    match &tree.value {
-        TreeValue::Mapping(entries) => {
-            out.push(b'{');
-            for (i, (key, value)) in entries.iter().enumerate() {
-                if i > 0 {
-                    out.push(b',');
-                }
-                literal(&TreeNode::string(key), out, input)?;
-                out.push(b':');
-                path.push(key.clone());
-                template(value, index, path, selected, out, input)?;
-                path.pop();
-            }
-            out.push(b'}');
-        }
-        TreeValue::Sequence(items) => {
-            out.push(b'[');
-            for (i, value) in items.iter().enumerate() {
-                if i > 0 {
-                    out.push(b',');
-                }
-                path.push(i.to_string());
-                template(value, index, path, selected, out, input)?;
-                path.pop();
-            }
-            out.push(b']');
-        }
-        _ => literal(tree, out, input)?,
-    }
-    if out.len() > ProjectLimits::default().bytes {
-        return Err(FormatError::new(FormatCode::LimitExceeded));
-    }
-    Ok(())
-}
-fn literal(tree: &TreeNode, out: &mut Vec<u8>, input: &crate::parser::ParsedInput) -> Result<()> {
-    // Serialize JSON data first, then quote it as one Go string argument. Delimiters inside that
-    // argument are data and cannot become directives, including keys and unknown private values.
-    let raw = encoded(tree, input)?;
-    let text = std::str::from_utf8(&raw).map_err(|_| FormatError::new(FormatCode::InvalidProject))?;
-    let quoted = serde_json::to_string(text).map_err(|_| FormatError::new(FormatCode::InvalidProject))?;
-    out.extend(format!("{{{{ print {quoted} }}}}").as_bytes());
+    files.insert("templates/resources.yaml".into(), templates);
     Ok(())
 }
 /// Generate a reusable local base and only explicitly requested finite native overlays.
@@ -697,11 +838,96 @@ pub fn generate_kustomize(
     overlays: &[KustomizeOverlay],
     profile_ids: Vec<String>,
 ) -> Result<ArtifactTree> {
+    kustomize_profiles(&profile_ids)?;
+    if overlays.len() > 16 {
+        return Err(FormatError::new(FormatCode::LimitExceeded));
+    }
+    let processing = resources.operation(options.processing);
+    let (input, ids, mut native_findings) = trees(resources, target, options, &processing)?;
+    processing
+        .payload(4096, Phase::Generation)
+        .and_then(|()| processing.work(4096, Phase::Generation))
+        .map_err(|finding| FormatError::native(vec![finding]))?;
+    let mut files = BTreeMap::new();
+    let mut format_findings = vec![FormatCode::ProvenanceLimited];
+    let emitted_resources = association(resources, &ids, &processing)?;
+    let mut base = Vec::new();
+    for tree in &input.trees {
+        lifecycle(tree, &mut format_findings);
+        artifact_encoding::append(&mut base, b"---\n", &processing)?;
+        artifact_encoding::append(&mut base, &encoded(tree, &input)?, &processing)?;
+        artifact_encoding::append(&mut base, b"\n", &processing)?;
+    }
+    let base_resources = if base.is_empty() {
+        Vec::new()
+    } else {
+        processing
+            .payload(base.len(), Phase::Generation)
+            .map_err(|finding| FormatError::native(vec![finding]))?;
+        files.insert("base/resources.yaml".into(), base.clone());
+        vec![TreeNode::string("resources.yaml")]
+    };
+    files.insert(
+        "base/kustomization.yaml".into(),
+        mapping_file(
+            &mapping([
+                ("apiVersion", TreeNode::string("kustomize.config.k8s.io/v1beta1")),
+                ("kind", TreeNode::string("Kustomization")),
+                ("resources", TreeNode::new(TreeValue::Sequence(base_resources))),
+            ]),
+            &processing,
+        )?,
+    );
+    let mut names = BTreeSet::new();
+    for overlay in overlays {
+        processing
+            .payload(4096, Phase::Generation)
+            .and_then(|()| processing.work(4096, Phase::Generation))
+            .map_err(|finding| FormatError::native(vec![finding]))?;
+        if !safe_name(&overlay.name)
+            || !names.insert(&overlay.name)
+            || overlay.variations.is_empty()
+            || overlay.variations.len() > 64
+        {
+            return Err(FormatError::new(FormatCode::UnsupportedVariation));
+        }
+        let (patches, outcomes) = overlay_patch(resources, target, options, overlay, &input, &ids, &base)?;
+        native_findings.extend(outcomes);
+        files.insert(format!("overlays/{}/patches.yaml", overlay.name), patches);
+        files.insert(
+            format!("overlays/{}/kustomization.yaml", overlay.name),
+            mapping_file(
+                &mapping([
+                    ("apiVersion", TreeNode::string("kustomize.config.k8s.io/v1beta1")),
+                    ("kind", TreeNode::string("Kustomization")),
+                    (
+                        "resources",
+                        TreeNode::new(TreeValue::Sequence(vec![TreeNode::string("../../base")])),
+                    ),
+                    (
+                        "patchesStrategicMerge",
+                        TreeNode::new(TreeValue::Sequence(vec![TreeNode::string("patches.yaml")])),
+                    ),
+                ]),
+                &processing,
+            )?,
+        );
+    }
+    artifact(
+        files,
+        format_findings,
+        native_findings,
+        profile_ids,
+        false,
+        emitted_resources,
+    )
+}
+fn kustomize_profiles(profile_ids: &[String]) -> Result<()> {
     if profile_ids.is_empty() || profile_ids.len() > 8 {
         return Err(FormatError::new(FormatCode::InvalidProfile));
     }
     let mut unique = BTreeSet::new();
-    for profile in &profile_ids {
+    for profile in profile_ids {
         if !unique.insert(profile)
             || profiles(
                 if profile.starts_with("kubectl-") {
@@ -716,66 +942,52 @@ pub fn generate_kustomize(
             return Err(FormatError::new(FormatCode::InvalidProfile));
         }
     }
-    if overlays.len() > 16 {
-        return Err(FormatError::new(FormatCode::LimitExceeded));
-    }
-    let processing = resources.operation(options.processing);
-    let (input, ids, mut native_findings) = trees(resources, target, options, &processing)?;
-    let mut files = BTreeMap::new();
-    let mut format_findings = vec![FormatCode::ProvenanceLimited];
-    let mut base = b"---\n".to_vec();
-    for (index, tree) in input.trees.iter().enumerate() {
-        lifecycle(tree, &mut format_findings);
-        if index > 0 {
-            base.extend(b"---\n");
-        }
-        base.extend(encoded(tree, &input)?);
-        base.push(b'\n');
-    }
-    processing
-        .payload(base.len(), Phase::Generation)
-        .map_err(|e| FormatError::native(vec![e]))?;
-    files.insert("base/resources.yaml".into(), base.clone());
-    files.insert("base/kustomization.yaml".into(), yaml(&serde_json::json!({"apiVersion":"kustomize.config.k8s.io/v1beta1","kind":"Kustomization","resources":["resources.yaml"]}))?);
-    let mut names = BTreeSet::new();
-    for overlay in overlays {
-        if !safe_name(&overlay.name)
-            || !names.insert(&overlay.name)
-            || overlay.variations.is_empty()
-            || overlay.variations.len() > 64
-        {
-            return Err(FormatError::new(FormatCode::UnsupportedVariation));
-        }
-        let (patches, outcomes) = overlay_patch(resources, target, options, overlay, &input, &ids, &base)?;
-        native_findings.extend(outcomes);
-        files.insert(format!("overlays/{}/patches.yaml", overlay.name), patches);
-        files.insert(format!("overlays/{}/kustomization.yaml", overlay.name), yaml(&serde_json::json!({"apiVersion":"kustomize.config.k8s.io/v1beta1","kind":"Kustomization","resources":["../../base"],"patchesStrategicMerge":["patches.yaml"]}))?);
-    }
-    artifact(files, format_findings, native_findings, profile_ids, false)
+    Ok(())
 }
+type NativeDelta = (usize, Vec<String>, TreeNode);
 fn overlay_patch(
     resources: &ResourceSet,
     target: &TargetProfile,
     options: &GenerationOptions,
     overlay: &KustomizeOverlay,
-    input: &crate::parser::ParsedInput,
+    input: &GeneratedTrees,
     ids: &[ResourceId],
     base: &[u8],
 ) -> Result<(Vec<u8>, Vec<crate::Finding>)> {
     let mut changed = parsed_in(base, SourceId(0), &input.limits, &input.processing)?
         .flatten_resources()
         .map_err(FormatError::native)?;
-    let mut patch_by_resource: BTreeMap<usize, TreeNode> = BTreeMap::new();
     let mut selected = BTreeSet::new();
+    let mut deltas = Vec::new();
     for variation in &overlay.variations {
         let document_index = resource_index(resources, variation.resource)?;
         let index = generated_index(ids, variation.resource, &input.processing)?;
         let tree = &input.trees[index];
-        let path = field_path(tree, &resources.documents()[document_index], &variation.field)?;
-        at(tree, &path)?;
+        let path = field_path(
+            tree,
+            &resources.documents()[document_index],
+            &variation.field,
+            &input.processing,
+        )?;
+        let existing = at(tree, &path)?;
+        match (&variation.field, &existing.value) {
+            (WorkloadField::Replicas, TreeValue::Number(_))
+            | (WorkloadField::Image { .. } | WorkloadField::Quantity { .. }, TreeValue::String(_)) => (),
+            _ => return Err(FormatError::new(FormatCode::UnsupportedVariation)),
+        }
         if !selected.insert((index, path.clone())) {
             return Err(FormatError::new(FormatCode::UnsupportedVariation));
         }
+        input
+            .processing
+            .payload(4096, Phase::Generation)
+            .and_then(|()| input.processing.work(4096, Phase::Generation))
+            .map_err(|finding| FormatError::native(vec![finding]))?;
+        // Preflight source ancestry, identity and sibling grouping copies before patch construction.
+        input
+            .processing
+            .tree_copy(tree, Phase::Generation)
+            .map_err(|finding| FormatError::native(vec![finding]))?;
         let value = variation.value.tree(&variation.field)?;
         let raw = encoded(&value, input)?;
         let edit = parsed_in(&raw, SourceId(1), &input.limits, &input.processing)?;
@@ -793,6 +1005,51 @@ fn overlay_patch(
                 edit,
             )
             .map_err(|e| FormatError::native(vec![e]))?;
+        input
+            .processing
+            .tree_copy(&value, Phase::Generation)
+            .map_err(|finding| FormatError::native(vec![finding]))?;
+        input
+            .processing
+            .payload_array::<(usize, Vec<String>, TreeNode)>(1, Phase::Generation)
+            .map_err(|finding| FormatError::native(vec![finding]))?;
+        deltas.push((index, path, value));
+    }
+    let patch_by_resource = grouped_patches(deltas, input)?;
+    let checked = generation::generate_in(&changed, target, OutputFormat::Yaml, options, &input.processing)
+        .map_err(FormatError::native)?;
+    let native_findings = checked.findings().to_vec();
+    let mut patches = Vec::new();
+    for patch in patch_by_resource.values() {
+        artifact_encoding::append(&mut patches, b"---\n", &input.processing)?;
+        artifact_encoding::append(&mut patches, &encoded(patch, input)?, &input.processing)?;
+        artifact_encoding::append(&mut patches, b"\n", &input.processing)?;
+    }
+    Ok((patches, native_findings))
+}
+
+fn grouped_patches(mut deltas: Vec<NativeDelta>, input: &GeneratedTrees) -> Result<BTreeMap<usize, TreeNode>> {
+    let mut patch_by_resource: BTreeMap<usize, TreeNode> = BTreeMap::new();
+    // Numeric container indices must compare numerically (container 2 precedes container 10).
+    let sort_units = deltas
+        .len()
+        .checked_mul(deltas.len())
+        .and_then(|n| n.checked_mul(512))
+        .ok_or_else(|| FormatError::native(vec![input.processing.fail(Phase::Generation)]))?;
+    input
+        .processing
+        .work(sort_units, Phase::Generation)
+        .map_err(|finding| FormatError::native(vec![finding]))?;
+    deltas.sort_by(|left, right| {
+        left.0.cmp(&right.0).then_with(|| {
+            left.1
+                .iter()
+                .map(|part| (part.parse::<usize>().ok(), part))
+                .cmp(right.1.iter().map(|part| (part.parse::<usize>().ok(), part)))
+        })
+    });
+    for (index, path, value) in deltas {
+        let tree = &input.trees[index];
         let delta = patch_by_resource.entry(index).or_insert_with(|| {
             let metadata = tree.get("metadata");
             let mut identity = Vec::new();
@@ -815,20 +1072,8 @@ fn overlay_patch(
         });
         patch_field(delta, &path, &value, tree)?;
     }
-    let checked = generation::generate_in(&changed, target, OutputFormat::Yaml, options, &input.processing)
-        .map_err(FormatError::native)?;
-    let native_findings = checked.findings().to_vec();
-    let mut patches = b"---\n".to_vec();
-    for (i, patch) in patch_by_resource.values().enumerate() {
-        if i > 0 {
-            patches.extend(b"---\n");
-        }
-        patches.extend(encoded(patch, input)?);
-        patches.push(b'\n');
-    }
-    Ok((patches, native_findings))
+    Ok(patch_by_resource)
 }
-
 fn patch_field(patch: &mut TreeNode, segments: &[String], value: &TreeNode, original: &TreeNode) -> Result<()> {
     let Some((first, rest)) = segments.split_first() else {
         *patch = value.clone();

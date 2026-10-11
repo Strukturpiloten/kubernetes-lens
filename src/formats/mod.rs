@@ -2,6 +2,7 @@
 //!
 //! These APIs do not acquire files, invoke tools implicitly, apply resources, or claim native
 //! conformance. A caller-selected executor must enforce the [`OfflineRenderer`] contract.
+mod artifact_encoding;
 #[cfg(all(feature = "supervised-renderer", target_os = "linux"))]
 mod broker_protocol;
 mod catalogue;
@@ -29,8 +30,8 @@ pub use input::{
     execute_with, import_rendered, plan_helm, plan_kustomize, render_with,
 };
 pub use output::{
-    ArtifactTree, HelmChartOptions, HelmParameter, HookPolicy, KustomizeOverlay, NativeValue, ResourceQuantity,
-    ResourceSide, WorkloadField, WorkloadVariation, generate_chart, generate_kustomize,
+    ArtifactTree, EmittedResourceAssociation, HelmChartOptions, HelmParameter, HookPolicy, KustomizeOverlay,
+    NativeValue, ResourceQuantity, ResourceSide, WorkloadField, WorkloadVariation, generate_chart, generate_kustomize,
 };
 
 use crate::Finding;
@@ -178,13 +179,4 @@ pub(crate) fn ledger() -> Result<&'static serde_json::Value> {
         .get_or_init(|| serde_json::from_slice(crate::capability::capability_ledger_bytes()).ok())
         .as_ref()
         .ok_or_else(|| FormatError::new(FormatCode::InvalidProfile))
-}
-pub(crate) fn json(bytes: &serde_json::Value) -> Result<Vec<u8>> {
-    serde_json::to_vec(bytes).map_err(|_| FormatError::new(FormatCode::InvalidProject))
-}
-pub(crate) fn yaml(bytes: &serde_json::Value) -> Result<Vec<u8>> {
-    let mut out = b"---\n".to_vec();
-    out.extend(json(bytes)?);
-    out.push(b'\n');
-    Ok(out)
 }
