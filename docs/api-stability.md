@@ -99,3 +99,7 @@ root broker policy. It exposes no public observer, trace, PID, lease or evidence
 `OfflineRenderer` construction intact. Selected transport replies bind the hash of original
 wire bytes; no client canonicalization repairs a mismatched hash. Native ACK core status is
 required only on the selected private route. Existing unobserved ACK serialization is retained.
+
+[ADR 0016](decisions/0016-pre-permit-input-view-rendezvous.md) adds an optional private root
+input-view rendezvous under controlled request schema 2 and original operation ends. It adds no
+public renderer API or external witness-path authority; default-none behavior is preserved.

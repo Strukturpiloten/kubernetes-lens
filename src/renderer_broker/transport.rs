@@ -38,6 +38,8 @@ struct Config {
     registrations: Vec<RegisteredTool>,
     #[serde(default)]
     wait_observer: Option<super::wait_observer::Selection>,
+    #[serde(default)]
+    input_view_witness: Option<super::input_view_witness::Selection>,
 }
 fn root() -> Result<()> {
     if nix::unistd::getuid().as_raw() != 0 || nix::unistd::geteuid().as_raw() != 0 {
@@ -72,6 +74,12 @@ fn load_config(path: &Path, end: Instant) -> Result<Config> {
             != config.registrations.len()
     {
         return Err("config-admission");
+    }
+    if let Some(witness) = &config.input_view_witness {
+        witness.validate_shape()?;
+        if config.wait_observer.is_none() {
+            return Err("input-view-wait-observer-required");
+        }
     }
     if let Some(observer) = &config.wait_observer {
         let expected = observer.validate()?;
@@ -466,6 +474,9 @@ fn prepare_transport(
     client: &UnixStream,
     end: Instant,
 ) -> Result<Transport> {
+    if let Some(witness) = &config.input_view_witness {
+        witness.validate_request(header, config.wait_observer.is_some())?;
+    }
     let registration = config
         .registrations
         .iter()
@@ -523,6 +534,7 @@ fn prepare_transport(
         tools: config.tools.clone(),
         request_sha256: Some(broker_protocol::digest(raw)),
         observer: config.wait_observer.clone(),
+        input_view_witness: config.input_view_witness.clone(),
     };
     durable(&descriptor, &d)?; // This immutable owned intent precedes every slice/controller mutation.
     let listener = UnixListener::bind(&channel).map_err(|_| "controller-channel")?;
@@ -952,6 +964,40 @@ mod tests {
         })
     }
     type TestResultHeader = std::result::Result<RequestHeader, Box<dyn std::error::Error>>;
+    #[test]
+    fn private_input_view_selection_is_default_none_and_rejects_unknown_authority() -> TestResult {
+        let value = serde_json::json!({
+            "schema":1, "journal":"/run/journal", "stage_root":"/run/stage", "transport_root":"/run/transport",
+            "helper":"/root/helper", "gate":"/root/gate", "helper_sha":([1;32]), "gate_sha":([2;32]),
+            "tools":{"manager":([1;32]),"systemd_run":([1;32]),"systemctl":([1;32]),"busctl":([1;32]),"bubblewrap":([1;32])},
+            "registrations":[]
+        });
+        let config: Config = serde_json::from_value(value.clone())?;
+        assert!(config.input_view_witness.is_none());
+        let mut null = value.clone();
+        null["input_view_witness"] = serde_json::Value::Null;
+        let config: Config = serde_json::from_value(null)?;
+        assert!(config.input_view_witness.is_none());
+        let mut wrong = value;
+        wrong["input_view_witness"] = serde_json::json!({"evidence_path":"/root/witness"});
+        assert!(serde_json::from_value::<Config>(wrong).is_err());
+        let header = client_header()?;
+        let value = serde_json::json!({
+            "schema":header.schema,"nonce":header.nonce,"client_uid":header.caller_uid,"execution_ns":header.deadline_ns,
+            "boot":header.boot,"journal":"/run/journal","stage":"/run/stage","helper":"/root/helper","gate":"/root/gate",
+            "renderer":header.executable,"helper_sha":([1;32]),"gate_sha":([2;32]),"renderer_sha":([1;32]),
+            "header":header,"channel":"/run/channel",
+            "tools":{"manager":([1;32]),"systemd_run":([1;32]),"systemctl":([1;32]),"busctl":([1;32]),"bubblewrap":([1;32])}
+        });
+        let descriptor: Descriptor = serde_json::from_value(value.clone())?;
+        assert!(descriptor.input_view_witness.is_none());
+        assert!(serde_json::to_value(descriptor)?.get("input_view_witness").is_none());
+        let mut null = value;
+        null["input_view_witness"] = serde_json::Value::Null;
+        let descriptor: Descriptor = serde_json::from_value(null)?;
+        assert!(descriptor.input_view_witness.is_none());
+        Ok(())
+    }
     #[test]
     fn rejected_clients_do_not_end_admission_or_reach_owned_lifecycle() -> TestResult {
         let mut clients = [

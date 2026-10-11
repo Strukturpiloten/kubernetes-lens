@@ -140,3 +140,12 @@ crash/downgrade/overlap quarantine. These tests launch no helper, observer, brok
 manager or cluster. Official source expectations are not runtime fixtures. Native wait, actual
 initial namespace, tracer lifetime/writer ownership, crash durability and unchanged full CNPG
 default execution remain independent obligations; see ADR 0015.
+
+Renderer #41 focused source controls cover closed/default-none selection and descriptor fields,
+controlled-schema refusal, independent literal Offer/Ack hashes, original capture intervals,
+credentialed length-prefix fragments, caps, truncation, extra bytes, actual socket EOF, missing
+credentials and injected rights. Cancellation with a complete body but no EOF refuses; retained
+root replacement, symlink substitution and same-inode content mutation refuse. Tests launch no
+helper, broker, renderer, systemd service or cluster. Native input-view equality, every independent
+closure, per-run actor/config sealing and original aggregate resource fit remain pending under
+B1–B6 in ADR 0016. The primary owns complete validation and independently authorized native work.

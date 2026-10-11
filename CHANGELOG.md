@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Add default-off authenticated pre-permit input-view rendezvous with original controlled ends,
+  retained process/object bindings and guarded credentialed framing. External witness capture and
+  native admission remain pending.
+
 - Add default-off root-selected stock native wait observation with original wire/deadline binding,
   credentialed native acknowledgement, finite protected evidence and fail-closed retirement.
   Source-only checks do not establish native renderer, observer or CNPG conformance.
