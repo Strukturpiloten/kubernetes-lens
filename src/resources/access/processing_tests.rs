@@ -463,3 +463,26 @@ fn actual_limit_range_type_bookkeeping_reserves_copy_payload_before_insertion() 
     crate::resources::access::policy::limits(&tree, &mut report);
     assert_eq!(count, report.findings.len());
 }
+
+#[test]
+fn standalone_native_validation_keeps_unknown_holder_reports() -> TestResult {
+    let set = fixture(&sa(&json!([{"name":"first","privateFuture":{}}])))?;
+    let resource = set.documents()[0]
+        .resource::<ServiceAccount>()
+        .ok_or("ServiceAccount")?;
+    let target = target()?;
+    let context = crate::registry::ValidationContext {
+        intent: crate::generation::NativeValidationIntent::Unspecified,
+        target: &target,
+        unknown_boundary_owner: crate::registry::UnknownBoundaryOwner::NativeValidation,
+        fields: FieldDecodeContext::standalone(),
+    };
+    let mut findings = Vec::new();
+    crate::registry::NativeResource::validate(resource, &context, &mut findings);
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].code, crate::diagnostic::FindingCode::UnadmittedField);
+    assert_eq!(findings[0].severity, crate::diagnostic::Severity::Warning);
+    assert_eq!(findings[0].phase, Phase::Validation);
+    assert_eq!(findings[0].path.as_ref().ok_or("holder path")?.0, ["secrets", "0"]);
+    Ok(())
+}

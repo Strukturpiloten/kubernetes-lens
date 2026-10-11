@@ -2,7 +2,7 @@
 use super::{TestResult, set, target};
 use kubernetes_lens::{
     Finding, FindingCode, NativeValidationIntent as Intent,
-    diagnostic::Severity,
+    diagnostic::{Phase, Severity},
     generate,
     generation::{ExplicitArtifactAccess, GenerationOptions, OutputFormat, ProtectedOutput},
     model::{AuthoredResource, ResourceSet},
@@ -207,11 +207,23 @@ fn pvc_create_requires_selected_modes_and_positive_storage_without_pod_resource_
             value["spec"]["accessModes"] = json!(["ReadWriteOnce", "ReadWriteOnce"]);
             assert!(accepted(&value, minor, Intent::Create)?);
         }
-        for storage in [json!("0"), json!("-1"), Value::Null] {
+        for storage in [json!("0"), json!("-1")] {
             let mut value = claim();
             value["spec"]["resources"]["requests"]["storage"] = storage;
             assert_invalid(&value, minor, "/spec/resources/requests/storage")?;
         }
+        let mut null_storage = claim();
+        null_storage["spec"]["resources"]["requests"]["storage"] = Value::Null;
+        assert!(findings(&null_storage, minor, Intent::Create)?.iter().any(|finding| {
+            finding.code == FindingCode::NativeFieldInvalid
+                && finding.severity == Severity::Error
+                && finding.phase == Phase::Decoding
+                && finding.source.is_some()
+                && finding.path.as_ref().is_some_and(|path| {
+                    path.reveal(&ExplicitSourceAccess::explicitly_allow_raw_source())
+                        == "/spec/resources/requests/storage"
+                })
+        }));
         let mut value = claim();
         value["spec"]["resources"] = json!({});
         assert_invalid(&value, minor, "/spec/resources/requests/storage")?;

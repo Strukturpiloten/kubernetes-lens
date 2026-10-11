@@ -162,3 +162,13 @@ of schema string shapes. The ledger binds naming rules, immutable source witness
 125 independent corrected cases. NativeNamingUnverified identifies historical prefix compatibility;
 Create cannot resolve it. Current naming code evidence does not certify API/server/controller
 acceptance, and all existing mandatory native conformance cells remain pending.
+
+## Finite native target correction
+
+[ADR 0018](../decisions/0018-finite-native-target-contract.md) and the
+[finite contract](../../schemas/capabilities/kubernetes-finite-native-contract.json) refine primitive,
+finding and present-field predicates. Container SecurityContext.runAsGroup is an independently
+evidenced enabled-stage exception at 1.20; its 54 default/on/off/version cells remain pending native
+execution. Empty helper-member maps never stand in for Quantity/IntOrString scalar admission.
+The existing immutable feature/schema sources, historical records, supported-minor empty list and
+all original native/official-corpus obligations remain unchanged.

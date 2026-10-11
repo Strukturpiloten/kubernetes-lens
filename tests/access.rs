@@ -1399,7 +1399,11 @@ fn actual_service_account_unknown_reports_stop_at_the_inherited_report_limit() -
         assert_eq!(findings.len(), entries + 1);
         if entries == 1 {
             assert_eq!(findings[0].code, FindingCode::UnadmittedField);
-            assert_eq!(findings[0].path, Some(path("/secrets/0")?));
+            assert_eq!(findings[0].path, Some(path("/secrets/0/privateFuture")?));
+            assert_eq!(findings[0].severity, kubernetes_lens::diagnostic::Severity::Warning);
+            assert_eq!(findings[0].phase, kubernetes_lens::diagnostic::Phase::Validation);
+            assert_eq!(findings[0].resource, Some(set.documents()[0].id()));
+            assert!(findings[0].source.is_none() && findings[0].wrapper.is_none());
         }
         assert!(!format!("{findings:?}").contains("access-private-scope"));
     }

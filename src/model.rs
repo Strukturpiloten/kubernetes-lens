@@ -672,6 +672,46 @@ pub(crate) enum CrdScopeCandidate {
     Ambiguous,
 }
 
+/// Explicit caller boundary for identity finding emission; never inferred from a codec context.
+#[derive(Clone, Copy)]
+pub(crate) enum IdentityFindingMode {
+    Analysis,
+    TargetValidation,
+}
+impl IdentityFindingMode {
+    const fn phase(self) -> Phase {
+        match self {
+            Self::Analysis => Phase::Analysis,
+            Self::TargetValidation => Phase::Validation,
+        }
+    }
+    fn emit(self, mut finding: Finding, out: &mut crate::processing::ProcessingReport) {
+        if out.failed() {
+            return;
+        }
+        if matches!(self, Self::TargetValidation)
+            && matches!(
+                finding.code,
+                FindingCode::DuplicateIdentity | FindingCode::InvalidIdentity
+            )
+        {
+            let processing = out.processing();
+            let charge = processing
+                .work("/metadata".len(), Phase::Validation)
+                .and_then(|()| processing.payload_array::<String>(1, Phase::Validation))
+                .and_then(|()| processing.payload("metadata".len(), Phase::Validation));
+            if let Err(error) = charge {
+                out.push(error);
+                return;
+            }
+            finding.phase = Phase::Validation;
+            finding.source = None;
+            finding.path = Some(FieldPath(vec!["metadata".to_owned()]));
+        }
+        out.push(finding);
+    }
+}
+
 /// Ordered supplied resources, retained wrappers, and immutable private sources.
 pub struct ResourceSet {
     pub(crate) custom_authority: Arc<()>,
@@ -766,7 +806,7 @@ impl ResourceSet {
             &set,
             target,
             crate::generation::NativeValidationIntent::Unspecified,
-            processing,
+            processing.clone(),
         )
         .into_iter()
         .map(|finding| {
@@ -783,6 +823,7 @@ impl ResourceSet {
             finding
         })
         .collect::<Vec<_>>();
+        let findings = refuse_authored_unadmitted_names(findings, limits.parser, processing);
         if crate::diagnostic::has_errors(&findings) {
             return Err(findings);
         }
@@ -852,7 +893,7 @@ impl ResourceSet {
             set.processing.clone(),
             Phase::Decoding,
         );
-        set.identity_findings_into(true, None, &mut report);
+        set.identity_findings_into(true, None, IdentityFindingMode::Analysis, &mut report);
         let findings = report.into_vec();
         if crate::diagnostic::has_errors(&findings) {
             return Err(findings);
@@ -928,16 +969,18 @@ impl ResourceSet {
     pub fn identity_findings(&self) -> Vec<Finding> {
         let context = self.encoding(None, self.operation(None));
         let mut report = crate::processing::ProcessingReport::new(context.budget.processing().clone(), Phase::Analysis);
-        self.identity_findings_into(false, Some(&context), &mut report);
+        self.identity_findings_into(false, Some(&context), IdentityFindingMode::Analysis, &mut report);
         report.into_vec()
     }
     pub(crate) fn identity_findings_into(
         &self,
         original: bool,
         context: Option<&registry::EncodeContext<'_>>,
+        mode: IdentityFindingMode,
         out: &mut crate::processing::ProcessingReport,
     ) {
         let processing = out.processing().clone();
+        let phase = mode.phase();
         let mut seen = BTreeMap::new();
         let mut list_ids = BTreeSet::new();
         for list in &self.lists {
@@ -945,20 +988,19 @@ impl ResourceSet {
                 break;
             }
             if let Err(finding) = processing
-                .work(1, Phase::Analysis)
-                .and_then(|()| processing.payload_array::<ListId>(1, Phase::Analysis))
+                .work(1, phase)
+                .and_then(|()| processing.payload_array::<ListId>(1, phase))
             {
                 out.push(finding);
                 break;
             }
             if !list_ids.insert(list.id) {
-                let mut finding =
-                    Finding::error(FindingCode::InvalidIdentity, Phase::Analysis).for_wrapper(WrapperSubject {
-                        source: list.source,
-                        list: list.id,
-                    });
+                let mut finding = Finding::error(FindingCode::InvalidIdentity, phase).for_wrapper(WrapperSubject {
+                    source: list.source,
+                    list: list.id,
+                });
                 finding.source = list.original.start;
-                out.push(finding);
+                mode.emit(finding, out);
             }
         }
         let mut ids = BTreeSet::new();
@@ -967,17 +1009,20 @@ impl ResourceSet {
                 break;
             }
             if let Err(finding) = processing
-                .work(1, Phase::Analysis)
-                .and_then(|()| processing.payload_array::<ResourceId>(1, Phase::Analysis))
+                .work(1, phase)
+                .and_then(|()| processing.payload_array::<ResourceId>(1, phase))
             {
                 out.push(finding);
                 break;
             }
             if !ids.insert(document.id) {
-                out.push(Finding::error(FindingCode::InvalidIdentity, Phase::Analysis).for_resource(document.id));
+                mode.emit(
+                    Finding::error(FindingCode::InvalidIdentity, phase).for_resource(document.id),
+                    out,
+                );
             }
             match if original {
-                charge_identity_copy(&document.original_identity, &processing, Phase::Analysis)
+                charge_identity_copy(&document.original_identity, &processing, phase)
                     .map(|()| document.original_identity.clone())
             } else {
                 document
@@ -985,23 +1030,24 @@ impl ResourceSet {
                     .and_then(|tree| identity(&tree, document.original_identity.scope))
             } {
                 Ok(identity) => {
-                    if let Err(finding) = charge_identity_copy(&identity, &processing, Phase::Analysis) {
+                    if let Err(finding) = charge_identity_copy(&identity, &processing, phase) {
                         out.push(finding.for_resource(document.id));
                         break;
                     }
                     if let Some(key) = identity.collision_key() {
                         if let Some(previous) = seen.insert(key, document.id) {
-                            out.push(
-                                Finding::error(FindingCode::DuplicateIdentity, Phase::Analysis).for_resource(previous),
+                            mode.emit(
+                                Finding::error(FindingCode::DuplicateIdentity, phase).for_resource(previous),
+                                out,
                             );
-                            out.push(
-                                Finding::error(FindingCode::DuplicateIdentity, Phase::Analysis)
-                                    .for_resource(document.id),
+                            mode.emit(
+                                Finding::error(FindingCode::DuplicateIdentity, phase).for_resource(document.id),
+                                out,
                             );
                         }
                     }
                 }
-                Err(finding) => out.push(finding.for_resource(document.id)),
+                Err(finding) => mode.emit(finding.for_resource(document.id), out),
             }
         }
     }
@@ -1390,6 +1436,42 @@ impl fmt::Debug for AuthoredResource {
         f.write_str("AuthoredResource(<private>)")
     }
 }
+fn refuse_authored_unadmitted_names(
+    findings: Vec<Finding>,
+    limits: crate::source::ParseLimits,
+    processing: crate::processing::NativeOperationBudget,
+) -> Vec<Finding> {
+    let fields = registry::FieldDecodeContext::new(limits, processing.clone(), Phase::Generation);
+    let mut report = crate::processing::ProcessingReport::from_report(findings, processing, Phase::Generation);
+    let original_count = report.len();
+    for index in 0..original_count {
+        if fields.processing.work(1, Phase::Generation).is_err() {
+            break;
+        }
+        let finding = &report[index];
+        if finding.code != FindingCode::UnadmittedField {
+            continue;
+        }
+        let Some(path) = finding.path.as_ref().filter(|path| {
+            path.0.len() == 2
+                && path.0[0] == "metadata"
+                && matches!(path.0[1].as_str(), "name" | "generateName" | "namespace")
+        }) else {
+            continue;
+        };
+        // A contextual target warning cannot authorize a source-free name.
+        // Preserve it and add the actual authoring-boundary refusal.
+        let Ok(path) = crate::resources::common::copy_path(path, &fields) else {
+            break;
+        };
+        let mut refusal = Finding::error(FindingCode::UnadmittedField, Phase::Generation).at_path(path);
+        refusal.resource = finding.resource;
+        refusal.wrapper = finding.wrapper;
+        report.push(refusal);
+    }
+    report.into_vec()
+}
+
 fn positionless(mut finding: Finding) -> Finding {
     finding.source = None;
     finding

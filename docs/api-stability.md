@@ -112,3 +112,9 @@ retains its existing identity ordering and serialization. `ArtifactTree::emitted
 read-only original input-local ResourceId/SourceRef/CollectionPath associations; those coordinates
 are not external provenance seals or native admission authority. Migrate readers as described in
 [generated projects](formats.md); protected artifact access and all native conformance limits remain.
+
+[ADR 0018](decisions/0018-finite-native-target-contract.md) retains the fallible i64 IntOrString
+carrier while checking native int32 at decoding, authored validation and generation. Consumers
+handle corrected full target finding facets, concrete RunAsGroup paths and finite contextual
+warnings; source-free failures retain genuine operation provenance. Existing source/artifact
+roles do not authenticate a remote host bridge. Native conformance and #43 remain pending.

@@ -1136,7 +1136,7 @@ fn root_status_expectations_bind_the_immutable_report_ledger_and_authenticated_w
             crate::capability::capability_ledger_bytes(),
         ),
         (
-            "witness_sha256",
+            "current_evaluation_witness_sha256",
             include_bytes!("../../schemas/capabilities/kubernetes-schema-witnesses.json").as_slice(),
         ),
     ] {
@@ -1209,6 +1209,27 @@ fn root_status_expectations_bind_the_immutable_report_ledger_and_authenticated_w
         }
         assert_eq!(actual, transition[key].as_str().required()?);
     }
+    Ok(())
+}
+
+#[test]
+fn current_witness_keeps_the_authenticated_historical_whole_document() -> TestResult {
+    let evidence: serde_json::Value = serde_json::from_str(include_str!("root-status-role-evidence.json"))?;
+    let witness: serde_json::Value = serde_json::from_slice(include_bytes!(
+        "../../schemas/capabilities/kubernetes-schema-witnesses.json"
+    ))?;
+    // Formatting may change current bytes; all authenticated historical witness facts stay exact.
+    let bytes = serde_json::to_vec(&witness)?;
+    let mut actual = String::new();
+    for byte in ledger_digest(&bytes) {
+        use std::fmt::Write as _;
+        write!(&mut actual, "{byte:02x}")?;
+    }
+    assert_eq!(
+        actual,
+        "df115e5225f17e21d098b72dfd2993fb8d2a75829968daaaafd2cdd2f966b38c"
+    );
+    assert_eq!(evidence["unchanged_witness_projection_sha256"], actual);
     Ok(())
 }
 

@@ -2404,12 +2404,7 @@
       "definition_shapes": {
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -2420,12 +2415,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -5870,12 +5860,7 @@
       "definition_shapes": {
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -5886,12 +5871,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -9025,12 +9005,7 @@
       "definition_shapes": {
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -9041,12 +9016,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -12137,12 +12107,7 @@
       "definition_shapes": {
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -12153,12 +12118,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -15303,12 +15263,7 @@
       "definition_shapes": {
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -15319,12 +15274,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -18253,12 +18203,7 @@
       "definition_shapes": {
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -18269,12 +18214,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -21031,12 +20971,7 @@
       "definition_shapes": {
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -21047,12 +20982,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -23781,12 +23711,7 @@
         },
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -23797,12 +23722,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -26541,12 +26461,7 @@
         },
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -26557,12 +26472,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -29305,12 +29215,7 @@
         },
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -29321,12 +29226,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -32082,12 +31982,7 @@
         },
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -32098,12 +31993,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -34866,12 +34756,7 @@
         },
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -34882,12 +34767,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -37651,12 +37531,7 @@
         },
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -37667,12 +37542,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -40436,12 +40306,7 @@
         },
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -40452,12 +40317,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -43221,12 +43081,7 @@
         },
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -43237,12 +43092,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -46006,12 +45856,7 @@
         },
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -46022,12 +45867,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -48791,12 +48631,7 @@
         },
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -48807,12 +48642,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"
@@ -51578,12 +51408,7 @@
         },
         "io.k8s.api.admissionregistration.v1.MutatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.RuleWithOperations": {
           "type": "object"
@@ -51594,12 +51419,7 @@
         },
         "io.k8s.api.admissionregistration.v1.ValidatingWebhook": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "io.k8s.api.admissionregistration.v1.WebhookClientConfig": {
           "type": "object"

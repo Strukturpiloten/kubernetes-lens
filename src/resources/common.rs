@@ -1,9 +1,10 @@
 //! Shared finite native helpers, independent of concrete resource cohorts.
 use crate::value::{AccessModes, LabelSelector, Quantity};
 use std::collections::BTreeMap;
+pub(crate) mod finite_metadata;
 
 macro_rules! native_object {
-    ($(#[$doc:meta])* pub struct $name:ident { $($wire:literal => $field:ident: $ty:ty,)* }) => {
+    ($(#[$doc:meta])* pub struct $name:ident { $($wire:literal => $field:ident: $ty:ty $([$null_policy:ident])?,)* }) => {
         $(#[$doc])*
         #[derive(Clone, Default, Debug)]
         pub struct $name {
@@ -35,17 +36,29 @@ macro_rules! native_object {
                 $crate::registry::codec::object(node, path)?;
                 ctx.processing.work(1, ctx.phase)?;
                 Ok(Self {
-                    $($field: $crate::registry::codec::read_presence(node, $wire, ctx, path)?,)*
+                    $($field: $crate::resources::common::native_object!(@read node, $wire, ctx, path $(, $null_policy)?)?,)*
                     unknown: $crate::syntax::UnknownFields::capture_in(node, Self::NATIVE_FIELDS, ctx)?,
                 })
             }
             fn encode(&self, ctx: &$crate::registry::EncodeContext<'_>, path: &$crate::diagnostic::FieldPath) -> Result<$crate::syntax::TreeNode, $crate::diagnostic::Finding> {
                 let mut entries = Vec::new();
-                $($crate::registry::codec::write_presence(&mut entries, $wire, &self.$field, ctx, path)?;)*
+                $($crate::resources::common::native_object!(@write &mut entries, $wire, &self.$field, ctx, path $(, $null_policy)?)?;)*
                 $crate::registry::codec::append_unknown(&self.unknown, &mut entries, ctx, path)?;
                 ctx.object(entries, path)
             }
         }
+    };
+    (@read $node:expr, $wire:expr, $ctx:expr, $path:expr) => {
+        $crate::registry::codec::read_presence($node, $wire, $ctx, $path)
+    };
+    (@read $node:expr, $wire:expr, $ctx:expr, $path:expr, non_null) => {
+        $crate::registry::codec::read_non_null_int_or_string($node, $wire, $ctx, $path)
+    };
+    (@write $entries:expr, $wire:expr, $value:expr, $ctx:expr, $path:expr) => {
+        $crate::registry::codec::write_presence($entries, $wire, $value, $ctx, $path)
+    };
+    (@write $entries:expr, $wire:expr, $value:expr, $ctx:expr, $path:expr, non_null) => {
+        $crate::registry::codec::write_non_null_int_or_string($entries, $wire, $value, $ctx, $path)
     };
 }
 pub(crate) use native_object;

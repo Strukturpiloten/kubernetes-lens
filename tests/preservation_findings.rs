@@ -52,11 +52,48 @@ fn artifact(set: &ResourceSet, options: &GenerationOptions) -> TestResult<Genera
         .map_err(|findings| format!("generation failed: {findings:?}").into())
 }
 fn unadmitted(artifact: &GeneratedArtifact) -> Vec<&Finding> {
-    artifact
+    let preservation = artifact
         .findings()
         .iter()
-        .filter(|f| f.code == FindingCode::UnadmittedField)
-        .collect()
+        .filter(|f| f.code == FindingCode::UnadmittedField && f.phase == Phase::Generation)
+        .collect::<Vec<_>>();
+    for finding in &preservation {
+        let pointer = finding
+            .path
+            .as_ref()
+            .map(|path| path.reveal(&ExplicitSourceAccess::explicitly_allow_raw_source()))
+            .unwrap_or_default();
+        let mut local = pointer.as_str();
+        // Preservation pointers qualify every containing List; target checks
+        // identify the same occurrence in its document-local namespace.
+        if finding.wrapper.is_some() {
+            while let Some(remainder) = local.strip_prefix("/items/") {
+                let Some(slash) = remainder.find('/') else {
+                    break;
+                };
+                if !remainder[..slash].bytes().all(|byte| byte.is_ascii_digit()) {
+                    break;
+                }
+                local = &remainder[slash..];
+            }
+        }
+        assert!(
+            artifact.findings().iter().any(|target| {
+                target.code == FindingCode::UnadmittedField
+                    && target.phase == Phase::Validation
+                    && target.severity == Severity::Warning
+                    && target.source.is_none()
+                    && target.resource == finding.resource
+                    && target.wrapper == finding.wrapper
+                    && target
+                        .path
+                        .as_ref()
+                        .is_some_and(|path| path.reveal(&ExplicitSourceAccess::explicitly_allow_raw_source()) == local)
+            }),
+            "distinct target context missing for preservation finding"
+        );
+    }
+    preservation
 }
 fn pointer(finding: &Finding) -> TestResult<String> {
     Ok(finding
@@ -227,13 +264,21 @@ fn existing_unsupported_value_findings_survive_without_duplicate_admission() -> 
     )?;
     let generated = artifact(&resources, &preserve())?;
     let warnings = unadmitted(&generated);
-    assert_eq!(warnings.len(), 2);
-    let existing = warnings
+    assert_eq!(warnings.len(), 1);
+    let existing = generated
+        .findings()
         .iter()
-        .find(|f| f.phase == Phase::Validation)
+        .find(|f| {
+            f.code == FindingCode::UnadmittedField
+                && f.phase == Phase::Validation
+                && f.path.as_ref().is_some_and(|path| {
+                    path.reveal(&ExplicitSourceAccess::explicitly_allow_raw_source()) == "/spec/accessModes/0"
+                })
+        })
         .ok_or("existing native finding missing")?;
     assert_eq!(pointer(existing)?, "/spec/accessModes/0");
     assert_eq!(existing.severity, Severity::Warning);
+    assert!(existing.source.is_none());
     let new = warnings
         .iter()
         .find(|f| f.phase == Phase::Generation)

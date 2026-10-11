@@ -84,6 +84,7 @@ pub(super) fn collect<T: super::validation::StaticChecks>(
     let validation = crate::registry::ValidationContext {
         target,
         intent: crate::generation::NativeValidationIntent::Unspecified,
+        unknown_boundary_owner: crate::registry::UnknownBoundaryOwner::NativeValidation,
         fields: ctx.fields.clone(),
     };
     let mut report = crate::processing::ProcessingReport::new(ctx.fields.processing.clone(), Phase::Analysis);

@@ -11,6 +11,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 NAMING_SHARED_SOURCES = {'src/diagnostic.rs', 'src/resources/common/native_naming.rs',
+                         'src/resources/common/finite_metadata.rs',
                          'tests/native_naming.rs'}
 NAMING_SOURCES = NAMING_SHARED_SOURCES | {
     'src/model.rs', 'src/generation.rs', 'src/graph.rs', 'src/resources/common.rs',
@@ -26,6 +27,36 @@ spec.loader.exec_module(contract)
 
 
 class ContractTests(unittest.TestCase):
+    def test_finite_native_contract_rejects_widened_domains_and_missing_init_scope(self):
+        finite = json.loads((ROOT / 'schemas/capabilities/kubernetes-finite-native-contract.json').read_text())
+        self.assertEqual(contract.validate_finite_contract(finite), [])
+        for section, name, replacement in [
+            ('int_or_string', 'native_wire_maximum', 9223372036854775807),
+            ('int_or_string', 'null_refusal_fields', ['NetworkPolicyPortNetworkingV1.port']),
+            ('int_or_string', 'nullable_presence_fields', []),
+            ('metadata', 'annotation_key_plus_value_maximum_utf8_bytes', 262145),
+            ('container_ports', 'roles', ['containers']),
+            ('environment', 'universal_native_invalidity', True),
+            ('host_authority', 'native_role_self_authentication', True),
+        ]:
+            changed = copy.deepcopy(finite)
+            changed[section][name] = replacement
+            self.assertTrue(contract.validate_finite_contract(changed))
+
+    def test_container_run_as_group_has_independent_enabled_stage_binding(self):
+        definition = 'io.k8s.api.core.v1.SecurityContext'
+        self.assertEqual(self.evaluate(definition, 'runAsGroup', '1.20'), 'selected_expected_pending')
+        self.assertEqual(self.evaluate(definition, 'runAsGroup', '1.20', 0, RunAsGroup='enabled'), 'selected_expected_pending')
+        self.assertEqual(self.evaluate(definition, 'runAsGroup', '1.20', 0, RunAsGroup='disabled'), 'unadmitted-field')
+        for number in [21, 22, 23, 37]:
+            self.assertEqual(self.evaluate(definition, 'runAsGroup', f'1.{number}'), 'selected_expected_pending')
+        binding = next(binding for binding in self.ledger['feature_gate_bindings'] if binding.get('definition') == definition and binding.get('member') == 'runAsGroup')
+        self.assertEqual(binding['selection'], 'enabled_stage')
+        cases = json.loads((ROOT / self.ledger['gate_case_file']).read_text())
+        self.assertEqual(sum(case['binding_id'] == binding['id'] for case in cases['cases']), 54)
+        changed = copy.deepcopy(self.ledger)
+        changed['feature_gate_bindings'] = [row for row in changed['feature_gate_bindings'] if row['id'] != binding['id']]
+        self.assertTrue(contract.validate_gate_cases(changed, cases))
     @classmethod
     def setUpClass(cls):
         cls.ledger = json.loads(contract.LEDGER.read_text())

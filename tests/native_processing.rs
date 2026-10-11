@@ -51,9 +51,16 @@ fn work_limits(units: usize) -> ParseLimits {
 }
 fn minimum(mut succeeds: impl FnMut(usize) -> bool) -> TestResult<usize> {
     let mut low = 0;
-    let mut high = 100_000;
-    if !succeeds(high) {
-        return Err("upper test bound did not succeed".into());
+    // Probe within the unchanged production ceiling. A fixed 100k test
+    // allowance is not a contract for cumulative finite capability scans.
+    let ceiling = NativeProcessingLimits::default().max_processing_units;
+    let mut high = 100_000.min(ceiling);
+    while !succeeds(high) {
+        if high == ceiling {
+            return Err("default production work ceiling did not succeed".into());
+        }
+        low = high + 1;
+        high = high.saturating_mul(2).min(ceiling);
     }
     while low < high {
         let middle = low + (high - low) / 2;

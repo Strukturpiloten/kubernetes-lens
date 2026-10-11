@@ -2212,7 +2212,14 @@ impl SourceFieldSession<'_> {
     }
     fn finding(&mut self, code: FindingCode, path: &crate::diagnostic::FieldPath) {
         if self.tick() {
-            self.out.push(Finding::error(code, self.phase).at_path(path.clone()));
+            let finding = if self.phase == Phase::Validation
+                && matches!(code, FindingCode::UnadmittedField | FindingCode::NativeContextRequired)
+            {
+                Finding::warning(code, self.phase)
+            } else {
+                Finding::error(code, self.phase)
+            };
+            self.out.push(finding.at_path(path.clone()));
         }
     }
 }
@@ -2610,6 +2617,27 @@ fn source_shape(
         .as_str()
         .and_then(|reference| reference.strip_prefix("#/definitions/"))
     {
+        if reference == "io.k8s.apimachinery.pkg.api.resource.Quantity" && session.phase == Phase::Validation {
+            if let Some(lexeme) = node.as_str() {
+                let fields = crate::registry::FieldDecodeContext::new(
+                    crate::source::ParseLimits::default(),
+                    session.processing.clone(),
+                    session.phase,
+                );
+                match crate::value::Quantity::parse_in(lexeme, &fields) {
+                    Ok(quantity) => {
+                        if let Err(finding) = session.processing.work(533, session.phase) {
+                            session.out.push(finding);
+                        } else if !quantity.finite_native_domain() {
+                            session.finding(FindingCode::NativeContextRequired, path);
+                        }
+                    }
+                    Err(finding) if finding.code == FindingCode::LimitExceeded => session.out.push(finding),
+                    Err(_) => session.finding(FindingCode::NativeFieldInvalid, path),
+                }
+            }
+            return;
+        }
         if let (Some(members), Some(entries)) = (
             ledger["typed_struct_inventory"][reference]["proposed_admitted_members"].as_object(),
             node.as_mapping(),

@@ -59,3 +59,20 @@ selected naming: StatefulSet uses labels from 1.27; CronJob's concrete 52-byte b
 ReplicationController changes its direct-prefix check from 1.35. The shared checker retains exact
 prefix spelling and explicit unverified outcomes. Generated-only documents establish no concrete
 lookup identity. Naming code evidence is separate from the pending native acceptance cells.
+
+## Reviewed finite supplied predicates
+
+[ADR 0018](decisions/0018-finite-native-target-contract.md) adds exact container RunAsGroup
+admission at 1.20 under complete documented-default/enabled context, stable 1.21–1.22 and persistent
+feature after toggle removal in 1.23. PodSecurityContext does not gain this gate by inference.
+Annotation key/value UTF-8 totals are at most 262144 bytes; every supplied supplementalGroups
+element is nonnegative even when other pod security members are overridden. No nonroot/UID-zero
+API rejection or runtime proof demand is inferred.
+
+Reviewed CPU/memory quantity domains precede exact explicit request<=limit checks. Missing limits
+remain missing; PVC semantics remain separate. Nonempty named ports are unique across admitted
+ordinary and init occurrences in each Pod/template, with separate Pods isolated. Drop ALL is
+reviewed, duplicates retained and other names contextual. A mountPath colon is invalid at 1.20
+and unverified in later contexts; no filesystem behavior is inferred. Env merge-key duplicates
+refuse projection without a universal native-invalid claim. The frozen CNPG CPU200m>100m overlay
+is negative; a separately reviewed valid positive counterpart cannot erase its original obligation.

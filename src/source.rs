@@ -170,6 +170,9 @@ impl ParseLimits {
 }
 
 /// Explicit opt-in token for private original source/native-value access.
+/// This in-process role is distinct from artifact access. A remote transport must authenticate
+/// its own opaque handle, caller opt-in, source scope and operation lifetime; JSON or byte hashes
+/// cannot construct this authority or independent reviewer/decoder authority.
 #[derive(Clone, Copy, Debug)]
 pub struct ExplicitSourceAccess(());
 impl ExplicitSourceAccess {

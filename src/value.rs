@@ -83,7 +83,8 @@ impl<T> fmt::Debug for Protected<T> {
 /// General Kubernetes integer-or-string, including named ports such as `http`.
 #[derive(Clone, Eq, PartialEq)]
 pub enum IntOrString {
-    /// Explicit native integer.
+    /// Fallible integer carrier. Native wire decoding, authored validation and generation
+    /// require signed int32; larger directly constructed values are never clipped or emitted.
     Int(i64),
     /// Explicit native string; it is not assumed to be a percentage.
     String(String),

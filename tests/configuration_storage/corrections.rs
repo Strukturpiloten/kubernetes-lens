@@ -2,7 +2,7 @@
 use super::{TestResult, set, target};
 use kubernetes_lens::{
     capability::{FeatureGateId, FeatureGateState},
-    diagnostic::{FieldPath, FindingCode, Severity},
+    diagnostic::{FieldPath, FindingCode, Phase, Severity},
     generate,
     generation::{
         ExplicitArtifactAccess, GenerationOptions, JsonShape, NativeValidationIntent, OpaqueFieldPolicy, OutputFormat,
@@ -242,6 +242,9 @@ fn malformed_configmap_key_suppliers_never_certify_membership() -> TestResult<()
     for data in [
         json!({"text":"valid","bad key":"x"}),
         json!({"text":"valid","blob":"overlap"}),
+        json!({"text":"valid",".":"context"}),
+        json!({"text":"valid","..":"context"}),
+        json!({"text":"valid","..prefix":"context"}),
     ] {
         let mut supplier = config();
         supplier["data"] = data;
@@ -283,11 +286,16 @@ fn malformed_configmap_key_suppliers_never_certify_membership() -> TestResult<()
         .flatten_resources()
         .err()
         .ok_or("malformed scalar unexpectedly admitted")?;
-    assert!(
-        findings
-            .iter()
-            .any(|finding| finding.code == FindingCode::NativeFieldInvalid)
-    );
+    assert!(findings.iter().any(|finding| {
+        finding.code == FindingCode::NativeFieldInvalid
+            && finding.phase == Phase::Decoding
+            && finding.severity == Severity::Error
+            && finding.source.is_some()
+            && finding
+                .path
+                .as_ref()
+                .is_some_and(|path| path.reveal(&ExplicitSourceAccess::explicitly_allow_raw_source()) == "/data/text")
+    }));
     Ok(())
 }
 

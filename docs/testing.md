@@ -4,6 +4,8 @@ The complete gate is `./scripts/check-all.sh --check`; `--fix` performs the same
 first. `format-lint.sh` runs no tests. Lightweight contracts cover trusted-base PR planning, aggregate
 failure/skip propagation, repository/release boundaries, and real Renovate extraction and policy.
 Renovate tests import the locked tool itself and require its RE2 engine to be available.
+The documentation phase also runs actual Prettier against the production file-check script
+with conflicting workspace configurations and fail-closed owning-config controls.
 
 Rust check, Clippy, test, doctest, Rustdoc, MSRV, cargo-deny, and local package validation run against
 the locked package. Offline native unit/integration tests and doctests verify the delivered

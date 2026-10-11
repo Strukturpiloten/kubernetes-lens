@@ -259,6 +259,10 @@ pub struct WrapperSubject {
 }
 
 /// A finding with fixed-code presentation and private free-form path data.
+/// Finite target-validation records retain the actual input-local resource and exact field path,
+/// with no original source position for an edited value. Immutable source coordinates remain
+/// separate resource evidence. Decoder positions and existing List wrapper subjects are genuine
+/// operation associations; external projection/authority/runtime refusals are not native codes.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Finding {
     /// Stable code.

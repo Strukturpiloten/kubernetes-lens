@@ -4,7 +4,7 @@
   "issue": 13,
   "canonical_ledger": {
     "path": "schemas/capabilities/kubernetes-1.20-1.37.json",
-    "sha256": "4d16a8ba154a8ce5a7c2e5d74768111c44154528a5600f8c6578fc01f397229c"
+    "sha256": "9095ab78099577b056cfb677c3211f8c0deae2c73931ad5307a06fdff41fa5d8"
   },
   "roots": [
     {
@@ -88,13 +88,13 @@
   ],
   "field_selection_rule": "Exact frozen root fields plus reviewed dynamic CRD-schema admission; unsupported schema keywords and unknown fields remain findings, never generic admission.",
   "source_sha256": {
-    "src/capability.rs": "dd9a69ee48aee45a5638fb38be7988c7c6d02ad0c176f697245ecf8a8a40ed40",
-    "src/diagnostic.rs": "5ac5cab660f3bccee70057940dab03a671d676b4c18176d428bb9e0ef5e37f30",
-    "src/generation.rs": "3ff3cc9b9179a60e59d395e3b4597063056032b5e7db86250b161b5141dab98b",
+    "src/capability.rs": "0cff4b617a714eb4b2097a613e221b34aeff0e13078f5034a1d3ffeac3ee779a",
+    "src/diagnostic.rs": "a193fb5a3bcc318984b28f5aeb2018e41b1e0100158eb9673de825fd815a4373",
+    "src/generation.rs": "847d2b7dbaf54276aa2c68e5e5bf65a16d5339ccb19ca7d43fd83c6330427fb8",
     "src/graph.rs": "cde872fb4ff06a993e17c3f48541a11a21b4be12385611c4567f61b6079d3405",
-    "src/model.rs": "e241166e68679275cfabddca496e08fad5bf708afa7525946217d97fc9a42561",
-    "src/registry.rs": "5e03c877fbbb689c5122be45a1403f0bf4615e53a2d3ed043d7d8c363fcd2bab",
-    "src/resources/common/native_naming.rs": "7dae658af9aedaa84a878455e026f8bfb5a28ae292c4aa5bdf962efee53b0273",
+    "src/model.rs": "0fe15225c35ff5de67bdb38ca0a04d67b664c27f7625a0db4301bdd299ddfcf5",
+    "src/registry.rs": "484d8e7b85fc2a90dc26fe6996bfc923ad7758852315b6749c83fc6c76b1934c",
+    "src/resources/common/native_naming.rs": "6f71d4f2a5642b08ba7b9383cdaaa6ecef6a90c1dc5d9be159191bef0a6c2328",
     "src/resources/extensions.rs": "5aea65a697f2c8a7aafc7ad40cf0bf581ca6121acef6565e00167dcd738a377c",
     "src/resources/extensions/capabilities.rs": "d1a3de0591f1ff769c43dbfe3e888a90cfd8579d150001085b014c228b489e85",
     "src/resources/extensions/custom_documents.rs": "5eb05b4ff2e4fdd9c16702328a2bd585723567410b5a3dd578fc673ca05c32bb",
@@ -109,12 +109,10 @@
     "src/value/protected_json.rs": "f04719257e5d29e957942639fbc6a770ba677f8f60528ec56d8e1d378fa68d9a",
     "tests/extensions.rs": "69366f20d42c9d816594805f1c0f03067b2a637fb051fccf238cef3ca61efec1",
     "tests/extensions_final_corrections.rs": "c73fd1b63cd633ed89d851c6734769871c20d62ae1cb5479814d85514eb9c2fb",
-    "tests/native_naming.rs": "edb9bd2fea2f94781cd80152531a7d47b29e33efcd412dccc7ca0b1ee9bf91eb"
+    "tests/native_naming.rs": "3952ad98f39561cf10af3452abec5e6ab1959643c240de467430d239e8ef57ee",
+    "src/resources/common/finite_metadata.rs": "ff765abb5218b32272c222aa092eae036b142bbd0e9800c640ba5f6dc1da47af"
   },
-  "independent_extension_tests": [
-    "tests/extensions.rs",
-    "tests/extensions_final_corrections.rs"
-  ],
+  "independent_extension_tests": ["tests/extensions.rs", "tests/extensions_final_corrections.rs"],
   "custom_document_contract": {
     "authority": "exact current supplied resource set, source, effective CRD, schema, custom document and target profile",
     "supported_subset": "bounded offline schema checking only; unsupported schema, CEL, conversion and controller behavior produce unavailable outcomes",

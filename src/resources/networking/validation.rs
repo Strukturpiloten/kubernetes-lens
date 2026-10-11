@@ -1280,6 +1280,7 @@ mod tests {
             &ValidationContext {
                 target: &target,
                 intent: NativeValidationIntent::Unspecified,
+                unknown_boundary_owner: crate::registry::UnknownBoundaryOwner::NativeValidation,
                 fields: crate::registry::FieldDecodeContext::standalone(),
             },
             &mut findings,

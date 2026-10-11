@@ -2,7 +2,7 @@
 use kubernetes_lens::{
     FindingCode,
     capability::{KubernetesVersion, TargetProfile},
-    diagnostic::{FieldPath, Finding, Severity},
+    diagnostic::{FieldPath, Finding, Phase, Severity},
     generation::{
         ExplicitArtifactAccess, GenerationOptions, JsonShape, NativeValidationIntent, OpaqueFieldPolicy, OutputFormat,
         ProtectedOutput, generate, validate_for_target_with_intent, validate_for_target_with_limits,
@@ -249,7 +249,16 @@ fn assert_case_outcome(case: &Value, id: &str, path: &str, findings: &[Finding])
             path
         };
         assert!(
-            code_at(findings, FindingCode::NativeFieldInvalid, error_path),
+            code_at(
+                findings,
+                if matches!(error_path, "/metadata/name" | "/metadata/namespace") {
+                    // ADR0018 changes target facets; the historical independent case bytes stay unchanged.
+                    FindingCode::InvalidIdentity
+                } else {
+                    FindingCode::NativeFieldInvalid
+                },
+                error_path
+            ),
             "{id}: {findings:?}"
         );
     } else if expected.contains("context-required")
@@ -344,7 +353,7 @@ fn authored_invalid_names_and_generated_only_names_cannot_create_positive_target
     let findings = ResourceSet::from_authored(vec![pod.into()], &target(37)?, &AuthoringLimits::default())
         .err()
         .ok_or("invalid authoring accepted")?;
-    assert!(code_at(&findings, FindingCode::NativeFieldInvalid, "/metadata/name"));
+    assert!(code_at(&findings, FindingCode::InvalidIdentity, "/metadata/name"));
     let mut doc = fixture("v1", "Pod", "valid");
     doc["metadata"].as_object_mut().ok_or("metadata")?.remove("name");
     doc["metadata"]["generateName"] = json!("prefix-");
@@ -405,7 +414,7 @@ fn independent_all_35_dispatch_covers_every_frozen_gvk_and_version_boundary() ->
                         validate_for_target_with_intent(&set, &target(version)?, NativeValidationIntent::Unspecified);
                     let invalid = matches!(name, "Namespace" | "Service") || name == "StatefulSet" && version >= 27;
                     assert_eq!(
-                        code_at(&findings, FindingCode::NativeFieldInvalid, "/metadata/name"),
+                        code_at(&findings, FindingCode::InvalidIdentity, "/metadata/name"),
                         invalid,
                         "{name}/{spelling}/1.{version}: {findings:?}"
                     );
@@ -413,7 +422,7 @@ fn independent_all_35_dispatch_covers_every_frozen_gvk_and_version_boundary() ->
                     let findings =
                         validate_for_target_with_intent(&set, &target(version)?, NativeValidationIntent::Unspecified);
                     assert!(
-                        code_at(&findings, FindingCode::NativeFieldInvalid, "/metadata/name"),
+                        code_at(&findings, FindingCode::InvalidIdentity, "/metadata/name"),
                         "missing dispatch {name}/{spelling}/1.{version}"
                     );
                 }
@@ -432,7 +441,7 @@ fn independent_all_35_dispatch_covers_every_frozen_gvk_and_version_boundary() ->
                         "{name}/{spelling}/1.{version}"
                     );
                     assert!(
-                        !code_at(&findings, FindingCode::NativeFieldInvalid, "/metadata/name"),
+                        !code_at(&findings, FindingCode::InvalidIdentity, "/metadata/name"),
                         "naming guessed for unavailable API {name}/{spelling}/1.{version}"
                     );
                 }
@@ -580,7 +589,7 @@ fn crd_naming_needs_current_group_and_plural_evidence() -> TestResult {
             }
             let set = parse(&crd).map_err(|_| "CRD acquisition")?;
             let findings = validate_for_target_with_intent(&set, &target(37)?, NativeValidationIntent::Unspecified);
-            assert!(code_at(&findings, FindingCode::NativeFieldInvalid, "/metadata/name"));
+            assert!(code_at(&findings, FindingCode::InvalidIdentity, "/metadata/name"));
             let graph = resolve_references_for_target(&set, &target(37)?);
             assert!(code_at(
                 &graph.findings,
@@ -718,11 +727,10 @@ fn source_free_authoring_preserves_private_rbac_and_refuses_relaxed_service_nami
         .err()
         .ok_or("relaxed Service branch authored")?;
     assert!(code_at(&errors, FindingCode::UnadmittedField, "/metadata/name"));
-    assert!(
-        errors
-            .iter()
-            .any(|finding| finding.code == FindingCode::UnadmittedField && finding.severity == Severity::Error)
-    );
+    assert!(errors.iter().any(|finding| finding.code == FindingCode::UnadmittedField
+        && finding.severity == Severity::Error
+        && finding.phase == Phase::Generation
+        && finding.source.is_none()));
     Ok(())
 }
 
@@ -1074,7 +1082,17 @@ fn unknown_api_names_keep_private_warning_generation_and_exhaustion_policy() -> 
         .find(|finding| finding.code == FindingCode::NativeNamingUnverified)
         .ok_or("warning")?;
     assert_eq!(warning.severity, Severity::Warning);
-    assert!(warning.source.is_some());
+    assert_eq!(warning.phase, Phase::Validation);
+    assert_eq!(warning.resource, Some(set.documents()[0].id()));
+    assert!(warning.source.is_none());
+    assert_eq!(
+        set.documents()[0]
+            .source_evidence()
+            .reveal_raw(&ExplicitSourceAccess::explicitly_allow_raw_source()),
+        serde_json::to_vec(&doc)
+            .map_err(|_| "fixture source serialization")?
+            .as_slice()
+    );
     assert!(!format!("{warning:?}").contains("Private/Unknown"));
     assert!(generate(&set, &profile, OutputFormat::Json, &options(false)).is_err());
     let artifact = generate(&set, &profile, OutputFormat::Json, &options(true))

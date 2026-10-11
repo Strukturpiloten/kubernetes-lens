@@ -270,6 +270,15 @@ def validate(ledger, witnesses, scenarios):
     def need(condition, message):
         if not condition:
             errors.append(message)
+    finite_path = 'schemas/capabilities/kubernetes-finite-native-contract.json'
+    need(ledger.get('finite_native_contract_file') == finite_path, 'finite native contract owner')
+    finite = json.loads((ROOT / finite_path).read_text())
+    errors += validate_finite_contract(finite)
+    for definition, primitive in [('io.k8s.apimachinery.pkg.util.intstr.IntOrString', 'int-or-string'),
+                                  ('io.k8s.apimachinery.pkg.api.resource.Quantity', 'quantity')]:
+        need(ledger['typed_struct_inventory'][definition].get('scalar_contract') == {
+            'file': finite_path, 'primitive': primitive, 'object_members_admit_no_scalar': True,
+        }, 'explicit finite primitive scalar binding')
     anchors = json.loads((LEDGER.parent / 'kubernetes-contract-anchors.json').read_text())
     need(frozen_digest(ledger['graph_relationships']) == anchors['graph_relationships'], 'frozen required graph relationship contract')
     need(frozen_digest(ledger['canonical_tool_owner']) == anchors['canonical_tool_owner'], 'one frozen immutable operational tool owner')
@@ -393,6 +402,40 @@ def validate(ledger, witnesses, scenarios):
         if 'server-acceptance' in cid:
             need(command['producer_execution_class'] == 'external-owned-harness' and '--kubeconfig' in argv and '--context' in argv and '--dry-run=server' in argv, f'external-only explicit runtime {cid}')
             need(('--validate=true' if cid.startswith('legacy') else '--validate=strict') in argv, f'historical exact validation flags {cid}')
+    return errors
+
+
+def validate_finite_contract(finite):
+    """Check adopted source constants, without evaluating native product output."""
+    errors = []
+    expected = {
+        ('int_or_string', 'carrier'): 'fallible-i64',
+        ('int_or_string', 'native_wire_minimum'): -2147483648,
+        ('int_or_string', 'native_wire_maximum'): 2147483647,
+        ('int_or_string', 'boundaries'): ['admitted-wire-decoding', 'authored-validation', 'generation'],
+        ('int_or_string', 'string_coercion'): False,
+        ('int_or_string', 'null_discriminant_admitted'): False,
+        ('int_or_string', 'null_refusal_fields'): ['ServicePort.targetPort', 'HTTPGetAction.port', 'TCPSocketAction.port'],
+        ('int_or_string', 'nullable_presence_fields'): ['PodDisruptionBudgetV1Spec.minAvailable', 'PodDisruptionBudgetV1Spec.maxUnavailable', 'PodDisruptionBudgetV1Beta1Spec.minAvailable', 'PodDisruptionBudgetV1Beta1Spec.maxUnavailable', 'RollingUpdateDeployment.maxSurge', 'RollingUpdateDeployment.maxUnavailable', 'RollingUpdateDaemonSet.maxSurge', 'RollingUpdateDaemonSet.maxUnavailable', 'NetworkPolicyPortNetworkingV1.port', 'IngressBackendExtensionsV1beta1.servicePort', 'IngressBackendNetworkingV1beta1.servicePort'],
+        ('int_or_string', 'nullable_presence_is_native_admission'): False,
+        ('quantity', 'native_magnitude_maximum'): 9223372036854775807,
+        ('quantity', 'native_exact_precision'): 3,
+        ('quantity', 'default_missing_limit'): False,
+        ('quantity', 'borrow_container_rules_for_pvc'): False,
+        ('metadata', 'annotation_key_plus_value_maximum_utf8_bytes'): 262144,
+        ('container_ports', 'roles'): ['containers', 'initContainers'],
+        ('container_ports', 'uniqueness_scope'): 'all-admitted-ContainerPort-occurrences-per-Pod-template',
+        ('environment', 'universal_native_invalidity'): False,
+        ('configmap', 'contextual_key_facts'): 'Unknown',
+        ('configmap', 'body_maximum_bytes'): 1048576,
+        ('host_authority', 'native_role_self_authentication'): False,
+        ('host_authority', 'ordinary_static_runtime_demand'): False,
+    }
+    for (section, member_name), value in expected.items():
+        if finite.get(section, {}).get(member_name) != value:
+            errors.append(f'finite native contract {section}.{member_name}')
+    if finite.get('native_conformance') != 'pending' or finite.get('native_success_count') != 0 or finite.get('supported_kubernetes_versions') != []:
+        errors.append('finite native contract cannot claim native success')
     return errors
 
 
