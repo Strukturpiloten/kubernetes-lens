@@ -120,3 +120,32 @@ The host token's metadata says admin but Actions-permission GET and repository P
 of Actions allowlist/default permissions/fork controls, release environments, squash/delete settings
 and the protected exact required check `PR gate`. Source validation cannot verify remote execution,
 required checks or those inaccessible settings; exact-head CI/readback remains the primary's gate.
+
+## Explicit file-formatter configuration
+
+PR #49 exposed an environment-dependent Prettier configuration: the shared
+workspace parent selected BoxFerry's 100-column configuration, while an
+independent hosted checkout selected Prettier's 80-column default. Local
+complete-gate success therefore did not establish hosted formatting parity.
+
+KubernetesLens now copies `.prettierrc.json` byte-exact from the already reviewed
+BoxFerry commit `da5570e3af4e894aaeb5fed35d633538ef1fca33` and passes its absolute
+repository path to every Prettier call in `scripts/check-files.sh`. Existing
+EditorConfig behavior, file exclusions and the immutable shared tool inventory
+are preserved. This is an explicit local definition with canonical provenance,
+not another Prettier version owner. No software pin, manager extraction, rule,
+approval or automerge setting changes; the complete actual Renovate regressions
+still verify their existing consumers.
+
+Actual-Prettier regressions run the production script with conflicting parent
+and nearer descendant configurations, an unrelated working directory,
+independently expected width/prose output, format/check convergence and missing
+or malformed owning configuration. The documentation phase requires them;
+Rust-only MSRV checks do not acquire a second file-tool inventory.
+
+Other Lens consumers remain read-only references. The inherited discovery
+pattern needs a separately scoped parity audit before claiming equivalent
+behavior across those repositories; KubernetesLens validation establishes only
+this consumer's behavior. [#50](https://github.com/Strukturpiloten/kubernetes-lens/issues/50) records
+the supplemental committed consumer inventory and follow-up; it grants no
+authority to change the other consumers.

@@ -185,6 +185,7 @@ class GateTests(unittest.TestCase):
         for phase, failure, later in (("rust", "cargo ci-check", "cargo ci-clippy"),
                                       ("msrv", "rustup run", "cargo +1.85.0 ci-check"),
                                       ("documentation", "actionlint", "node scripts/test-renovate.mjs"),
+                                      ("documentation", "python3 scripts/test-file-config.py", "python3 scripts/test-renovate-tool.py"),
                                       ("documentation", "python3 scripts/compatibility-ledger.py", "python3 scripts/test-compatibility-ledger.py"),
                                       ("documentation", "python3 scripts/test-compatibility-ledger.py", "node scripts/test-renovate.mjs")):
             result = self.run_script("run-checks.sh", phase, GATE_TEST_FAILURE=failure)

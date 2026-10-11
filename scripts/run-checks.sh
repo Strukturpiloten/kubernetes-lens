@@ -31,6 +31,7 @@ case "${1:-}" in
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-repository-policy.py
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-check-all.py
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-ci-tools.py
+    PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-file-config.py
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-renovate-tool.py
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/compatibility-ledger.py
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-compatibility-ledger.py

@@ -98,12 +98,12 @@ check_yaml_document_markers() {
 
 if [[ "${mode}" == "--fix" ]]; then
   printf '\nFormat Markdown\n'
-  run prettier --write --ignore-path .prettierignore --ignore-unknown "${markdown_files[@]}"
+  run prettier --config "${repository_root}/.prettierrc.json" --write --ignore-path .prettierignore --ignore-unknown "${markdown_files[@]}"
   run markdownlint-cli2 --fix "${markdown_literals[@]}"
 
   if ((${#structured_files[@]} != 0)); then
     printf '\nFormat JSON and YAML\n'
-    run prettier --write --ignore-path .prettierignore --ignore-unknown "${structured_files[@]}"
+    run prettier --config "${repository_root}/.prettierrc.json" --write --ignore-path .prettierignore --ignore-unknown "${structured_files[@]}"
   fi
 
   if ((${#toml_files[@]} != 0)); then
@@ -121,11 +121,11 @@ printf '\nLint Markdown\n'
 run markdownlint-cli2 "${markdown_literals[@]}"
 
 printf '\nCheck Markdown formatting\n'
-run prettier --check --ignore-path .prettierignore --ignore-unknown "${markdown_files[@]}"
+run prettier --config "${repository_root}/.prettierrc.json" --check --ignore-path .prettierignore --ignore-unknown "${markdown_files[@]}"
 
 if ((${#structured_files[@]} != 0)); then
   printf '\nCheck JSON and YAML formatting and syntax\n'
-  run prettier --check --ignore-path .prettierignore --ignore-unknown "${structured_files[@]}"
+  run prettier --config "${repository_root}/.prettierrc.json" --check --ignore-path .prettierignore --ignore-unknown "${structured_files[@]}"
 fi
 
 if ((${#yaml_document_files[@]} != 0)); then
