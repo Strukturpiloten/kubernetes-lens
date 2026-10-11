@@ -46,3 +46,10 @@ and operation intent. Metadata acquisition preserves bounded spelling independen
 authoring and generation share the checker; target graph projections suppress native facts from
 invalid/unverified naming. Versionless collision equality remains exact supplied evidence. See
 [ADR 0013](decisions/0013-native-naming-and-source-identity.md).
+
+The private `renderer_broker::wait_observer` module implements the finite root-selected
+observer in [ADR 0015](decisions/0015-root-selected-native-wait-observer.md). It captures raw
+root-private evidence, authenticates each native socket fragment and matches a consuming
+parent wait with natural retirement. Existing controller/tracer loops pump bounded data; no
+collector thread or new public format surface is introduced. Journal Origin/Proof append once;
+cold archive recovery scans bounded record/metadata only and cannot synthesize native proof.

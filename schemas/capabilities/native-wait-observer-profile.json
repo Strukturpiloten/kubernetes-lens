@@ -1,0 +1,28 @@
+{
+  "schema": "native-wait-observer-fixed-profile-v1",
+  "classification": "immutable historical conformance profile",
+  "default_enabled": false,
+  "platform": { "os": "linux", "architecture": "x86_64" },
+  "profile": {
+    "name": "strace-7.2-supervisor-wait-v1",
+    "version": "7.2",
+    "executable": "/usr/bin/strace",
+    "executable_sha256": "508698af314d3fad6bed553d0dcb59e5002732339ea205ebcce1c617dd368b92"
+  },
+  "provenance": {
+    "upstream": "https://github.com/strace/strace",
+    "commit": "195ac8ddbf6fad16ff1ff125b0feb725b6c46dcf",
+    "license": "LGPL-2.1-or-later with individual source notices",
+    "use": "Source facts consulted; no upstream implementation or binary redistribution"
+  },
+  "pin_policy": {
+    "canonical_definition": "schemas/capabilities/native-wait-observer-profile.json",
+    "consumer": "src/renderer_broker/wait_observer.rs",
+    "renovate_exclusion": "schemas/capabilities/**",
+    "operational_installer": null,
+    "update": "A new supported profile requires explicit review and new evidence; this historical profile never auto-advances"
+  },
+  "integrity_scope": "Exact executable bytes only; ELF interpreter and shared-library closure require separate runtime evidence",
+  "implementation_evidence": "Source and pure tests only; actual consuming-wait conformance remains unverified",
+  "runtime_evidence": []
+}

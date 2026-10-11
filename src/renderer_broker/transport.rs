@@ -36,6 +36,8 @@ struct Config {
     gate_sha: [u8; 32],
     tools: NativeTools,
     registrations: Vec<RegisteredTool>,
+    #[serde(default)]
+    wait_observer: Option<super::wait_observer::Selection>,
 }
 fn root() -> Result<()> {
     if nix::unistd::getuid().as_raw() != 0 || nix::unistd::geteuid().as_raw() != 0 {
@@ -70,6 +72,13 @@ fn load_config(path: &Path, end: Instant) -> Result<Config> {
             != config.registrations.len()
     {
         return Err("config-admission");
+    }
+    if let Some(observer) = &config.wait_observer {
+        let expected = observer.validate()?;
+        let mut tool = route::root_regular(Path::new("/usr/bin/strace"))?;
+        if authority::digest_file(&mut tool, end)? != expected {
+            return Err("observer-tool-digest");
+        }
     }
     for p in [&config.journal, &config.transport_root] {
         private_directory(p)?;
@@ -450,7 +459,13 @@ struct Transport {
     listener: UnixListener,
     held: HeldPid,
 }
-fn prepare_transport(config: &Config, header: &RequestHeader, client: &UnixStream, end: Instant) -> Result<Transport> {
+fn prepare_transport(
+    config: &Config,
+    header: &RequestHeader,
+    raw: &[u8],
+    client: &UnixStream,
+    end: Instant,
+) -> Result<Transport> {
     let registration = config
         .registrations
         .iter()
@@ -506,6 +521,8 @@ fn prepare_transport(config: &Config, header: &RequestHeader, client: &UnixStrea
         header: header.clone(),
         channel: channel.clone(),
         tools: config.tools.clone(),
+        request_sha256: Some(broker_protocol::digest(raw)),
+        observer: config.wait_observer.clone(),
     };
     durable(&descriptor, &d)?; // This immutable owned intent precedes every slice/controller mutation.
     let listener = UnixListener::bind(&channel).map_err(|_| "controller-channel")?;
@@ -534,7 +551,7 @@ fn serve_request(
         channel,
         listener,
         held,
-    } = prepare_transport(config, header, client, end)?;
+    } = prepare_transport(config, header, raw, client, end)?;
     let mut socket = loop {
         if Instant::now() >= end {
             return Err("controller-accept-deadline");
@@ -564,8 +581,7 @@ fn serve_request(
     };
     let metadata = broker_protocol::read_frame(&mut socket, 32768, receipt_end).map_err(|_| "controller-reply")?;
     let mut reply: ReplyHeader = serde_json::from_slice(&metadata).map_err(|_| "controller-reply-schema")?;
-    // Controller binds a canonical re-encoding; the broker binds the exact original wire metadata.
-    reply.request_sha256 = broker_protocol::digest(raw);
+    // The controller must bind the original admitted wire hash; no canonical re-encoding repair.
     super::super::supervised::validate_reply(header, raw, &reply).map_err(|_| "controller-result-binding")?;
     let cleanup = monotonic_end(reply.cleanup_ns.unwrap_or_else(|| header.total_end_ns().unwrap_or(0)))?;
     let out = broker_protocol::read_frame(&mut socket, reply.stdout_bytes, cleanup).map_err(|_| "controller-stdout")?;
@@ -675,12 +691,18 @@ pub(super) fn controller(path: &Path) -> Result<()> {
             None,
         ),
     };
-    let raw = serde_json::to_vec(&d.header).map_err(|_| "request-encode")?;
+    let original_request_sha256 = match d.request_sha256 {
+        Some(hash) => hash,
+        None if d.observer.is_none() => {
+            broker_protocol::digest(&serde_json::to_vec(&d.header).map_err(|_| "request-encode")?)
+        }
+        None => return Err("observer-request-origin"),
+    };
     let original_total = d.header.total_end_ns().map_err(|_| "total-deadline")?;
     let reply = ReplyHeader {
         schema: d.schema,
         nonce: d.nonce,
-        request_sha256: broker_protocol::digest(&raw),
+        request_sha256: original_request_sha256,
         profile: d.header.profile,
         image_sha256: d.renderer_sha,
         code,

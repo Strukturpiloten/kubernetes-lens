@@ -73,6 +73,7 @@ pub fn census(uid: u32, allowed: &[u32], deadline: Instant) -> Result<()> {
         let Some(pid) = e.file_name().to_str().and_then(|v| v.parse::<u32>().ok()) else {
             continue;
         };
+        super::wait_observer::pump()?;
         count += 1;
         if count > 16384 || Instant::now() >= deadline {
             return Err("census-budget");
@@ -590,6 +591,7 @@ pub fn empty_group(path: &Path, deadline: Instant) -> Result<()> {
     let mut pending = vec![path.to_path_buf()];
     let mut count = 0;
     while let Some(p) = pending.pop() {
+        super::wait_observer::pump()?;
         count += 1;
         if count > 256 || Instant::now() >= deadline {
             return Err("cleanup-group-budget");

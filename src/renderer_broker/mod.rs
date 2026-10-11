@@ -10,6 +10,7 @@ mod manager;
 pub(super) mod route;
 mod tracer;
 mod transport;
+mod wait_observer;
 use super::broker_protocol;
 type Result<T> = std::result::Result<T, &'static str>;
 
@@ -32,6 +33,8 @@ pub fn run_helper(arguments: &[String]) -> std::result::Result<(), &'static str>
             arguments[5].parse().map_err(|_| "deadline")?,
             arguments[6].parse().map_err(|_| "total-deadline")?,
         ),
+        Some("observed-launch") if arguments.len() == 9 => wait_observer::launch(arguments),
+        Some("observed-supervisor") if arguments.len() == 7 => wait_observer::supervisor(arguments),
         Some("recover") if arguments.len() == 4 => route::recover(Path::new(&arguments[2]), &arguments[3]),
         _ => Err("closed-helper-role"),
     }

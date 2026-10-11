@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Add default-off root-selected stock native wait observation with original wire/deadline binding,
+  credentialed native acknowledgement, finite protected evidence and fail-closed retirement.
+  Source-only checks do not establish native renderer, observer or CNPG conformance.
+
 - Add typed stable/historical CRD and webhook definitions, bounded supported-subset offline
   custom-document checks and source-bound graph descriptors. Native-profile, official corpus,
   server admission and controller conformance remain pending.

@@ -22,9 +22,18 @@ pub fn bounded(path: &Path, max: usize) -> Result<Vec<u8>> {
 }
 pub fn read_file(f: &mut File, max: usize) -> Result<Vec<u8>> {
     let mut b = Vec::new();
-    f.take(max as u64 + 1).read_to_end(&mut b).map_err(|_| "read")?;
-    if b.len() > max {
-        return Err("read-budget");
+    let mut chunk = [0; 4096];
+    loop {
+        super::wait_observer::pump()?;
+        let amount = chunk.len().min(max.saturating_add(1).saturating_sub(b.len()));
+        let n = f.read(&mut chunk[..amount]).map_err(|_| "read")?;
+        if n == 0 {
+            break;
+        }
+        b.extend_from_slice(&chunk[..n]);
+        if b.len() > max {
+            return Err("read-budget");
+        }
     }
     Ok(b)
 }
@@ -41,6 +50,7 @@ pub fn digest_file_checked(
     let mut buf = vec![0; 65536];
     loop {
         check()?;
+        super::wait_observer::pump()?;
         if Instant::now() >= deadline {
             return Err("hash-deadline");
         }
@@ -236,6 +246,7 @@ pub fn receive_rights_count(socket: &UnixStream, nonce: &str, deadline: Instant,
     if peer.uid.as_raw() != 0 || peer.gid.as_raw() != 0 {
         return Err("nonroot-handoff");
     }
+    handoff_data(socket, deadline)?;
     socket
         .set_read_timeout(Some(
             deadline
@@ -253,6 +264,12 @@ pub fn receive_rights_count(socket: &UnixStream, nonce: &str, deadline: Instant,
         net::RecvFlags::CMSG_CLOEXEC,
     )
     .map_err(|_| "handoff-recv")?;
+    if m.bytes == 0 {
+        // Only a competing reader/local close could remove positively peeked bytes.
+        // EOF carries no rights on this stream; avoid decoding the zero-PID sentinel.
+        std::mem::forget(ancillary);
+        return Err("handoff-reader-race");
+    }
     if m.bytes != 32
         || m.flags.intersects(net::ReturnFlags::CTRUNC | net::ReturnFlags::TRUNC)
         || &bytes[..32] != nonce.as_bytes()
@@ -277,4 +294,59 @@ pub fn receive_rights_count(socket: &UnixStream, nonce: &str, deadline: Instant,
         return Err("handoff-count");
     }
     Ok(fds)
+}
+
+/// Preserve the original blocking handoff deadline, without constructing EOF `UCred`.
+fn handoff_data(socket: &UnixStream, deadline: Instant) -> Result<()> {
+    socket
+        .set_read_timeout(Some(
+            deadline
+                .checked_duration_since(Instant::now())
+                .filter(|d| !d.is_zero())
+                .ok_or("handoff-expired")?,
+        ))
+        .map_err(|_| "handoff-timeout")?;
+    let mut byte = [0; 1];
+    match net::recv(socket, &mut byte[..], net::RecvFlags::PEEK) {
+        Ok((0, _)) => Err("handoff-eof"),
+        Ok(_) => Ok(()),
+        Err(_) => Err("handoff-peek"),
+    }
+}
+#[cfg(test)]
+mod wait_observer_handoff_tests {
+    use super::*;
+    use std::io::Write;
+    type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+    #[test]
+    fn peer_eof_before_nonce_never_creates_typed_ancillary_receiver() -> TestResult {
+        let (sender, receiver) = UnixStream::pair()?;
+        net::sockopt::set_socket_passcred(&receiver, true)?;
+        sender.shutdown(std::net::Shutdown::Write)?;
+        assert_eq!(
+            handoff_data(&receiver, Instant::now() + std::time::Duration::from_secs(1)),
+            Err("handoff-eof")
+        );
+        Ok(())
+    }
+    #[test]
+    fn delayed_handoff_data_preserves_wait_and_peek_does_not_consume() -> TestResult {
+        let (mut sender, mut receiver) = UnixStream::pair()?;
+        let thread = std::thread::spawn(move || -> std::io::Result<()> {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            sender.write_all(b"n")
+        });
+        handoff_data(&receiver, Instant::now() + std::time::Duration::from_secs(1))?;
+        let mut byte = [0; 1];
+        receiver.read_exact(&mut byte)?;
+        assert_eq!(byte, [b'n']);
+        thread.join().map_err(|_| "test-thread-failed")??;
+        Ok(())
+    }
+    #[test]
+    fn handoff_peek_cannot_renew_expired_original_end() -> TestResult {
+        let (_sender, receiver) = UnixStream::pair()?;
+        assert_eq!(handoff_data(&receiver, Instant::now()), Err("handoff-expired"));
+        Ok(())
+    }
 }

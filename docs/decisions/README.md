@@ -20,4 +20,6 @@
 
 | [0014](0014-renderer-operation-deadline-and-cancellation.md) | Accepted source contract | Original caller total end, private owned-parent cancellation and unproved-cleanup quarantine |
 
+| [0015](0015-root-selected-native-wait-observer.md) | Accepted source contract | Default-off finite root-selected stock native wait evidence and unchanged-budget archive |
+
 Add a new numbered ADR when an accepted decision changes; preserve and supersede historical decisions.

@@ -15,3 +15,10 @@ The optional `supervised-renderer` implementation and its helper/gate binaries a
 Default builds retain subprocess-free native input, local plans and generated projects. Unsupported
 platforms or missing explicit broker/runtime prerequisites have no automatic fallback. See
 [renderer interfaces](formats.md) for provisioning and the still-pending independent evidence.
+
+The separately root-selected stock wait observer accepts only Linux x86_64 and the exact
+strace 7.2 executable digest in [ADR 0015](decisions/0015-root-selected-native-wait-observer.md).
+Selection requires pre-tool initial-user-namespace proof, capability-free leased execution,
+root-held readiness identities and natural retirement evidence. Missing host prerequisites
+refuse without unobserved fallback. Its source tests do not establish runtime/platform support,
+and executable hashing alone does not authenticate the loader/shared-library closure.

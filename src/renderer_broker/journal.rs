@@ -61,6 +61,8 @@ pub struct Record {
     pub phase: String,
     pub cause: Option<String>,
     pub stage: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observer: Option<super::wait_observer::Observation>,
 }
 impl Record {
     pub fn total_end_ns(&self) -> Result<u64> {
@@ -83,6 +85,10 @@ impl Record {
 
     pub fn validate(&self) -> Result<()> {
         self.ownership.validate()?;
+        if let Some(observer) = &self.observer {
+            observer.validate(&self.ownership.nonce)?;
+            super::wait_observer::validate_record_binding(self)?;
+        }
         super::cold_boot::stage_shape(self)?;
         let total = self.total_end_ns()?;
         if self.controller_pid <= 1
@@ -111,6 +117,24 @@ pub(super) fn pending_binding(live: &Record, candidate: &Record) -> Result<()> {
         || candidate.ownership != live.ownership
         || candidate.controller_pid != live.controller_pid
         || candidate.controller_start != live.controller_start
+        || candidate
+            .observer
+            .as_ref()
+            .map(|o| (&o.selection, o.request_sha256, o.helper_sha256, &o.evidence))
+            != live
+                .observer
+                .as_ref()
+                .map(|o| (&o.selection, o.request_sha256, o.helper_sha256, &o.evidence))
+        || live
+            .observer
+            .as_ref()
+            .and_then(|o| o.origin.as_ref())
+            .is_some_and(|origin| candidate.observer.as_ref().and_then(|o| o.origin.as_ref()) != Some(origin))
+        || live
+            .observer
+            .as_ref()
+            .and_then(|o| o.proof.as_ref())
+            .is_some_and(|p| candidate.observer.as_ref().and_then(|o| o.proof.as_ref()) != Some(p))
         || candidate.boot != live.boot
         || candidate.execution_ns != live.execution_ns
         || candidate.total_deadline_ns != live.total_deadline_ns
@@ -175,6 +199,12 @@ fn writer_lock(dir: &Path) -> Result<File> {
     rustix::fs::flock(&f, rustix::fs::FlockOperation::NonBlockingLockExclusive).map_err(|_| "journal-writer-busy")?;
     Ok(f)
 }
+pub(super) fn admit_inventory(active: usize, archived: usize) -> Result<()> {
+    if active >= 16 || archived >= 256 {
+        return Err("journal-admission-full");
+    }
+    Ok(())
+}
 impl Journal {
     pub fn create(dir: &Path, record: Record) -> Result<Self> {
         directory(dir)?;
@@ -206,9 +236,7 @@ impl Journal {
             e.map_err(|_| "archive-scan")?;
             archived += 1;
         }
-        if active >= 16 || archived >= 256 {
-            return Err("journal-admission-full");
-        }
+        admit_inventory(active, archived)?;
         let j = Self {
             dir: dir.into(),
             record,
@@ -367,7 +395,14 @@ impl Journal {
             return Err("retire-before-release");
         }
         let archive = self.dir.join("archive");
-        self.write_new(&archive.join(format!("{}.json", self.record.ownership.nonce)))?;
+        let record_path = self.record.observer.as_ref().map_or_else(
+            || archive.join(format!("{}.json", self.record.ownership.nonce)),
+            |o| o.evidence.join("record.json"),
+        );
+        self.write_new(&record_path)?;
+        if let Some(observer) = &self.record.observer {
+            syncdir(&observer.evidence)?;
+        }
         syncdir(&archive)?;
         let marker = self.dir.join(format!("{}.watch-cleanup", self.record.ownership.nonce));
         match fs::remove_file(marker) {
@@ -398,6 +433,7 @@ mod complete_pending_tests {
             uid: Some(61000),
             phase: "intent".into(),
             cause: None,
+            observer: None,
             stage: format!("/var/lib/private/klspike-{nonce}").into(),
         })
     }

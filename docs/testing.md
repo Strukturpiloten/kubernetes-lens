@@ -130,3 +130,13 @@ or interrupted recovery. All original 90 renderer cells, three graph cases, two 
 patches and full unchanged CNPG default-render obligations remain required. Run the
 complete repository gate only under the primary's shared-slot authorization after the
 final source edit; focused source/model checks never replace it.
+
+Renderer #39 focused source controls live in private `wait_observer` tests and cold recovery
+models. They cover literal stock wait/signal/core vocabulary, startup/zero/signal nonproof,
+wrong child/attach/status, partial/duplicate/trailing records, 4-MiB trace and 65536-byte record
+limits, actual local Unix socket recvmsg credentials and EOF, finite FIFO pumping, closed
+selection/argv, immutable original request/Origin/Proof, archive kinds/child metadata/caps and
+crash/downgrade/overlap quarantine. These tests launch no helper, observer, broker, renderer,
+manager or cluster. Official source expectations are not runtime fixtures. Native wait, actual
+initial namespace, tracer lifetime/writer ownership, crash durability and unchanged full CNPG
+default execution remain independent obligations; see ADR 0015.

@@ -279,3 +279,15 @@ name grammar. Neither case bypasses protected-output authorization. Explicit inc
 original names in chart literals and Kustomize bases; raw artifact access remains separately explicit.
 An undeclared workload-shaped document still cannot become a typed values parameter or variation.
 The source-only bridge regression covers these policies without invoking either official renderer.
+
+## Root-selected native wait observation
+
+The default-off private broker selection and finite evidence archive are specified in
+[ADR 0015](decisions/0015-root-selected-native-wait-observer.md). Root config accepts only
+`wait_observer: {profile: "strace-7.2-supervisor-wait-v1", tool_sha256:
+"508698af314d3fad6bed553d0dcb59e5002732339ea205ebcce1c617dd368b92"}`.
+No client option selects the observer. Selected operations retain the original raw request
+hash and require independently credentialed native ACK fragments plus matching stock consuming
+wait and natural observer retirement before lease release. Failure retains quarantine.
+Protected trace/ACK evidence remains root-private and is never included in public diagnostics.
+Neither original deadline nor input/output/resource/16-active/256-archive cap increases.
