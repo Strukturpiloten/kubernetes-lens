@@ -208,7 +208,9 @@ version support, isolation conformance or generally available backend is claimed
 
 `generate_chart` first calls existing native generation under explicit target/privacy/opaque and
 collection policies. It creates Chart.yaml, finite values.yaml/schema, static CRDs under crds/ and
-native resources under templates/. CRDs are not templated. Hooks are rejected by default or retained
+native resources in one templates/resources.yaml stream. CRD filenames use six-digit global
+emitted ordinals, including non-CRD positions. Mapping files use compact sorted JSON plus LF;
+native resource/patch streams retain one `---` marker per root. CRDs are not templated. Hooks are rejected by default or retained
 only by explicit `PreserveWithFinding`; they are never executed. No original chart dependency,
 conditional branch, template code or formatting is reconstructed.
 
@@ -221,16 +223,19 @@ Selected resource IDs are associated with trees by the same native projection th
 input document positions never substitute for that association. This also covers flattened Lists and
 identically named resources in different namespaces. Defaults are exact supplied native values;
 absence/null/defaults are not invented. Other fields,
-including unknown protected descendants, remain static data. Every static scalar/key is serialized
+including supplied observations under PreserveDocument and unknown protected descendants, remain static data. Every static scalar/key is serialized
 as JSON and then quoted as a Go string argument to `print`. Thus supplied `{{ ... }}` bytes cannot
-become template directives. Selected values use `toJson`, not `tpl` or raw template code. The generated
+become template directives. Selected values use closed `toJson (index .Values <quoted-name>)` expressions, not `tpl` or raw template code. The generated
 schema rejects extra keys and bounds replicas/string sizes. It does not prove server-side admission
 of arbitrary changed caller values; official render/reimport/native target validation remains needed.
 
 `generate_kustomize` creates a reusable base and only caller-requested named overlays. Overlay
 variations select the same finite existing workload fields with explicit private replacements.
 Each candidate is edited and validated through existing native generation before a minimal strategic
-merge patch is produced. Container patches retain the native name key and unselected base members.
+merge patch is produced. Container patches retain the unique native name key and unselected base members. All variations are
+grouped into one minimal patch per selected resource, and selected container entries retain original
+container-array order even when the caller reverses variation order. Null/missing/ambiguous leaves
+and duplicate selections (including equal replacements) refuse.
 Initial native generation, generated-byte reparse, field edits, encoding and every overlay validation
 share one cumulative processing budget. Source parser ceilings and caller-lowered processing ceilings
 remain in force throughout; exhausting the operation cannot produce a successful artifact.
@@ -242,6 +247,26 @@ Artifact trees never write files or execute generated commands. They can plan ge
 lint, local packaging, template rendering, and generated Kustomize base/overlay builds using declared
 profiles. Packaging plans permit only an executor-owned local destination, never publication.
 Private artifacts require explicit access before a caller can write them.
+
+### Generated-project ordering and migration
+
+[ADR 0017](decisions/0017-generated-native-artifact-bytes.md) defines this intentional unpublished
+byte/layout change. Roots follow immutable supplied source argument order, document order and
+nested List item order, even after callers reorder ResourceSet documents. Ordinary public native
+`generate` retains effective-identity ordering and its existing serialization. Every wrapper,
+including empty Lists, still receives target/privacy/opaque/observation checks before Flatten.
+`ArtifactTree::emitted_resources` exposes original ResourceId, SourceRef, full optional CollectionPath
+and global emitted ordinal from the same successful projection. Static CRDs are included; zero roots
+have no association entries. These coordinates confer no external provenance or native authority.
+
+Replace per-root templates/0000.yaml reads with the templates/resources.yaml stream and four-digit
+CRD paths with six-digit global ordinals. Values, schema, Chart.yaml and Kustomization readers must
+accept compact JSON plus LF without a document marker. Static tokens preserve exact raw numeric
+lexemes, sorted UTF-8 object keys, ordered arrays and literal Unicode; Go arguments additionally
+escape DEL. Nonempty template objects have one space inside each brace. Zero-root/CRD-only charts
+retain the fixed zero-roots comment. Empty Kustomize bases emit only base/kustomization.yaml with
+resources: []; requested empty overlays refuse. No protected/observed/unknown field is silently
+removed and no caller policy is silently replaced.
 
 ## Local validation and remaining acceptance
 

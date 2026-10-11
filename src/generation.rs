@@ -1077,12 +1077,16 @@ fn output_roots(
         crate::model::charge_identity(tree, processing, Phase::Generation)?;
     }
     let mut ordered: Vec<_> = resources.documents.iter().collect();
-    ordered.sort_by_cached_key(|doc| {
-        trees
-            .get(&doc.id)
-            .and_then(|tree| crate::model::identity(tree, doc.original_identity.scope).ok())
-            .map(|identity| (identity.gvk, identity.scope, identity.namespace, identity.name, doc.id))
-    });
+    if resource_ids.is_some() {
+        order_source_documents(&mut ordered, resources, processing)?;
+    } else {
+        ordered.sort_by_cached_key(|doc| {
+            trees
+                .get(&doc.id)
+                .and_then(|tree| crate::model::identity(tree, doc.original_identity.scope).ok())
+                .map(|identity| (identity.gvk, identity.scope, identity.namespace, identity.name, doc.id))
+        });
+    }
     let root_count = resources
         .documents
         .len()
@@ -1110,6 +1114,77 @@ fn output_roots(
         }
     }
     Ok(roots)
+}
+
+// Only generated project associations select this order. Public native generation keeps
+// its existing effective-identity ordering. Coordinates never depend on mutable document order.
+fn order_source_documents(
+    documents: &mut [&crate::model::ResourceDocument],
+    resources: &ResourceSet,
+    processing: &NativeOperationBudget,
+) -> Result<(), Finding> {
+    fn greater(
+        left: &crate::model::ResourceDocument,
+        right: &crate::model::ResourceDocument,
+        resources: &ResourceSet,
+        processing: &NativeOperationBudget,
+    ) -> Result<bool, Finding> {
+        processing.work(resources.sources.len().saturating_mul(2), Phase::Generation)?;
+        let source_index = |doc: &crate::model::ResourceDocument| {
+            resources
+                .sources
+                .iter()
+                .position(|source| source.id == doc.source.source)
+        };
+        let left_source = source_index(left).ok_or_else(conflict)?;
+        let right_source = source_index(right).ok_or_else(conflict)?;
+        let prefix = (left_source, left.source.document_index).cmp(&(right_source, right.source.document_index));
+        if prefix != std::cmp::Ordering::Equal {
+            return Ok(prefix.is_gt());
+        }
+        let left_items = left.collection.as_ref().map_or(&[][..], |path| path.items.as_slice());
+        let right_items = right.collection.as_ref().map_or(&[][..], |path| path.items.as_slice());
+        processing.work(
+            left_items.len().saturating_add(right_items.len()).saturating_add(1),
+            Phase::Generation,
+        )?;
+        Ok(left_items
+            .iter()
+            .map(|(_, item)| item)
+            .cmp(right_items.iter().map(|(_, item)| item))
+            .is_gt())
+    }
+    fn sift(
+        documents: &mut [&crate::model::ResourceDocument],
+        mut root: usize,
+        resources: &ResourceSet,
+        processing: &NativeOperationBudget,
+    ) -> Result<(), Finding> {
+        while let Some(left) = root
+            .checked_mul(2)
+            .and_then(|n| n.checked_add(1))
+            .filter(|n| *n < documents.len())
+        {
+            let mut child = left;
+            if left + 1 < documents.len() && greater(documents[left + 1], documents[left], resources, processing)? {
+                child += 1;
+            }
+            if !greater(documents[child], documents[root], resources, processing)? {
+                break;
+            }
+            documents.swap(root, child);
+            root = child;
+        }
+        Ok(())
+    }
+    for root in (0..documents.len() / 2).rev() {
+        sift(documents, root, resources, processing)?;
+    }
+    for end in (1..documents.len()).rev() {
+        documents.swap(0, end);
+        sift(&mut documents[..end], 0, resources, processing)?;
+    }
+    Ok(())
 }
 
 fn serialize_roots(

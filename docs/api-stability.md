@@ -103,3 +103,12 @@ required only on the selected private route. Existing unobserved ACK serializati
 [ADR 0016](decisions/0016-pre-permit-input-view-rendezvous.md) adds an optional private root
 input-view rendezvous under controlled request schema 2 and original operation ends. It adds no
 public renderer API or external witness-path authority; default-none behavior is preserved.
+
+[ADR 0017](decisions/0017-generated-native-artifact-bytes.md) intentionally changes unpublished
+Helm/Kustomize generated layouts and bytes: one templates/resources.yaml stream, six-digit global
+CRD ordinals, sorted compact JSON mapping files without document markers, indexed values expressions,
+source-order roots and grouped patches in original container order. Ordinary public native generation
+retains its existing identity ordering and serialization. `ArtifactTree::emitted_resources` adds
+read-only original input-local ResourceId/SourceRef/CollectionPath associations; those coordinates
+are not external provenance seals or native admission authority. Migrate readers as described in
+[generated projects](formats.md); protected artifact access and all native conformance limits remain.

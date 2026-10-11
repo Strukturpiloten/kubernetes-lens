@@ -1,6 +1,6 @@
 # ADR 0012: Explicit offline renderer selection
 
-Status: Accepted
+Status: Partly superseded by ADR 0017 (generated native artifacts)
 
 Refines the no-renderer milestone in ADR 0003. Independent ownership, private evidence,
 finite targets, unknown retention and no publication or live-cluster acquisition remain accepted.
@@ -20,7 +20,9 @@ prerequisites fail explicitly, without unsupervised execution or a competing fal
 
 Generated charts, bases and overlays have their own provenance; rendered resources cannot recover
 original templates or overlay structure. Artifact selection retains source-local ResourceIds through
-the same native output projection, including sorting, namespaces and List flattening.
+the same native output projection, including namespaces and List flattening. ADR 0017 replaces
+generated-project ordering/layout/bytes with immutable source order and explicit emitted associations;
+ordinary public native generation retains effective-identity ordering and its existing serialization.
 
 ## Consequences
 
