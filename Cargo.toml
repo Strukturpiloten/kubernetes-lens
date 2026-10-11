@@ -8,7 +8,7 @@ readme = "README.md"
 repository = "https://github.com/Strukturpiloten/kubernetes-lens"
 license = "MPL-2.0"
 publish = false
-include = ["/src/**", "/Cargo.toml", "/Cargo.lock", "/LICENSE", "/README.md", "/CHANGELOG.md", "/schemas/capabilities/**", "/docs/extensions.md", "/docs/compatibility/licenses/**", "/tests/foundation.rs", "/tests/foundation/**", "/tests/native_processing.rs", "/tests/exact_json_number.rs", "/tests/protected_json.rs", "/fixtures/foundation/**"]
+include = ["/src/**", "/Cargo.toml", "/Cargo.lock", "/LICENSE", "/README.md", "/CHANGELOG.md", "/schemas/capabilities/**", "/docs/extensions.md", "/docs/formats.md", "/tests/formats.rs", "/tests/supervised_renderer.rs", "/docs/compatibility/licenses/**", "/tests/foundation.rs", "/tests/foundation/**", "/tests/native_processing.rs", "/tests/exact_json_number.rs", "/tests/protected_json.rs", "/fixtures/foundation/**"]
 
 [workspace]
 resolver = "3"
@@ -31,12 +31,30 @@ todo = "warn"
 unimplemented = "warn"
 unwrap_used = "warn"
 
+[features]
+supervised-renderer = ["dep:nix", "dep:rustix", "dep:command-fds", "dep:close_fds", "dep:sha2"]
+
+[[bin]]
+name = "kubernetes-lens-renderer-helper"
+path = "src/bin/kubernetes-lens-renderer-helper.rs"
+required-features = ["supervised-renderer"]
+
+[[bin]]
+name = "renderer-gate"
+path = "src/bin/renderer-gate.rs"
+required-features = ["supervised-renderer"]
+
 [dependencies]
 base64 = { version = "=0.22.1", default-features = false }
 jiff-tzdb = { version = "=0.1.9", default-features = false }
-serde = "=1.0.229"
+serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.151", features = ["raw_value"] }
 yaml-rust2 = { version = "=0.13.0", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "=0.2.190"
+nix = { version = "=0.31.2", features = ["ptrace", "process", "signal", "user", "fs", "time"], optional = true }
+rustix = { version = "=1.1.5", features = ["process", "net", "fs", "pipe"], optional = true }
+command-fds = { version = "=0.3.3", optional = true }
+close_fds = { version = "=0.3.2", optional = true }
+sha2 = { version = "=0.11.0", default-features = false, optional = true }

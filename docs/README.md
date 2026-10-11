@@ -11,7 +11,7 @@ pending native evidence for the agreed version/kind slice.
 
 The [foundation API](foundation-api.md) records delivered offline behavior, private evidence and
 sealed cohort integration. [Workload](workloads.md), [access and policy](access.md), and
-[networking](networking.md), and [configuration/storage](storage.md) pages describe the delivered native cohorts. Runtime and renderer
+[networking](networking.md), and [configuration/storage](storage.md) pages describe the delivered native cohorts. Official runtime and renderer conformance
 conformance remain pending.
 
 The access contract records typed resource/field boundaries and source-only admission witnesses.
@@ -21,3 +21,5 @@ The [official fixture corpus](fixtures/official-corpus.md) records immutable off
 source metadata, private offline preparation and renderer admission expectations. Its required
 preparation/admission tests run through the repository policy suite; official corpus native,
 renderer, API and runtime acceptance remains pending.
+
+[Helm/Kustomize renderer interfaces and provisioning](formats.md) describe the explicit offline formats API.

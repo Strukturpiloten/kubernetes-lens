@@ -34,7 +34,14 @@ def validate(files: dict[str, str]) -> None:
     dependencies = manifest.get("dependencies", {})
     assert set(dependencies) >= {"serde", "serde_json", "yaml-rust2"}
     target_dependencies = manifest["target"]['cfg(target_os = "linux")']["dependencies"]
-    assert set(target_dependencies) == {"libc"}
+    assert set(target_dependencies) == {"libc", "nix", "rustix", "command-fds", "close_fds", "sha2"}
+    renderer_dependencies = {"nix", "rustix", "command-fds", "close_fds", "sha2"}
+    assert set(manifest["features"]["supervised-renderer"]) == {"dep:" + name for name in renderer_dependencies}
+    assert all(target_dependencies[name].get("optional") is True for name in renderer_dependencies)
+    assert target_dependencies["sha2"]["default-features"] is False
+    assert dependencies["serde"]["features"] == ["derive"]
+    assert {binary["name"] for binary in manifest["bin"]} == {"kubernetes-lens-renderer-helper", "renderer-gate"}
+    assert all(binary["required-features"] == ["supervised-renderer"] for binary in manifest["bin"])
     for dependency in [*dependencies.values(), *target_dependencies.values()]:
         version = dependency if isinstance(dependency, str) else dependency["version"]
         assert re.fullmatch(r"=\d+\.\d+\.\d+", version), "exact product dependency required"

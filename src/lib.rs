@@ -7,6 +7,7 @@
 pub mod acquisition;
 pub mod capability;
 pub mod diagnostic;
+pub mod formats;
 pub mod generation;
 pub mod graph;
 pub mod model;

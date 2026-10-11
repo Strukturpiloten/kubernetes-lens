@@ -695,6 +695,41 @@ pub fn generate(
     options: &GenerationOptions,
 ) -> Result<GeneratedArtifact, Vec<Finding>> {
     let processing = resources.operation(options.processing);
+    generate_in(resources, target, format, options, &processing)
+}
+
+/// Continue a compound native operation without resetting its cumulative counters.
+pub(crate) fn generate_in(
+    resources: &ResourceSet,
+    target: &TargetProfile,
+    format: OutputFormat,
+    options: &GenerationOptions,
+    processing: &NativeOperationBudget,
+) -> Result<GeneratedArtifact, Vec<Finding>> {
+    generate_selected_in(resources, target, format, options, processing, None)
+}
+
+/// Capture root/resource association from the same projected native output, without re-projecting.
+pub(crate) fn generate_associated_in(
+    resources: &ResourceSet,
+    target: &TargetProfile,
+    format: OutputFormat,
+    options: &GenerationOptions,
+    processing: &NativeOperationBudget,
+) -> Result<(GeneratedArtifact, Vec<ResourceId>), Vec<Finding>> {
+    let mut ids = Vec::new();
+    let artifact = generate_selected_in(resources, target, format, options, processing, Some(&mut ids))?;
+    Ok((artifact, ids))
+}
+
+fn generate_selected_in(
+    resources: &ResourceSet,
+    target: &TargetProfile,
+    format: OutputFormat,
+    options: &GenerationOptions,
+    processing: &NativeOperationBudget,
+    resource_ids: Option<&mut Vec<ResourceId>>,
+) -> Result<GeneratedArtifact, Vec<Finding>> {
     let construction = resources.encoding(Some(target), processing.clone());
     let mut findings = ProcessingReport::from_report(
         validate_in(resources, target, options.validation_intent, processing.clone()),
@@ -722,13 +757,13 @@ pub fn generate(
             projection.observations,
             options,
             &mut findings,
-            &processing,
+            processing,
         ) {
             findings.push(error);
             break;
         }
-        preserve_access_mode_findings(doc, &tree, &projection.occurrences, options, &processing, &mut findings);
-        apply_generation_admission(doc, &tree, options, &processing, &mut findings);
+        preserve_access_mode_findings(doc, &tree, &projection.occurrences, options, processing, &mut findings);
+        apply_generation_admission(doc, &tree, options, processing, &mut findings);
         let mut protected_paths = Vec::new();
         if let Some(resource) = &projection.resource {
             resource.collect_protected_paths(&context, &mut protected_paths);
@@ -739,7 +774,7 @@ pub fn generate(
         let private_names = match crate::resources::common::native_naming::private_names(
             &tree,
             &projection.identity.gvk,
-            &processing,
+            processing,
             Phase::Generation,
         ) {
             Ok(private) => private,
@@ -765,18 +800,36 @@ pub fn generate(
         }
         trees.insert(doc.id, tree);
     }
-    let mut wrappers = prepare_wrappers(resources, options, &processing, &mut findings);
+    let mut wrappers = prepare_wrappers(resources, options, processing, &mut findings);
     if findings.failed() || has_errors(&findings) {
         return Err(findings.into_vec());
     }
-    let roots = match output_roots(resources, options.collections, &mut trees, &mut wrappers, &processing) {
+    let roots = match output_roots(
+        resources,
+        options.collections,
+        &mut trees,
+        &mut wrappers,
+        processing,
+        resource_ids,
+    ) {
         Ok(roots) => roots,
         Err(finding) => {
             findings.push(finding);
             return Err(findings.into_vec());
         }
     };
-    let bytes = match serialize_roots(roots, format, options.json_shape, &processing) {
+    serialize_artifact(roots, format, options.json_shape, processing, findings)
+}
+
+// Serialization retains the operation session and the complete projected findings.
+fn serialize_artifact(
+    roots: Vec<TreeNode>,
+    format: OutputFormat,
+    shape: JsonShape,
+    processing: &NativeOperationBudget,
+    mut findings: ProcessingReport,
+) -> Result<GeneratedArtifact, Vec<Finding>> {
+    let bytes = match serialize_roots(roots, format, shape, processing) {
         Ok(bytes) => bytes,
         Err(finding) => {
             findings.push(finding);
@@ -1017,6 +1070,7 @@ fn output_roots(
     trees: &mut BTreeMap<ResourceId, TreeNode>,
     wrappers: &mut BTreeMap<crate::model::ListId, TreeNode>,
     processing: &NativeOperationBudget,
+    mut resource_ids: Option<&mut Vec<ResourceId>>,
 ) -> Result<Vec<TreeNode>, Finding> {
     processing.payload_array::<&crate::model::ResourceDocument>(resources.documents.len(), Phase::Generation)?;
     for tree in trees.values() {
@@ -1035,19 +1089,25 @@ fn output_roots(
         .checked_add(resources.lists.len())
         .ok_or_else(|| processing.fail(Phase::Generation))?;
     processing.payload_array::<TreeNode>(root_count, Phase::Generation)?;
+    if resource_ids.is_some() {
+        processing.payload_array::<ResourceId>(resources.documents.len(), Phase::Generation)?;
+    }
     let mut roots = Vec::new();
     if collections == CollectionOutput::PreserveWrappers {
         for list in resources.lists.iter().filter(|list| list.collection.is_none()) {
             roots.push(rewrap(resources, list.id, trees, wrappers, processing)?);
         }
-        roots.extend(
-            ordered
-                .iter()
-                .filter(|doc| doc.collection.is_none())
-                .filter_map(|doc| trees.remove(&doc.id)),
-        );
-    } else {
-        roots.extend(ordered.iter().filter_map(|doc| trees.remove(&doc.id)));
+    }
+    for doc in ordered {
+        if collections == CollectionOutput::PreserveWrappers && doc.collection.is_some() {
+            continue;
+        }
+        if let Some(tree) = trees.remove(&doc.id) {
+            if let Some(ids) = &mut resource_ids {
+                ids.push(doc.id);
+            }
+            roots.push(tree);
+        }
     }
     Ok(roots)
 }

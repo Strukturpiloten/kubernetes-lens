@@ -225,7 +225,7 @@
       "schemas/capabilities/kubernetes-1.20-1.37.json": "4d16a8ba154a8ce5a7c2e5d74768111c44154528a5600f8c6578fc01f397229c",
       "src/capability.rs": "dd9a69ee48aee45a5638fb38be7988c7c6d02ad0c176f697245ecf8a8a40ed40",
       "src/diagnostic.rs": "5ac5cab660f3bccee70057940dab03a671d676b4c18176d428bb9e0ef5e37f30",
-      "src/generation.rs": "9074d5a5c832fdb67e0d72e96e1d27e2c3379577da9906a79dd07f54f567c133",
+      "src/generation.rs": "0a77cef12270c044d51ea97618616e64293fa36d485f572960dceea09a118a58",
       "src/graph.rs": "cde872fb4ff06a993e17c3f48541a11a21b4be12385611c4567f61b6079d3405",
       "src/model.rs": "e241166e68679275cfabddca496e08fad5bf708afa7525946217d97fc9a42561",
       "src/processing.rs": "2df13c2ad6f06d71f809b10848c6652da542c3d7f603f882cf475993e85e29e5",
@@ -256,7 +256,7 @@
       "tests/exact_json_number.rs": "f9305a6d0f011a6880dc7725aa8b4a0be889d7a7e4430353f8b5438e25aaef01",
       "tests/foundation/core.rs": "cf960c644acdf880101253be223b25d148b55a606efe1541be1bc39ab9190e55",
       "tests/foundation/graph.rs": "d2ce4ff9eca2c9c09e7a905bf61adc754fd75a6c9ddbacae5561ea785c268f80",
-      "tests/foundation/root-status-role-evidence.json": "3c36fb1c3aa849fde33e180d40bd494625256078ce34ddf554c363320d21a1ff",
+      "tests/foundation/root-status-role-evidence.json": "e73b49edee6d4272470f0f2f242f543a0ce0491643702cf4dcf5a875fcc4d460",
       "tests/native_naming.rs": "edb9bd2fea2f94781cd80152531a7d47b29e33efcd412dccc7ca0b1ee9bf91eb",
       "tests/protected_json.rs": "6adb4c257e68aab87568b66de99c56aabbe0c454e1599002078b8ba4f1b3461d",
       "tests/workloads.rs": "45c7b58c70316a4008500b8da388167775738269d5133630670da3f8be82e221"

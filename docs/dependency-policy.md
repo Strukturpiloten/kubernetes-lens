@@ -110,3 +110,9 @@ binary codecs, requires Dependency Dashboard approval and disables automerge. Ex
 replacement, missing-owner and rule-order regressions accompany this pin. Backend updates require
 review of bounded slice APIs, padding/tail-bit behavior and privacy; no native conformance claim
 follows from using the backend.
+
+Optional Linux supervised renderer dependencies (`nix`, `rustix`, `command-fds`, `close_fds`,
+`sha2`) use exact Cargo versions and locked registry checksums. Renovate's final supervised-renderer
+rule requires dashboard approval and disables automerge; extraction, replacement and rule-order
+regressions own these pins once. Shared official renderer/tool integrity inventories remain owned
+by BoxFerry; this library adds no duplicate inventory.
