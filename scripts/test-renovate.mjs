@@ -397,6 +397,98 @@ const frozenLedger = JSON.parse(
     "utf8",
   ),
 );
+const observerProfilePath =
+  "schemas/capabilities/native-wait-observer-profile.json";
+const observerProfileText = await fs.readFile(
+  path.join(root, observerProfilePath),
+  "utf8",
+);
+const observerProfile = JSON.parse(observerProfileText);
+const observerConsumer = await fs.readFile(
+  path.join(root, "src/renderer_broker/wait_observer.rs"),
+  "utf8",
+);
+function assertObserverAnchor(profile, consumer) {
+  assert.equal(
+    profile.classification,
+    "immutable historical conformance profile",
+  );
+  assert.equal(profile.default_enabled, false);
+  assert.equal(profile.pin_policy.canonical_definition, observerProfilePath);
+  assert.equal(profile.pin_policy.operational_installer, null);
+  assert.equal(
+    profile.pin_policy.renovate_exclusion,
+    "schemas/capabilities/**",
+  );
+  assert(Array.isArray(profile.runtime_evidence));
+  assert.match(profile.profile.executable_sha256, /^[a-f0-9]{64}$/);
+  for (const [name, value] of [
+    ["PROFILE", profile.profile.name],
+    ["TOOL", profile.profile.executable],
+    ["TOOL_SHA", profile.profile.executable_sha256],
+  ]) {
+    const actual = consumer.match(
+      new RegExp(`const ${name}: &str = "([^"]+)";`),
+    );
+    assert(actual, `fixed observer consumer must expose ${name}`);
+    assert.equal(
+      actual[1],
+      value,
+      `fixed observer ${name} must match its anchor`,
+    );
+  }
+  assert.equal(
+    profile.profile.name,
+    `strace-${profile.profile.version}-supervisor-wait-v1`,
+  );
+}
+assertObserverAnchor(observerProfile, observerConsumer);
+const changedObserverAnchor = structuredClone(observerProfile);
+changedObserverAnchor.profile.executable_sha256 = "0".repeat(64);
+assert.throws(() =>
+  assertObserverAnchor(changedObserverAnchor, observerConsumer),
+);
+const changedObserverVersion = structuredClone(observerProfile);
+changedObserverVersion.profile.version = "7.3";
+assert.throws(() =>
+  assertObserverAnchor(changedObserverVersion, observerConsumer),
+);
+assert.deepEqual(
+  await inventory(new Map([[observerProfilePath, observerProfileText]])),
+  [],
+  "a fixed conformance profile is not an operational pin manager",
+);
+const futureObserverManager = structuredClone(config);
+futureObserverManager.customManagers.push({
+  customType: "regex",
+  managerFilePatterns: [
+    "/^schemas\\/capabilities\\/native-wait-observer-profile\\.json$/",
+  ],
+  matchStrings: ['"version":\\s*"(?<currentValue>[0-9]+\\.[0-9]+)"'],
+  depNameTemplate: "strace/strace",
+  datasourceTemplate: "github-tags",
+  versioningTemplate: "loose",
+});
+assert.deepEqual(
+  await inventory(
+    new Map([[observerProfilePath, observerProfileText]]),
+    futureObserverManager,
+  ),
+  [],
+  "the real engine must exclude the observer anchor even with a future manager",
+);
+const unexcludedObserverManager = structuredClone(futureObserverManager);
+unexcludedObserverManager.ignorePaths =
+  unexcludedObserverManager.ignorePaths.filter(
+    (pattern) => pattern !== "schemas/capabilities/**",
+  );
+const exposedObserverPins = await inventory(
+  new Map([[observerProfilePath, observerProfileText]]),
+  unexcludedObserverManager,
+);
+assert.equal(exposedObserverPins.length, 1);
+assert.equal(exposedObserverPins[0].dep.depName, "strace/strace");
+assert.equal(exposedObserverPins[0].dep.currentValue, "7.2");
 assert.deepEqual(frozenLedger.frozen_scope.claimable_supported_minors, []);
 assert.equal(
   frozenLedger.canonical_tool_owner.commit.length,
@@ -516,17 +608,39 @@ try {
   const rendererOriginal = files.get(rendererRow.file);
   await fs.writeFile(path.join(scratch, rendererRow.file), rendererOriginal);
   const rendererUpgrade = {
-    ...rendererRow.extraction, ...rendererRow.dep, manager: "cargo", packageFile: rendererRow.file,
-    depIndex: rendererRow.extraction.deps.indexOf(rendererRow.dep), newValue: "=0.31.3",
+    ...rendererRow.extraction,
+    ...rendererRow.dep,
+    manager: "cargo",
+    packageFile: rendererRow.file,
+    depIndex: rendererRow.extraction.deps.indexOf(rendererRow.dep),
+    newValue: "=0.31.3",
   };
-  const rendererUpdated = await doAutoReplace(rendererUpgrade, rendererOriginal, false);
+  const rendererUpdated = await doAutoReplace(
+    rendererUpgrade,
+    rendererOriginal,
+    false,
+  );
   assert(rendererUpdated && rendererUpdated !== rendererOriginal);
-  const rendererAfter = await cargo.extractPackageFile(rendererUpdated, rendererRow.file, {});
-  assert.equal(rendererAfter.deps[rendererUpgrade.depIndex].currentValue, "=0.31.3");
-  assert(rendererUpdated.includes('features = ["ptrace", "process", "signal", "user", "fs", "time"], optional = true'));
+  const rendererAfter = await cargo.extractPackageFile(
+    rendererUpdated,
+    rendererRow.file,
+    {},
+  );
+  assert.equal(
+    rendererAfter.deps[rendererUpgrade.depIndex].currentValue,
+    "=0.31.3",
+  );
+  assert(
+    rendererUpdated.includes(
+      'features = ["ptrace", "process", "signal", "user", "fs", "time"], optional = true',
+    ),
+  );
   const absentRenderer = rendererOriginal.replace(/^nix =.*\n/m, "");
   await fs.writeFile(path.join(scratch, rendererRow.file), absentRenderer);
-  assert.equal(await doAutoReplace(rendererUpgrade, absentRenderer, false), absentRenderer);
+  assert.equal(
+    await doAutoReplace(rendererUpgrade, absentRenderer, false),
+    absentRenderer,
+  );
   const imageRow = actual.find((row) => row.dep.datasource === "docker");
   const originalImage = files.get(imageRow.file);
   await fs.mkdir(path.join(scratch, path.dirname(imageRow.file)), {
@@ -606,7 +720,12 @@ for (const updateType of ["minor", "patch", "pin", "digest", "pinDigest"]) {
   assert.equal(binary.dependencyDashboardApproval, true);
   assert.equal(binary.minimumReleaseAge, "3 days");
   for (const name of rendererPins) {
-    const renderer = await policy({ manager: "cargo", datasource: "crate", depName: name, updateType });
+    const renderer = await policy({
+      manager: "cargo",
+      datasource: "crate",
+      depName: name,
+      updateType,
+    });
     assert.equal(renderer.groupName, "Supervised renderer dependencies");
     assert.equal(renderer.automerge, false);
     assert.equal(renderer.dependencyDashboardApproval, true);
@@ -748,8 +867,20 @@ assert.equal(
 );
 assert.throws(() => assert.equal(unsafeTimezone.automerge, false));
 for (const name of rendererPins) {
-  const renderer = await policy({ manager: "cargo", datasource: "crate", depName: name, updateType: "patch" }, reordered);
-  assert.equal(renderer.automerge, true, "negative rule-order mutation exposes unsafe renderer updates");
+  const renderer = await policy(
+    {
+      manager: "cargo",
+      datasource: "crate",
+      depName: name,
+      updateType: "patch",
+    },
+    reordered,
+  );
+  assert.equal(
+    renderer.automerge,
+    true,
+    "negative rule-order mutation exposes unsafe renderer updates",
+  );
   assert.throws(() => assert.equal(renderer.automerge, false));
 }
 const unsafeImage = await policy(

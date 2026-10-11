@@ -52,6 +52,14 @@ fn collect(
             (&mut stderr as &mut dyn Read, &mut err),
         ] {
             loop {
+                if let Err(cause) = super::wait_observer::pump() {
+                    let _killed = child.kill();
+                    return reap(child, cleanup).and(Err(cause));
+                }
+                if Instant::now() >= end {
+                    let _killed = child.kill();
+                    return reap(child, cleanup).and(Err("manager-timeout"));
+                }
                 match pipe.read(&mut buf) {
                     Ok(0) => break,
                     Ok(n) => {
@@ -87,6 +95,7 @@ pub fn reserve(allowance: Duration) -> Duration {
 }
 fn reap(child: &mut Child, end: Instant) -> Result<()> {
     loop {
+        let _pumped = super::wait_observer::pump();
         if child.try_wait().map_err(|_| "helper-reap")?.is_some() {
             return Ok(());
         }
@@ -259,10 +268,15 @@ impl SystemManager {
             args.push(self.journal_dir.to_str().ok_or("journal-path")?.into());
             args.push(j.record.ownership.nonce.clone());
         }
-        if role == "supervisor" {
+        if matches!(role, "supervisor" | "observed-launch") {
             args.push(self.stage.to_str().ok_or("stage-path")?.into());
             args.push(j.record.execution_ns.to_string());
             args.push(j.record.total_end_ns()?.to_string());
+            if role == "observed-launch" {
+                let observed = j.record.observer.as_ref().ok_or("observer-role-binding")?;
+                args.push(super::wait_observer::hex(&observed.helper_sha256));
+                args.push(observed.selection.tool_sha256.clone());
+            }
         }
         Self::command("/usr/bin/systemd-run", &args, end, end)?;
         if let Some(runtime) = runtime {
@@ -319,6 +333,7 @@ impl SystemManager {
             if Instant::now() >= end {
                 return Err("lease-deadline");
             }
+            super::wait_observer::pump()?;
             thread::sleep(Duration::from_millis(2));
         }
     }
@@ -412,36 +427,51 @@ impl SystemManager {
             j.record.total_end_ns()?,
             super::route::monotonic_ns()?,
         )? / 1000;
+        let mut properties = vec![
+            "Type=exec".into(),
+            "DynamicUser=yes".into(),
+            format!("User={}", o.username),
+            format!("Group={}", o.username),
+            "Restart=no".into(),
+            "KillMode=control-group".into(),
+            "SendSIGKILL=yes".into(),
+            "Delegate=no".into(),
+            format!("BindsTo={}", o.watch),
+            format!("After={}", o.watch),
+            format!("RuntimeMaxSec={runtime}us"),
+            "RuntimeRandomizedExtraSec=0".into(),
+            "TimeoutStopSec=1s".into(),
+            "TimeoutStopFailureMode=terminate".into(),
+            format!("MemoryMax={}", request.memory_bytes),
+            "MemorySwapMax=0".into(),
+            format!("TasksMax={}", request.pids),
+            format!("Slice=klrenderer{}.slice", o.nonce),
+            "CPUQuota=100%".into(),
+            "CPUQuotaPeriodSec=100ms".into(),
+            "NoNewPrivileges=yes".into(),
+            "ProtectSystem=strict".into(),
+            "ProtectHome=yes".into(),
+            "PrivateTmp=yes".into(),
+        ];
+        if let Some(observed) = &j.record.observer {
+            properties.extend([
+                "CapabilityBoundingSet=".into(),
+                "AmbientCapabilities=".into(),
+                "SupplementaryGroups=".into(),
+                "PrivateUsers=no".into(),
+                "StandardInput=file:/proc/1/ns/user".into(),
+                format!("StandardError=file:{}", observed.evidence.join("trace.fifo").display()),
+            ]);
+        }
         self.start(
             j,
             &o.work,
-            vec![
-                "Type=exec".into(),
-                "DynamicUser=yes".into(),
-                format!("User={}", o.username),
-                format!("Group={}", o.username),
-                "Restart=no".into(),
-                "KillMode=control-group".into(),
-                "SendSIGKILL=yes".into(),
-                "Delegate=no".into(),
-                format!("BindsTo={}", o.watch),
-                format!("After={}", o.watch),
-                format!("RuntimeMaxSec={runtime}us"),
-                "RuntimeRandomizedExtraSec=0".into(),
-                "TimeoutStopSec=1s".into(),
-                "TimeoutStopFailureMode=terminate".into(),
-                format!("MemoryMax={}", request.memory_bytes),
-                "MemorySwapMax=0".into(),
-                format!("TasksMax={}", request.pids),
-                format!("Slice=klrenderer{}.slice", o.nonce),
-                "CPUQuota=100%".into(),
-                "CPUQuotaPeriodSec=100ms".into(),
-                "NoNewPrivileges=yes".into(),
-                "ProtectSystem=strict".into(),
-                "ProtectHome=yes".into(),
-                "PrivateTmp=yes".into(),
-            ],
-            "supervisor",
+            properties,
+            if j.record.observer.is_some() {
+                "observed-launch"
+            } else {
+                "supervisor"
+            },
             Some(runtime),
             end,
         )

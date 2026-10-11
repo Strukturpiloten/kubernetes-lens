@@ -60,6 +60,14 @@ Actual Renovate/RE2 regressions verify exclusions and show that removing them ex
 even if a future manager recognizes a compatibility path. Operational shared-reference/image
 managers, grouping, manual approvals and native conformance boundaries remain unchanged.
 
+The default-off observer's fixed strace 7.2 profile is defined in
+`schemas/capabilities/native-wait-observer-profile.json`; its private Rust allowlist is a checked
+consumer. It is a historical conformance anchor, with no operational installer or second shared
+tool inventory. Existing capability-path exclusions apply without a Renovate configuration change.
+The actual Renovate/RE2 tests check exclusion, future-manager extraction when that exclusion is
+removed, and source/ledger drift. A new profile needs reviewed integrity and runtime evidence;
+the executable fingerprint alone does not authenticate its loader or shared libraries.
+
 ## Foundation parser dependency evidence
 
 The reviewed parser choice is yaml-rust2 0.13.0 with default encoding features disabled, using

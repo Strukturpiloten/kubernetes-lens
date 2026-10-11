@@ -163,15 +163,7 @@ fn filename(name: &str, suffix: &str) -> Result<String> {
 }
 
 fn same_ownership(old: &Record, pending: &Record) -> bool {
-    old.schema == pending.schema
-        && old.ownership == pending.ownership
-        && old.controller_pid == pending.controller_pid
-        && old.controller_start == pending.controller_start
-        && old.boot == pending.boot
-        && old.execution_ns == pending.execution_ns
-        && old.total_deadline_ns == pending.total_deadline_ns
-        && old.stage == pending.stage
-        && (old.uid.is_none() || old.uid == pending.uid)
+    super::journal::pending_binding(old, pending).is_ok()
 }
 
 fn cold_archive(mut record: Record) -> Record {
@@ -191,6 +183,7 @@ struct Snapshot {
     pending: BTreeMap<String, Record>,
     markers: Vec<String>,
     archived: BTreeMap<String, Record>,
+    reserved_archives: usize,
 }
 
 fn snapshot(live: &File, archive: &File, end: Instant) -> Result<Snapshot> {
@@ -199,6 +192,7 @@ fn snapshot(live: &File, archive: &File, end: Instant) -> Result<Snapshot> {
         pending: BTreeMap::new(),
         markers: Vec::new(),
         archived: BTreeMap::new(),
+        reserved_archives: 0,
     };
     for name in names(live, MAX_ACTIVE_FILES + 2, end)? {
         budget(end)?;
@@ -226,7 +220,46 @@ fn snapshot(live: &File, archive: &File, end: Instant) -> Result<Snapshot> {
     for name in names(archive, MAX_ARCHIVES, end)? {
         budget(end)?;
         let nonce = filename(&name, ".json")?;
-        let value = record(archive, &name, &nonce)?;
+        let value = match rfs::openat(
+            archive,
+            name.as_str(),
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::empty(),
+        ) {
+            Ok(fd) => {
+                let directory = File::from(fd);
+                private_directory(&directory)?;
+                match rfs::statat(&directory, "record.json", AtFlags::SYMLINK_NOFOLLOW) {
+                    Ok(_) => {
+                        let value = record(&directory, "record.json", &nonce)?;
+                        super::wait_observer::archive_form(&value, true, true)?;
+                        let held = super::wait_observer::authenticate_archive_metadata(&value, end, true)?;
+                        if authority::Object::of(&held)? != authority::Object::of(&directory)? {
+                            return Err("cold-observer-directory-binding");
+                        }
+                        value
+                    }
+                    Err(rustix::io::Errno::NOENT) => {
+                        let active = result.records.get(&nonce).ok_or("cold-observer-orphan-directory")?;
+                        super::wait_observer::archive_form(active, true, false)?;
+                        let held = super::wait_observer::authenticate_archive_metadata(active, end, false)?;
+                        if authority::Object::of(&held)? != authority::Object::of(&directory)? {
+                            return Err("cold-observer-reservation-binding");
+                        }
+                        result.reserved_archives += 1;
+                        continue;
+                    }
+                    Err(_) => return Err("cold-observer-publication-incomplete"),
+                }
+            }
+            Err(rustix::io::Errno::NOTDIR) => {
+                let value = record(archive, &name, &nonce)?;
+                super::wait_observer::archive_form(&value, false, true)?;
+                value
+            }
+            Err(_) => return Err("cold-archive-kind"),
+        };
+
         if !["lease-released", "cold-boot-retired"].contains(&value.phase.as_str()) {
             return Err("cold-archive-phase");
         }
@@ -270,7 +303,7 @@ fn plan(snapshot: &Snapshot, boot: &str, reserved: Option<&Path>) -> Result<Vec<
             }
             continue;
         }
-        if record.schema == super::broker_protocol::CONTROLLED_SCHEMA {
+        if record.schema == super::broker_protocol::CONTROLLED_SCHEMA || record.observer.is_some() {
             return Err("cold-controlled-boot-quarantine");
         }
         let latest = snapshot.pending.get(nonce).unwrap_or(record);
@@ -294,7 +327,7 @@ fn plan(snapshot: &Snapshot, boot: &str, reserved: Option<&Path>) -> Result<Vec<
             old.push(terminal);
         }
     }
-    if snapshot.archived.len() + additions > MAX_ARCHIVES {
+    if snapshot.archived.len() + snapshot.reserved_archives + additions > MAX_ARCHIVES {
         return Err("cold-archive-budget");
     }
     Ok(old)
@@ -430,4 +463,90 @@ pub(crate) fn reconcile_until(dir: &Path, boot: &str, reserved: Option<&Path>, e
         )?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod wait_observer_recovery_tests {
+    use super::*;
+    type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+    fn observed() -> Result<Record> {
+        let mut r = super::super::route::cleanup_contract_tests::intent()?;
+        r.observer = Some(super::super::wait_observer::Observation {
+            selection: super::super::wait_observer::Selection {
+                profile: super::super::wait_observer::PROFILE.into(),
+                tool_sha256: "508698af314d3fad6bed553d0dcb59e5002732339ea205ebcce1c617dd368b92".into(),
+            },
+            request_sha256: [1; 32],
+            helper_sha256: [2; 32],
+            evidence: format!("/root/journal/archive/{}.json", r.ownership.nonce).into(),
+            origin: None,
+            proof: None,
+        });
+        Ok(r)
+    }
+    fn snapshot_for(r: Record) -> Snapshot {
+        Snapshot {
+            records: BTreeMap::from([(r.ownership.nonce.clone(), r)]),
+            pending: BTreeMap::new(),
+            markers: Vec::new(),
+            archived: BTreeMap::new(),
+            reserved_archives: 0,
+        }
+    }
+    #[test]
+    fn observer_crash_before_origin_never_cold_retires_or_reconstructs_proof() -> TestResult {
+        let r = observed()?;
+        let current = "11111111-1111-1111-1111-111111111111";
+        assert_eq!(
+            plan(&snapshot_for(r), current, None).map(|_| ()),
+            Err("cold-controlled-boot-quarantine")
+        );
+        Ok(())
+    }
+    #[test]
+    fn observed_pending_cannot_downgrade_or_rebind_during_cold_scan() -> TestResult {
+        let r = observed()?;
+        for change in ["downgrade", "request", "tool"] {
+            let mut snapshot = snapshot_for(r.clone());
+            let mut pending = r.clone();
+            match change {
+                "downgrade" => pending.observer = None,
+                "request" => pending.observer.as_mut().ok_or("test-observer")?.request_sha256 = [9; 32],
+                _ => pending.observer.as_mut().ok_or("test-observer")?.selection.tool_sha256 = "1".repeat(64),
+            }
+            snapshot.pending.insert(r.ownership.nonce.clone(), pending);
+            assert_eq!(plan(&snapshot, &r.boot, None).map(|_| ()), Err("cold-pending-binding"));
+        }
+        Ok(())
+    }
+    #[test]
+    fn same_boot_live_and_published_archive_pair_remains_quarantined() -> TestResult {
+        let r = observed()?;
+        let mut snapshot = snapshot_for(r.clone());
+        let mut archive = r.clone();
+        archive.phase = "lease-released".into();
+        snapshot.archived.insert(r.ownership.nonce.clone(), archive);
+        assert_eq!(
+            plan(&snapshot, &r.boot, None).map(|_| ()),
+            Err("cold-current-archive-overlap")
+        );
+        Ok(())
+    }
+    #[test]
+    fn active_reservation_blocks_legacy_addition_at_physical_archive_limit() -> TestResult {
+        let r = super::super::route::cleanup_contract_tests::intent()?;
+        let mut snapshot = snapshot_for(r);
+        snapshot.reserved_archives = 1;
+        for n in 0..255 {
+            snapshot.archived.insert(
+                format!("{n:032x}"),
+                super::super::route::cleanup_contract_tests::intent()?,
+            );
+        }
+        assert_eq!(
+            plan(&snapshot, "11111111-1111-1111-1111-111111111111", None).map(|_| ()),
+            Err("cold-archive-budget")
+        );
+        Ok(())
+    }
 }

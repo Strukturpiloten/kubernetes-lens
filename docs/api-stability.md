@@ -93,3 +93,9 @@ queue/setup and retaining its token, rather than creating a fresh duration per s
 descriptor and journal retain both immutable monotonic ends; old brokers reject v2
 without fallback. Private supervisor control is not a public cancellation/recovery API.
 These changes establish source contracts, not actual kernel or official-tool conformance.
+
+[ADR 0015](decisions/0015-root-selected-native-wait-observer.md) adds a private, default-off
+root broker policy. It exposes no public observer, trace, PID, lease or evidence API and leaves
+`OfflineRenderer` construction intact. Selected transport replies bind the hash of original
+wire bytes; no client canonicalization repairs a mismatched hash. Native ACK core status is
+required only on the selected private route. Existing unobserved ACK serialization is retained.

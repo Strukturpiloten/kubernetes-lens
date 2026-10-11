@@ -72,6 +72,10 @@ pub(super) struct Descriptor {
     pub header: RequestHeader,
     pub channel: PathBuf,
     pub tools: NativeTools,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_sha256: Option<[u8; 32]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observer: Option<super::wait_observer::Selection>,
 }
 /// Only a root-created exact candidate descriptor can construct admission. No boolean bypass.
 pub struct Admission {
@@ -140,6 +144,12 @@ impl Admission {
             return Err("descriptor-schema");
         }
         Ownership::new(&d.nonce, d.client_uid)?;
+        if let Some(observer) = &d.observer {
+            observer.validate()?;
+            if d.request_sha256.is_none() || d.header.pids < 6 {
+                return Err("observer-origin-or-capacity");
+            }
+        }
         root_ancestry(&d.journal)?;
         root_ancestry(d.stage.parent().ok_or("stage-parent")?)?;
         let now = monotonic_ns()?;
@@ -210,6 +220,8 @@ struct NativeWait {
     bwrap: u32,
     code: Option<i32>,
     signal: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    core: Option<bool>,
 }
 /// Private message on the existing authenticated, held supervisor control socket.
 #[derive(Debug, Serialize, Deserialize)]
@@ -285,6 +297,7 @@ fn recv_checked<T: for<'a> Deserialize<'a>>(
 ) -> Result<T> {
     let mut bytes = Vec::new();
     loop {
+        super::wait_observer::pump()?;
         if client.map(client_write_closed).transpose()? == Some(true) {
             return Err("caller-cancelled-during-supervisor-setup");
         }
@@ -364,6 +377,8 @@ struct ExecObserver {
     cleanup_clock: CleanupClock,
     cancel_sent: bool,
     cancellation_cause: Option<&'static str>,
+    wait_capture: Option<super::wait_observer::Handle>,
+    descriptor: Descriptor,
 }
 fn native_binding(n: &NativeWait, nonce: &str, bwrap: u32) -> Result<()> {
     if n.nonce != nonce
@@ -403,6 +418,27 @@ impl ExecObserver {
         Ok(())
     }
     fn poll_parent(&mut self) -> Result<bool> {
+        super::wait_observer::pump()?;
+        if let Some(capture) = &self.wait_capture {
+            let raw = capture
+                .lock()
+                .map_err(|_| "observer-capture-lock")?
+                .receive_ack(&self.control)?;
+            if let Some(raw) = raw {
+                let n: NativeWait = serde_json::from_slice(raw.strip_suffix(b"\n").ok_or("observer-ack-newline")?)
+                    .map_err(|_| "native-wait-schema")?;
+                native_binding(&n, &self.journal.record.ownership.nonce, self.bwrap.pid)?;
+                if n.core.is_none() || n.code.is_some() && n.core != Some(false) {
+                    return Err("observer-ack-core-status");
+                }
+                self.native_wait = Some(n);
+            }
+            if self.native_wait.is_some() {
+                self.bwrap.gone()?;
+                return Ok(true);
+            }
+            return Ok(false);
+        }
         if self.native_wait.is_none() {
             loop {
                 let mut byte = [0];
@@ -496,6 +532,42 @@ impl Observer for ExecObserver {
     }
     fn permit(&mut self) -> Result<()> {
         self.bound_identity()?;
+        if let Some(capture) = self.wait_capture.clone() {
+            loop {
+                if Instant::now() >= self.end || self.cancelled() {
+                    return Err("observer-readiness-deadline-or-cancel");
+                }
+                let ready =
+                    capture
+                        .lock()
+                        .map_err(|_| "observer-capture-lock")?
+                        .ready(super::wait_observer::Readiness {
+                            supervisor: &self.supervisor,
+                            bwrap: &self.bwrap,
+                            gate: &self.gate,
+                            uid: self.uid,
+                            work: &self.work_invocation,
+                            cgroup: &self.cgroup,
+                            d: &self.descriptor,
+                        });
+                match ready {
+                    Ok(()) => {
+                        self.journal
+                            .record
+                            .observer
+                            .as_mut()
+                            .ok_or("observer-journal-missing")?
+                            .origin = Some(capture.lock().map_err(|_| "observer-capture-lock")?.origin()?);
+                        break;
+                    }
+                    Err("observer-not-ready") => {
+                        thread::sleep(Duration::from_millis(2));
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            self.bound_identity()?;
+        }
         self.journal.record.phase = "trace-armed".into();
         self.journal.persist()?;
         self.permit
@@ -534,6 +606,9 @@ impl Observer for ExecObserver {
         self.journal.persist()
     }
     fn cancelled(&mut self) -> bool {
+        if let Err(reason) = super::wait_observer::pump() {
+            self.cancellation_cause = Some(reason);
+        }
         if self.cancellation_cause.is_none() {
             self.cancellation_cause = poll_cancellation(
                 &self.client,
@@ -642,11 +717,13 @@ pub fn controller(admission: Admission, client: UnixStream) -> Result<Outcome> {
     };
     // Only successful durable creation in THIS attempt grants error cleanup ownership.
     let mut created_intent = None;
+    let _pump = super::wait_observer::install(None);
     let result = controller_inner(admission, client, cleanup_clock.clone(), &mut created_intent);
     if let (Err(cause), Some(created)) = (&result, created_intent.as_ref()) {
         if let Ok(mut j) = Journal::load_writer(&dir, &nonce) {
             if created_intent_binding(Some(created), &j.record).is_ok() {
                 if let Ok(cleanup) = cleanup_clock.begin() {
+                    let _no_pump = super::wait_observer::install(None);
                     let _ = SystemManager::terminate(&j, cleanup);
                     let _ = j.reconcile_pending_after_stop();
                 }
@@ -676,6 +753,7 @@ struct Prepared {
     spec: LaunchSpec,
     expected_package: Option<String>,
     client: UnixStream,
+    wait_capture: Option<super::wait_observer::Handle>,
 }
 struct Running {
     d: Descriptor,
@@ -756,9 +834,24 @@ fn prepare(admission: Admission, mut client: UnixStream, created_intent: &mut Op
         phase: "intent".into(),
         cause: None,
         stage: d.stage.clone(),
+        observer: d.observer.clone().map(|selection| super::wait_observer::Observation {
+            selection,
+            request_sha256: d.request_sha256.unwrap_or([0; 32]),
+            helper_sha256: d.helper_sha,
+            evidence: d.journal.join("archive").join(format!("{}.json", d.nonce)),
+            origin: None,
+            proof: None,
+        }),
     };
     let mut journal = Journal::create(&d.journal, record)?;
     *created_intent = Some(journal.record.clone());
+    let wait_capture = journal
+        .record
+        .observer
+        .as_ref()
+        .map(super::wait_observer::Capture::create)
+        .transpose()?;
+    super::wait_observer::set_active(wait_capture.clone());
     drop(controller);
     let manager = SystemManager {
         helper: d.helper.clone(),
@@ -772,6 +865,12 @@ fn prepare(admission: Admission, mut client: UnixStream, created_intent: &mut Op
     let listener = UnixListener::bind(&socket).map_err(|_| "control-bind")?;
     fs::set_permissions(&socket, fs::Permissions::from_mode(0o666)).map_err(|_| "control-mode")?;
     listener.set_nonblocking(true).map_err(|_| "control-nonblock")?;
+    if d.observer.is_some() {
+        rustix::net::sockopt::set_socket_passcred(&listener, true).map_err(|_| "observer-listener-passcred")?;
+        if !rustix::net::sockopt::socket_passcred(&listener).map_err(|_| "observer-listener-passcred")? {
+            return Err("observer-listener-passcred");
+        }
+    }
     let allocation = manager.create_lease(&journal, end)?;
     journal.record.uid = Some(allocation.uid);
     journal.record.phase = "lease-active".into();
@@ -798,6 +897,7 @@ fn prepare(admission: Admission, mut client: UnixStream, created_intent: &mut Op
         spec,
         expected_package,
         client,
+        wait_capture,
     })
 }
 fn prepare_project(
@@ -845,6 +945,7 @@ struct StartedSupervisor {
     supervisor: HeldPid,
     control: UnixStream,
     started: Started,
+    wait_capture: Option<super::wait_observer::Handle>,
 }
 fn start_supervisor(prepared: Prepared) -> Result<StartedSupervisor> {
     let Prepared {
@@ -863,6 +964,7 @@ fn start_supervisor(prepared: Prepared) -> Result<StartedSupervisor> {
         spec,
         expected_package,
         client,
+        wait_capture,
     } = prepared;
     if client_write_closed(&client)? {
         return Err("caller-cancelled-before-work");
@@ -872,12 +974,19 @@ fn start_supervisor(prepared: Prepared) -> Result<StartedSupervisor> {
     let supervisor = HeldPid::open(work.get("MainPID")?.parse().map_err(|_| "supervisor-pid")?)?;
     audit::credentials(supervisor.pid, allocation.uid)?;
     let mut control = loop {
+        super::wait_observer::pump()?;
         if Instant::now() >= end {
             return Err("accept-deadline");
         }
         match listener.accept() {
             Ok((s, _)) => {
                 if authority::peer(&s, &supervisor, allocation.uid).is_ok() {
+                    if d.observer.is_some() {
+                        rustix::net::sockopt::set_socket_passcred(&s, true).map_err(|_| "observer-control-passcred")?;
+                        if !rustix::net::sockopt::socket_passcred(&s).map_err(|_| "observer-control-passcred")? {
+                            return Err("observer-control-passcred");
+                        }
+                    }
                     break s;
                 }
             }
@@ -929,6 +1038,7 @@ fn start_supervisor(prepared: Prepared) -> Result<StartedSupervisor> {
         supervisor,
         control,
         started,
+        wait_capture,
     })
 }
 fn observe(prepared: Prepared, cleanup_clock: CleanupClock) -> Result<Running> {
@@ -948,6 +1058,7 @@ fn observe(prepared: Prepared, cleanup_clock: CleanupClock) -> Result<Running> {
         supervisor,
         control,
         started,
+        wait_capture,
     } = start_supervisor(prepared)?;
     let bwrap = HeldPid::open(started.bwrap)?;
     let gate = HeldPid::open(u32::try_from(started.gate).map_err(|_| "gate-pid")?)?;
@@ -1001,6 +1112,8 @@ fn observe(prepared: Prepared, cleanup_clock: CleanupClock) -> Result<Running> {
         cleanup_clock,
         cancel_sent: false,
         cancellation_cause: None,
+        wait_capture,
+        descriptor: d.clone(),
     };
     Ok(Running {
         d,
@@ -1023,6 +1136,7 @@ fn drain_pipe(
 ) -> Result<bool> {
     let mut chunk = [0; 4096];
     loop {
+        super::wait_observer::pump()?;
         if let Some(cause) = cancellation() {
             return Err(cause);
         }
@@ -1113,6 +1227,7 @@ fn drain(running: &mut Running, trace: &tracer::TraceResult) -> Drained {
 }
 fn trace(observer: ExecObserver) -> Result<(ExecObserver, tracer::TraceResult)> {
     thread::spawn(move || {
+        let _pump = super::wait_observer::install(observer.wait_capture.clone());
         let mut observer = observer;
         let mut kernel =
             tracer::LinuxKernel::new_on_owning_thread(i32::try_from(observer.gate.pid).map_err(|_| "gate-pid")?)?;
@@ -1207,6 +1322,43 @@ fn set_cleaning_record(journal: &mut Journal, cleanup: Instant, cause: Option<&'
     Ok(())
 }
 
+fn await_observer_retirement(observer: &mut ExecObserver, native: Option<&NativeWait>, end: Instant) -> Result<()> {
+    let Some(capture) = observer.wait_capture.clone() else {
+        return Ok(());
+    };
+    let n = native.ok_or("observer-native-ack-missing")?;
+    let status = match (n.code, n.signal, n.core) {
+        (Some(code), None, Some(false)) => {
+            super::wait_observer::Status::Exit(u8::try_from(code).map_err(|_| "observer-ack-code")?)
+        }
+        (None, Some(signal), Some(core)) => super::wait_observer::Status::Signal {
+            number: u8::try_from(signal).map_err(|_| "observer-ack-signal")?,
+            core,
+        },
+        _ => return Err("observer-ack-status"),
+    };
+    loop {
+        if Instant::now() >= end {
+            return Err("observer-natural-retirement-missing");
+        }
+        observer.poll_parent()?;
+        let mut capture = capture.lock().map_err(|_| "observer-capture-lock")?;
+        if capture.retirement_ready()? {
+            let proof = capture.retire(status, end)?;
+            observer
+                .journal
+                .record
+                .observer
+                .as_mut()
+                .ok_or("observer-journal-missing")?
+                .proof = Some(proof);
+            return Ok(());
+        }
+        drop(capture);
+        thread::sleep(Duration::from_millis(2));
+    }
+}
+
 fn retain_cleanup_cause(journal: &mut Journal, cause: Option<&'static str>, proved: bool) {
     journal.record.cause = cause
         .or(if proved { None } else { Some("cleanup-unproved") })
@@ -1217,6 +1369,21 @@ fn retain_cleanup_cause(journal: &mut Journal, cause: Option<&'static str>, prov
     }
 }
 
+fn abandon_observer_on_failure(
+    observer: &ExecObserver,
+    retirement: Result<()>,
+    cause: &mut Option<&'static str>,
+) -> Result<Option<super::wait_observer::PumpGuard>> {
+    if let Err(reason) = retirement {
+        *cause = cause.or(Some(reason));
+        if let Some(capture) = &observer.wait_capture {
+            capture.lock().map_err(|_| "observer-capture-lock")?.abandon();
+        }
+        Ok(Some(super::wait_observer::install(None)))
+    } else {
+        Ok(None)
+    }
+}
 fn finish(running: Running, drained: Drained) -> Result<Outcome> {
     let Running {
         d,
@@ -1258,10 +1425,12 @@ fn finish(running: Running, drained: Drained) -> Result<Outcome> {
     // Missing parent acknowledgement cannot become positive reap after whole-work fallback.
 
     // Owned kill occurs before any fresh cleanup persistence, including failed fsync.
+    let observed_retirement = await_observer_retirement(&mut observer, native.as_ref(), ack_end);
+    let _failure_pump_guard = abandon_observer_on_failure(&observer, observed_retirement, &mut cause)?;
     let terminated = SystemManager::terminate(&observer.journal, cleanup);
     set_cleaning_record(&mut observer.journal, cleanup, cause)?;
     let persisted = observer.journal.persist();
-    let mut proved = terminated.is_ok() && persisted.is_ok();
+    let mut proved = terminated.is_ok() && persisted.is_ok() && observed_retirement.is_ok();
     proved &= verify_native_cleanup(
         &observer,
         native.as_ref(),
@@ -1322,6 +1491,12 @@ fn finish(running: Running, drained: Drained) -> Result<Outcome> {
 }
 
 fn retire_owned(mut journal: Journal, cleanup: Instant) -> Result<()> {
+    if journal.record.observer.as_ref().is_some_and(|o| o.proof.is_none()) {
+        return Err("observer-retire-before-proof");
+    }
+    if journal.record.observer.is_some() {
+        super::wait_observer::authenticate_archive(&journal.record, cleanup, false)?;
+    }
     SystemManager::release(&journal, cleanup)?;
     journal.record.phase = "lease-released".into();
     journal.persist()?;
@@ -1360,6 +1535,15 @@ fn poll_native_cancel(control: &mut UnixStream, cancellation: &mut Vec<u8>) -> R
 }
 
 pub fn supervisor(nonce: &str, stage: &Path, execution_ns: u64, total_ns: u64) -> Result<()> {
+    supervisor_mode(nonce, stage, execution_ns, total_ns, false)
+}
+pub(super) fn supervisor_mode(
+    nonce: &str,
+    stage: &Path,
+    execution_ns: u64,
+    total_ns: u64,
+    observed: bool,
+) -> Result<()> {
     if nix::unistd::getuid().as_raw() == 0 || nix::unistd::getuid() != nix::unistd::geteuid() {
         return Err("supervisor-dedicated-uid");
     }
@@ -1430,6 +1614,7 @@ pub fn supervisor(nonce: &str, stage: &Path, execution_ns: u64, total_ns: u64) -
                     bwrap: held.real_parent.id(),
                     code: status.code(),
                     signal: status.signal(),
+                    core: if observed { Some(status.core_dumped()) } else { None },
                 },
                 ack_end,
             )?;
@@ -1576,7 +1761,7 @@ pub fn recover(dir: &Path, nonce: &str) -> Result<()> {
     let current_boot = String::from_utf8(authority::bounded(Path::new("/proc/sys/kernel/random/boot_id"), 128)?)
         .map_err(|_| "recovery-boot")?;
     if current_boot.trim() != j.record.boot {
-        if j.record.schema == super::broker_protocol::CONTROLLED_SCHEMA {
+        if j.record.schema == super::broker_protocol::CONTROLLED_SCHEMA || j.record.observer.is_some() {
             return Err("controlled-recovery-boot");
         }
         return j.reconcile_after_reboot(current_boot.trim());
@@ -1655,7 +1840,7 @@ pub fn recover(dir: &Path, nonce: &str) -> Result<()> {
     if Instant::now() >= end {
         return Err("recovery-deadline");
     }
-    if j.record.schema == super::broker_protocol::CONTROLLED_SCHEMA {
+    if j.record.schema == super::broker_protocol::CONTROLLED_SCHEMA || j.record.observer.is_some() {
         // Orphan fallback has no authenticated real-parent wait acknowledgement.
         // Group/UID absence cannot manufacture one or authorize lease retirement.
         return Err("controlled-recovery-native-reap-unproved");
@@ -1673,10 +1858,10 @@ pub fn recover(dir: &Path, nonce: &str) -> Result<()> {
 }
 
 #[cfg(test)]
-mod cleanup_contract_tests {
+pub(super) mod cleanup_contract_tests {
     use super::*;
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
-    pub(super) fn intent() -> Result<Record> {
+    pub(crate) fn intent() -> Result<Record> {
         let nonce = "a".repeat(32);
         Ok(Record {
             schema: 1,
@@ -1690,6 +1875,7 @@ mod cleanup_contract_tests {
             uid: None,
             phase: "intent".into(),
             cause: None,
+            observer: None,
             stage: format!("/var/lib/private/klspike-{nonce}").into(),
         })
     }
@@ -1740,6 +1926,7 @@ mod cleanup_contract_tests {
             bwrap: 20,
             code: Some(0),
             signal: None,
+            core: None,
         };
         assert!(native_completion(&native, &nonce, 20)?);
         native.code = Some(23);
@@ -1850,6 +2037,7 @@ mod operation_reap_tests {
             bwrap: 20,
             code: None,
             signal: Some(9),
+            core: None,
         };
         bound_native_reap(Some(&ack), &nonce, 20)?;
         assert!(bound_native_reap(Some(&ack), &nonce, 21).is_err());
