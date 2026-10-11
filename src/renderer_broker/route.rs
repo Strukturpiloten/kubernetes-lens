@@ -76,10 +76,13 @@ pub(super) struct Descriptor {
     pub request_sha256: Option<[u8; 32]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub observer: Option<super::wait_observer::Selection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_view_witness: Option<super::input_view_witness::Selection>,
 }
 /// Only a root-created exact candidate descriptor can construct admission. No boolean bypass.
 pub struct Admission {
     d: Descriptor,
+    descriptor_binding: Option<super::input_view_witness::DescriptorBinding>,
     helper: File,
     gate: File,
     renderer: File,
@@ -127,11 +130,8 @@ impl Admission {
         if fd.metadata().map_err(|_| "descriptor-stat")?.mode() & 0o077 != 0 {
             return Err("descriptor-private");
         }
-        let d: Descriptor = serde_json::from_slice(&authority::read_file(
-            &mut fd,
-            super::broker_protocol::HEADER_LIMIT + 65536,
-        )?)
-        .map_err(|_| "descriptor-json")?;
+        let raw = authority::read_file(&mut fd, super::broker_protocol::HEADER_LIMIT + 65536)?;
+        let d: Descriptor = serde_json::from_slice(&raw).map_err(|_| "descriptor-json")?;
         if d.schema != d.header.schema
             || d.nonce != d.header.nonce
             || d.client_uid != d.header.caller_uid
@@ -150,6 +150,12 @@ impl Admission {
                 return Err("observer-origin-or-capacity");
             }
         }
+        let descriptor_binding = if let Some(witness) = &d.input_view_witness {
+            witness.validate_request(&d.header, d.observer.is_some())?;
+            Some(super::input_view_witness::DescriptorBinding::new(fd, path, &raw)?)
+        } else {
+            None
+        };
         root_ancestry(&d.journal)?;
         root_ancestry(d.stage.parent().ok_or("stage-parent")?)?;
         let now = monotonic_ns()?;
@@ -199,6 +205,7 @@ impl Admission {
         let renderer = root_regular(&d.renderer)?;
         Ok(Self {
             d,
+            descriptor_binding,
             helper,
             gate,
             renderer,
@@ -379,6 +386,7 @@ struct ExecObserver {
     cancellation_cause: Option<&'static str>,
     wait_capture: Option<super::wait_observer::Handle>,
     descriptor: Descriptor,
+    descriptor_binding: Option<super::input_view_witness::DescriptorBinding>,
 }
 fn native_binding(n: &NativeWait, nonce: &str, bwrap: u32) -> Result<()> {
     if n.nonce != nonce
@@ -400,6 +408,78 @@ fn native_completion(n: &NativeWait, nonce: &str, bwrap: u32) -> Result<bool> {
     Ok(n.code == Some(0))
 }
 impl ExecObserver {
+    fn witness_progress(&mut self) -> Result<()> {
+        if Instant::now() >= self.end || self.cancelled() {
+            return Err(self.cancellation_cause.unwrap_or("input-view-deadline-or-cancel"));
+        }
+        Ok(())
+    }
+    fn witness_live_setup(&mut self) -> Result<()> {
+        self.witness_progress()?;
+        self.bound_identity()?;
+        let capture = self.wait_capture.clone().ok_or("input-view-wait-observer-required")?;
+        capture
+            .lock()
+            .map_err(|_| "observer-capture-lock")?
+            .ready(super::wait_observer::Readiness {
+                supervisor: &self.supervisor,
+                bwrap: &self.bwrap,
+                gate: &self.gate,
+                uid: self.uid,
+                work: &self.work_invocation,
+                cgroup: &self.cgroup,
+                d: &self.descriptor,
+            })?;
+        let current = audit::setup(&self.gate, self.uid)?;
+        if current.namespaces != self.setup.namespaces
+            || current.mountinfo != self.setup.mountinfo
+            || current.null != self.setup.null
+            || current.null_flags != self.setup.null_flags
+        {
+            return Err("input-view-setup-changed");
+        }
+        audit::limits(&self.cgroup, self.memory, self.pids)?;
+        self.witness_progress()
+    }
+    fn input_view_rendezvous(&mut self) -> Result<Option<super::input_view_witness::Retained>> {
+        let Some(selection) = self.descriptor.input_view_witness.clone() else {
+            return Ok(None);
+        };
+        self.witness_live_setup()?;
+        let capture = self.wait_capture.clone().ok_or("input-view-wait-observer-required")?;
+        let (origin, origin_path) = {
+            let capture = capture.lock().map_err(|_| "observer-capture-lock")?;
+            (capture.origin()?, capture.origin_path())
+        };
+        let descriptor = self.descriptor.clone();
+        let gate = super::wait_observer::Identity::of(&self.gate);
+        let cgroup = self.cgroup.clone();
+        let namespaces = ["user", "pid", "mnt"].map(|kind| {
+            self.setup
+                .namespaces
+                .get(kind)
+                .copied()
+                .ok_or("input-view-setup-namespace")
+        });
+        let namespaces = [namespaces[0]?, namespaces[1]?, namespaces[2]?];
+        let binding = self.descriptor_binding.take().ok_or("input-view-descriptor-missing")?;
+        let mut retained = super::input_view_witness::Retained::prepare(
+            super::input_view_witness::Input {
+                descriptor: &descriptor,
+                origin: &origin,
+                origin_path: &origin_path,
+                gate,
+                cgroup: &cgroup,
+                namespaces,
+            },
+            binding,
+            &mut || self.witness_progress(),
+        )?;
+        retained.exchange(&selection, &mut || self.witness_progress())?;
+        self.witness_live_setup()?;
+        retained.recheck(&mut || self.witness_progress())?;
+        Ok(Some(retained))
+    }
     fn request_native_cancel(&mut self, end: Instant) -> Result<()> {
         if self.native_wait.is_some() || self.cancel_sent {
             return Ok(());
@@ -568,8 +648,13 @@ impl Observer for ExecObserver {
             }
             self.bound_identity()?;
         }
+        let mut witness = self.input_view_rendezvous()?;
         self.journal.record.phase = "trace-armed".into();
         self.journal.persist()?;
+        if let Some(retained) = witness.as_mut() {
+            self.witness_live_setup()?;
+            retained.recheck(&mut || self.witness_progress())?;
+        }
         self.permit
             .take()
             .ok_or("permit-used")?
@@ -739,6 +824,7 @@ pub fn controller(admission: Admission, client: UnixStream) -> Result<Outcome> {
 }
 struct Prepared {
     d: Descriptor,
+    descriptor_binding: Option<super::input_view_witness::DescriptorBinding>,
     end: Instant,
     gate: File,
     renderer: File,
@@ -808,6 +894,7 @@ fn controller_inner(
 fn prepare(admission: Admission, mut client: UnixStream, created_intent: &mut Option<Record>) -> Result<Prepared> {
     let Admission {
         d,
+        descriptor_binding,
         helper: _helper,
         gate,
         renderer,
@@ -883,6 +970,7 @@ fn prepare(admission: Admission, mut client: UnixStream, created_intent: &mut Op
     let (spec, expected_package) = prepare_project(&d, &mut client, allocation.uid, end)?;
     Ok(Prepared {
         d,
+        descriptor_binding,
         end,
         gate,
         renderer,
@@ -931,6 +1019,7 @@ fn prepare_project(
 }
 struct StartedSupervisor {
     d: Descriptor,
+    descriptor_binding: Option<super::input_view_witness::DescriptorBinding>,
     end: Instant,
     journal: Journal,
     listener: UnixListener,
@@ -950,6 +1039,7 @@ struct StartedSupervisor {
 fn start_supervisor(prepared: Prepared) -> Result<StartedSupervisor> {
     let Prepared {
         d,
+        descriptor_binding,
         end,
         gate,
         renderer,
@@ -1024,6 +1114,7 @@ fn start_supervisor(prepared: Prepared) -> Result<StartedSupervisor> {
     }
     Ok(StartedSupervisor {
         d,
+        descriptor_binding,
         end,
         journal,
         listener,
@@ -1044,6 +1135,7 @@ fn start_supervisor(prepared: Prepared) -> Result<StartedSupervisor> {
 fn observe(prepared: Prepared, cleanup_clock: CleanupClock) -> Result<Running> {
     let StartedSupervisor {
         d,
+        descriptor_binding,
         end,
         journal,
         listener,
@@ -1114,6 +1206,7 @@ fn observe(prepared: Prepared, cleanup_clock: CleanupClock) -> Result<Running> {
         cancellation_cause: None,
         wait_capture,
         descriptor: d.clone(),
+        descriptor_binding,
     };
     Ok(Running {
         d,

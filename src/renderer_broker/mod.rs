@@ -5,6 +5,7 @@ mod audit;
 pub(super) mod authority;
 mod bubblewrap_probe;
 mod cold_boot;
+mod input_view_witness;
 mod journal;
 mod manager;
 pub(super) mod route;

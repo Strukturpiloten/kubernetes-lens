@@ -82,7 +82,7 @@ pub(super) struct Identity {
     pub start: u64,
 }
 impl Identity {
-    fn of(pid: &authority::HeldPid) -> Self {
+    pub(super) fn of(pid: &authority::HeldPid) -> Self {
         Self {
             pid: pid.pid,
             start: pid.start,
@@ -513,10 +513,10 @@ impl Stream {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Sender {
-    pid: u32,
-    uid: u32,
-    gid: u32,
+pub(super) struct Sender {
+    pub pid: u32,
+    pub uid: u32,
+    pub gid: u32,
 }
 #[derive(Default)]
 struct Ack {
@@ -907,6 +907,9 @@ impl Capture {
     pub fn abandon(&mut self) {
         self.failed = Some("observer-forced-or-incomplete-retirement");
     }
+    pub fn origin_path(&self) -> PathBuf {
+        self.directory.join("origin.json")
+    }
     pub fn origin(&self) -> Result<Origin> {
         self.origin.clone().ok_or("observer-origin-missing")
     }
@@ -996,13 +999,13 @@ fn drain_fifo(reader: &mut impl Read, mut consume: impl FnMut(&[u8]) -> Result<(
     }
     Ok(false)
 }
-struct AckChunk {
-    bytes: Vec<u8>,
-    credentials: Vec<Sender>,
-    invalid: bool,
+pub(super) struct AckChunk {
+    pub bytes: Vec<u8>,
+    pub credentials: Vec<Sender>,
+    pub invalid: bool,
 }
 /// The sole actual recvmsg path; each returned nonempty chunk must carry original credentials.
-fn receive_ack_chunk(socket: &UnixStream) -> Result<Option<AckChunk>> {
+pub(super) fn receive_ack_chunk(socket: &UnixStream) -> Result<Option<AckChunk>> {
     // SO_PASSCRED emits a zero-PID credential sentinel at EOF. Do not ask rustix's
     // nonzero typed UCred decoder to construct it. The sole owning reader peeks
     // without ancillary; buffered bytes remain until the credential-bearing recvmsg.
@@ -1059,7 +1062,7 @@ fn receive_ack_chunk(socket: &UnixStream) -> Result<Option<AckChunk>> {
     }))
 }
 /// Authenticated nsfs name and reserved inode give the safe equivalent of initial `CLONE_NEWUSER`.
-fn initial_namespace(fd: &impl AsFd) -> Result<(u64, u64)> {
+pub(super) fn initial_namespace(fd: &impl AsFd) -> Result<(u64, u64)> {
     let before = rustix::fs::fstat(fd).map_err(|_| "observer-user-namespace-stat")?;
     let magic = i128::from(
         rustix::fs::fstatfs(fd)

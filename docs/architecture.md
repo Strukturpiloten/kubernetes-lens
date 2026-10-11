@@ -53,3 +53,9 @@ root-private evidence, authenticates each native socket fragment and matches a c
 parent wait with natural retirement. Existing controller/tracer loops pump bounded data; no
 collector thread or new public format surface is introduced. Journal Origin/Proof append once;
 cold archive recovery scans bounded record/metadata only and cannot synthesize native proof.
+
+The private `renderer_broker::input_view_witness` module implements the optional pre-permit
+rendezvous in [ADR 0016](decisions/0016-pre-permit-input-view-rendezvous.md). It authenticates
+selected root peer/frame/digests and rechecks product-owned live bindings under the original
+ends. Witness body capture, persistence, interpretation and independent mounted closure
+verification remain external. No witness path or new permit authority enters the product.

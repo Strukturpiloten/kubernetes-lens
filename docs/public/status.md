@@ -27,3 +27,8 @@ Typed access and policy resources add native import, bounded authoring, finite v
 protected generation for identity, RBAC, autoscaling, disruption, quotas, limits and historical PSP.
 Controller/enforcement behavior and unresolved native rounding/defaulting remain explicit. The
 [access contract](../access.md) records the scope; API-server and runtime compatibility remain pending.
+
+The private default-off input-view rendezvous authenticates a selected root observer before the
+original controlled permit; see [ADR 0016](../decisions/0016-pre-permit-input-view-rendezvous.md).
+External witness capture and native admission remain pending. This adds no supported version,
+renderer conformance, cluster capability or resource-budget extension.

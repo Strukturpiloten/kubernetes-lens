@@ -291,3 +291,10 @@ hash and require independently credentialed native ACK fragments plus matching s
 wait and natural observer retirement before lease release. Failure retains quarantine.
 Protected trace/ACK evidence remains root-private and is never included in public diagnostics.
 Neither original deadline nor input/output/resource/16-active/256-archive cap increases.
+
+Private root `input_view_witness` selection defaults to absent/null and requires controlled
+request schema 2 plus wait observation. [ADR 0016](decisions/0016-pre-permit-input-view-rendezvous.md)
+defines its closed actor/socket fields, single guarded stream Offer/Ack exchange and retained
+pre-permit bindings. Product code never reads the external witness body. The original public
+renderer API, execution/cleanup ends and archive shape are unchanged; native acceptance remains
+blocked on independent external closure, provisioning, metadata and resource evidence.
