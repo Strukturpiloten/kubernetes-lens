@@ -1,12 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:best-practices"],
-  "enabledManagers": [
-    "cargo",
-    "github-actions",
-    "rust-toolchain",
-    "custom.regex"
-  ],
+  "enabledManagers": ["cargo", "github-actions", "rust-toolchain", "custom.regex"],
   "dependencyDashboard": true,
   "minimumReleaseAge": "3 days",
   "prConcurrentLimit": 5,
@@ -69,9 +64,7 @@
       "groupName": "GitHub Actions"
     },
     {
-      "description": [
-        "Automerge tested compatible updates only after required CI"
-      ],
+      "description": ["Automerge tested compatible updates only after required CI"],
       "matchUpdateTypes": ["minor", "patch", "pin", "digest", "pinDigest"],
       "automerge": true,
       "automergeType": "pr",
@@ -153,13 +146,7 @@
         "Review supervised renderer isolation, descriptor and digest dependencies after generic automerge rules"
       ],
       "matchManagers": ["cargo"],
-      "matchPackageNames": [
-        "nix",
-        "rustix",
-        "command-fds",
-        "close_fds",
-        "sha2"
-      ],
+      "matchPackageNames": ["nix", "rustix", "command-fds", "close_fds", "sha2"],
       "groupName": "Supervised renderer dependencies",
       "dependencyDashboardApproval": true,
       "automerge": false

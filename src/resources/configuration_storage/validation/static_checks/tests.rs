@@ -14,6 +14,7 @@ fn context(target: &TargetProfile, limits: NativeProcessingLimits) -> Validation
     ValidationContext {
         intent: NativeValidationIntent::Create,
         target,
+        unknown_boundary_owner: crate::registry::UnknownBoundaryOwner::NativeValidation,
         fields: FieldDecodeContext::new(
             ParseLimits::default(),
             NativeOperationBudget::new(limits),

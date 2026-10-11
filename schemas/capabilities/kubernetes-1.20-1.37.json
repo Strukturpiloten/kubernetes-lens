@@ -8498,10 +8498,7 @@
               "native_constraints": [
                 {
                   "rule": "indexed_job_policy",
-                  "requires": [
-                    "completionMode=Indexed",
-                    "template.spec.restartPolicy=Never"
-                  ],
+                  "requires": ["completionMode=Indexed", "template.spec.restartPolicy=Never"],
                   "integer_minimum": 0
                 },
                 {
@@ -8629,16 +8626,7 @@
               "desired_state_role": "authored_when_explicit; retain source-origin distinction",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.30",
-                  "1.31",
-                  "1.32",
-                  "1.33",
-                  "1.34",
-                  "1.35",
-                  "1.36",
-                  "1.37"
-                ]
+                "target_minors": ["1.30", "1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37"]
               },
               "native_constraints": [
                 {
@@ -11715,12 +11703,7 @@
                   "schema_pointer": "#/definitions/io.k8s.api.core.v1.ServiceSpec/properties/type",
                   "source_schema_ids": ["k8s-1.23-0"],
                   "schema_shape": {
-                    "enum": [
-                      "ClusterIP",
-                      "ExternalName",
-                      "LoadBalancer",
-                      "NodePort"
-                    ],
+                    "enum": ["ClusterIP", "ExternalName", "LoadBalancer", "NodePort"],
                     "type": "string"
                   }
                 }
@@ -11764,22 +11747,12 @@
               "native_constraints": [
                 {
                   "rule": "enum",
-                  "values": [
-                    "ExternalName",
-                    "ClusterIP",
-                    "NodePort",
-                    "LoadBalancer"
-                  ],
+                  "values": ["ExternalName", "ClusterIP", "NodePort", "LoadBalancer"],
                   "other_values": "preserve_only"
                 },
                 {
                   "rule": "enum",
-                  "values": [
-                    "ExternalName",
-                    "ClusterIP",
-                    "NodePort",
-                    "LoadBalancer"
-                  ],
+                  "values": ["ExternalName", "ClusterIP", "NodePort", "LoadBalancer"],
                   "other_values": "preserve_only"
                 }
               ],
@@ -12694,11 +12667,7 @@
               "native_constraints": [
                 {
                   "rule": "enum",
-                  "values": [
-                    "SingleStack",
-                    "PreferDualStack",
-                    "RequireDualStack"
-                  ],
+                  "values": ["SingleStack", "PreferDualStack", "RequireDualStack"],
                   "other_values": "preserve_only"
                 },
                 {
@@ -13002,16 +12971,7 @@
               "desired_state_role": "authored_when_explicit; retain source-origin distinction",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.30",
-                  "1.31",
-                  "1.32",
-                  "1.33",
-                  "1.34",
-                  "1.35",
-                  "1.36",
-                  "1.37"
-                ]
+                "target_minors": ["1.30", "1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37"]
               },
               "native_constraints": [
                 {
@@ -34228,14 +34188,7 @@
               "desired_state_role": "authored_when_explicit; retain source-origin distinction",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.20",
-                  "1.21",
-                  "1.22",
-                  "1.23",
-                  "1.24",
-                  "1.25"
-                ]
+                "target_minors": ["1.20", "1.21", "1.22", "1.23", "1.24", "1.25"]
               },
               "native_constraints": [],
               "schema_required_profile_ids": []
@@ -34279,14 +34232,7 @@
               "desired_state_role": "authored_when_explicit; retain source-origin distinction",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.20",
-                  "1.21",
-                  "1.22",
-                  "1.23",
-                  "1.24",
-                  "1.25"
-                ]
+                "target_minors": ["1.20", "1.21", "1.22", "1.23", "1.24", "1.25"]
               },
               "native_constraints": [],
               "schema_required_profile_ids": []
@@ -34330,14 +34276,7 @@
               "desired_state_role": "authored_when_explicit; retain source-origin distinction",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.20",
-                  "1.21",
-                  "1.22",
-                  "1.23",
-                  "1.24",
-                  "1.25"
-                ]
+                "target_minors": ["1.20", "1.21", "1.22", "1.23", "1.24", "1.25"]
               },
               "native_constraints": [],
               "schema_required_profile_ids": []
@@ -34384,14 +34323,7 @@
               "desired_state_role": "authored_when_explicit; retain source-origin distinction",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.20",
-                  "1.21",
-                  "1.22",
-                  "1.23",
-                  "1.24",
-                  "1.25"
-                ]
+                "target_minors": ["1.20", "1.21", "1.22", "1.23", "1.24", "1.25"]
               },
               "native_constraints": [],
               "schema_required_profile_ids": []
@@ -34438,14 +34370,7 @@
               "desired_state_role": "authored_when_explicit; retain source-origin distinction",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.20",
-                  "1.21",
-                  "1.22",
-                  "1.23",
-                  "1.24",
-                  "1.25"
-                ]
+                "target_minors": ["1.20", "1.21", "1.22", "1.23", "1.24", "1.25"]
               },
               "native_constraints": [],
               "schema_required_profile_ids": []
@@ -34493,14 +34418,7 @@
               "desired_state_role": "authored_when_explicit; retain source-origin distinction",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.20",
-                  "1.21",
-                  "1.22",
-                  "1.23",
-                  "1.24",
-                  "1.25"
-                ]
+                "target_minors": ["1.20", "1.21", "1.22", "1.23", "1.24", "1.25"]
               },
               "native_constraints": [],
               "schema_required_profile_ids": []
@@ -34549,14 +34467,7 @@
               "desired_state_role": "authored_or_observed; provenance and lifecycle classification required",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.20",
-                  "1.21",
-                  "1.22",
-                  "1.23",
-                  "1.24",
-                  "1.25"
-                ]
+                "target_minors": ["1.20", "1.21", "1.22", "1.23", "1.24", "1.25"]
               },
               "native_constraints": [],
               "schema_required_profile_ids": []
@@ -34600,14 +34511,7 @@
               "desired_state_role": "authored_when_explicit; retain source-origin distinction",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.20",
-                  "1.21",
-                  "1.22",
-                  "1.23",
-                  "1.24",
-                  "1.25"
-                ]
+                "target_minors": ["1.20", "1.21", "1.22", "1.23", "1.24", "1.25"]
               },
               "native_constraints": [],
               "schema_required_profile_ids": [
@@ -34659,14 +34563,7 @@
               "desired_state_role": "authored_when_explicit; retain source-origin distinction",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.20",
-                  "1.21",
-                  "1.22",
-                  "1.23",
-                  "1.24",
-                  "1.25"
-                ]
+                "target_minors": ["1.20", "1.21", "1.22", "1.23", "1.24", "1.25"]
               },
               "native_constraints": [
                 {
@@ -34725,14 +34622,7 @@
               "desired_state_role": "authored_when_explicit; retain source-origin distinction",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.20",
-                  "1.21",
-                  "1.22",
-                  "1.23",
-                  "1.24",
-                  "1.25"
-                ]
+                "target_minors": ["1.20", "1.21", "1.22", "1.23", "1.24", "1.25"]
               },
               "native_constraints": [],
               "schema_required_profile_ids": [
@@ -34786,14 +34676,7 @@
               "desired_state_role": "authored_when_explicit; retain source-origin distinction",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.20",
-                  "1.21",
-                  "1.22",
-                  "1.23",
-                  "1.24",
-                  "1.25"
-                ]
+                "target_minors": ["1.20", "1.21", "1.22", "1.23", "1.24", "1.25"]
               },
               "native_constraints": [],
               "schema_required_profile_ids": []
@@ -34837,14 +34720,7 @@
               "desired_state_role": "authored_when_explicit; retain source-origin distinction",
               "admission_predicate": {
                 "selection": "finite_schema_shape_and_constraints",
-                "target_minors": [
-                  "1.20",
-                  "1.21",
-                  "1.22",
-                  "1.23",
-                  "1.24",
-                  "1.25"
-                ]
+                "target_minors": ["1.20", "1.21", "1.22", "1.23", "1.24", "1.25"]
               },
               "native_constraints": [],
               "schema_required_profile_ids": []
@@ -36247,11 +36123,7 @@
                 },
                 {
                   "schema_pointer": "#/definitions/io.k8s.api.policy.v1beta1.PodDisruptionBudgetSpec/properties/selector",
-                  "source_schema_ids": [
-                    "k8s-1.21-0",
-                    "k8s-1.22-0",
-                    "k8s-1.23-0"
-                  ],
+                  "source_schema_ids": ["k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0"],
                   "schema_shape": {
                     "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector",
                     "x-kubernetes-patch-strategy": "replace"
@@ -45009,16 +44881,7 @@
           ],
           "admission_predicate": {
             "selection": "finite_schema_shape_and_constraints",
-            "target_minors": [
-              "1.30",
-              "1.31",
-              "1.32",
-              "1.33",
-              "1.34",
-              "1.35",
-              "1.36",
-              "1.37"
-            ]
+            "target_minors": ["1.30", "1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37"]
           },
           "native_constraints": [],
           "schema_required_profile_ids": [
@@ -45078,16 +44941,7 @@
           ],
           "admission_predicate": {
             "selection": "finite_schema_shape_and_constraints",
-            "target_minors": [
-              "1.30",
-              "1.31",
-              "1.32",
-              "1.33",
-              "1.34",
-              "1.35",
-              "1.36",
-              "1.37"
-            ]
+            "target_minors": ["1.30", "1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37"]
           },
           "native_constraints": [],
           "schema_required_profile_ids": []
@@ -45128,16 +44982,7 @@
           ],
           "admission_predicate": {
             "selection": "finite_schema_shape_and_constraints",
-            "target_minors": [
-              "1.30",
-              "1.31",
-              "1.32",
-              "1.33",
-              "1.34",
-              "1.35",
-              "1.36",
-              "1.37"
-            ]
+            "target_minors": ["1.30", "1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37"]
           },
           "native_constraints": [],
           "schema_required_profile_ids": []
@@ -46380,24 +46225,13 @@
           "native_constraints": [
             {
               "rule": "enum",
-              "values": [
-                "Object",
-                "Pods",
-                "Resource",
-                "External",
-                "ContainerResource"
-              ],
+              "values": ["Object", "Pods", "Resource", "External", "ContainerResource"],
               "other_values": "preserve_only"
             },
             {
               "rule": "discriminated_union",
               "gated_values": ["ContainerResource"],
-              "unconditional_values": [
-                "Object",
-                "Pods",
-                "Resource",
-                "External"
-              ],
+              "unconditional_values": ["Object", "Pods", "Resource", "External"],
               "exactly_one_corresponding_source": true
             },
             {
@@ -46900,7 +46734,12 @@
       "proposed_admitted_members": {},
       "schema_supported_but_unadmitted_members": [],
       "unknown_descendants": "preserve + unadmitted finding; no automatic typed admission",
-      "implementation_requirement": "Author Rust types independently; this specification is evidence, not permission to copy/translate an oracle implementation."
+      "implementation_requirement": "Author Rust types independently; this specification is evidence, not permission to copy/translate an oracle implementation.",
+      "scalar_contract": {
+        "file": "schemas/capabilities/kubernetes-finite-native-contract.json",
+        "primitive": "quantity",
+        "object_members_admit_no_scalar": true
+      }
     },
     "io.k8s.api.autoscaling.v2.PodsMetricSource": {
       "first_inventory_schema_id": "k8s-1.23-0",
@@ -61038,10 +60877,7 @@
           "native_constraints": [
             {
               "rule": "indexed_job_policy",
-              "requires": [
-                "completionMode=Indexed",
-                "template.spec.restartPolicy=Never"
-              ],
+              "requires": ["completionMode=Indexed", "template.spec.restartPolicy=Never"],
               "integer_minimum": 0
             },
             {
@@ -61602,16 +61438,7 @@
           ],
           "admission_predicate": {
             "selection": "finite_schema_shape_and_constraints",
-            "target_minors": [
-              "1.30",
-              "1.31",
-              "1.32",
-              "1.33",
-              "1.34",
-              "1.35",
-              "1.36",
-              "1.37"
-            ]
+            "target_minors": ["1.30", "1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37"]
           },
           "native_constraints": [
             {
@@ -62459,12 +62286,7 @@
             },
             {
               "schema_shape": {
-                "enum": [
-                  "ClusterFirst",
-                  "ClusterFirstWithHostNet",
-                  "Default",
-                  "None"
-                ],
+                "enum": ["ClusterFirst", "ClusterFirstWithHostNet", "Default", "None"],
                 "type": "string"
               },
               "source_schema_ids": ["k8s-1.23-0"]
@@ -62506,12 +62328,7 @@
           "native_constraints": [
             {
               "rule": "enum",
-              "values": [
-                "ClusterFirstWithHostNet",
-                "ClusterFirst",
-                "Default",
-                "None"
-              ],
+              "values": ["ClusterFirstWithHostNet", "ClusterFirst", "Default", "None"],
               "other_values": "preserve_only"
             }
           ],
@@ -64442,10 +64259,7 @@
                   "$ref": "#/definitions/io.k8s.api.core.v1.TopologySpreadConstraint"
                 },
                 "type": "array",
-                "x-kubernetes-list-map-keys": [
-                  "topologyKey",
-                  "whenUnsatisfiable"
-                ],
+                "x-kubernetes-list-map-keys": ["topologyKey", "whenUnsatisfiable"],
                 "x-kubernetes-list-type": "map",
                 "x-kubernetes-patch-merge-key": "topologyKey",
                 "x-kubernetes-patch-strategy": "merge"
@@ -70370,10 +70184,7 @@
           "schema_required_profile_ids": []
         }
       },
-      "schema_supported_but_unadmitted_members": [
-        "clusterTrustBundle",
-        "podCertificate"
-      ],
+      "schema_supported_but_unadmitted_members": ["clusterTrustBundle", "podCertificate"],
       "unknown_descendants": "preserve + unadmitted finding; no automatic typed admission",
       "implementation_requirement": "Author Rust types independently; this specification is evidence, not permission to copy/translate an oracle implementation."
     },
@@ -75439,10 +75250,7 @@
           "schema_required_profile_ids": []
         }
       },
-      "schema_supported_but_unadmitted_members": [
-        "dataSourceRef",
-        "volumeAttributesClassName"
-      ],
+      "schema_supported_but_unadmitted_members": ["dataSourceRef", "volumeAttributesClassName"],
       "unknown_descendants": "preserve + unadmitted finding; no automatic typed admission",
       "implementation_requirement": "Author Rust types independently; this specification is evidence, not permission to copy/translate an oracle implementation."
     },
@@ -81719,12 +81527,7 @@
             },
             {
               "schema_shape": {
-                "enum": [
-                  "ContainersReady",
-                  "Initialized",
-                  "PodScheduled",
-                  "Ready"
-                ],
+                "enum": ["ContainersReady", "Initialized", "PodScheduled", "Ready"],
                 "type": "string"
               },
               "source_schema_ids": ["k8s-1.23-0"]
@@ -84109,10 +83912,7 @@
           "schema_required_profile_ids": []
         }
       },
-      "schema_supported_but_unadmitted_members": [
-        "bindMountOptions",
-        "recursiveReadOnly"
-      ],
+      "schema_supported_but_unadmitted_members": ["bindMountOptions", "recursiveReadOnly"],
       "unknown_descendants": "preserve + unadmitted finding; no automatic typed admission",
       "implementation_requirement": "Author Rust types independently; this specification is evidence, not permission to copy/translate an oracle implementation."
     },
@@ -84878,10 +84678,7 @@
           "schema_required_profile_ids": []
         }
       },
-      "schema_supported_but_unadmitted_members": [
-        "grpc",
-        "terminationGracePeriodSeconds"
-      ],
+      "schema_supported_but_unadmitted_members": ["grpc", "terminationGracePeriodSeconds"],
       "unknown_descendants": "preserve + unadmitted finding; no automatic typed admission",
       "implementation_requirement": "Author Rust types independently; this specification is evidence, not permission to copy/translate an oracle implementation."
     },
@@ -85059,7 +84856,12 @@
       "proposed_admitted_members": {},
       "schema_supported_but_unadmitted_members": [],
       "unknown_descendants": "preserve + unadmitted finding; no automatic typed admission",
-      "implementation_requirement": "Author Rust types independently; this specification is evidence, not permission to copy/translate an oracle implementation."
+      "implementation_requirement": "Author Rust types independently; this specification is evidence, not permission to copy/translate an oracle implementation.",
+      "scalar_contract": {
+        "file": "schemas/capabilities/kubernetes-finite-native-contract.json",
+        "primitive": "int-or-string",
+        "object_members_admit_no_scalar": true
+      }
     },
     "io.k8s.api.core.v1.HTTPGetAction": {
       "first_inventory_schema_id": "k8s-1.20-0",
@@ -86187,7 +85989,15 @@
               "1.37"
             ]
           },
-          "native_constraints": [],
+          "native_constraints": [
+            {
+              "rule": "feature_gate",
+              "gate": "RunAsGroup",
+              "selection": "enabled_stage",
+              "gated_values": null,
+              "unconditional_values": []
+            }
+          ],
           "schema_required_profile_ids": []
         },
         "runAsNonRoot": {
@@ -91513,12 +91323,7 @@
             ]
           },
           "native_constraints": [],
-          "schema_required_profile_ids": [
-            "k8s-1.25-0",
-            "k8s-1.26-0",
-            "k8s-1.27-0",
-            "k8s-1.28-0"
-          ]
+          "schema_required_profile_ids": ["k8s-1.25-0", "k8s-1.26-0", "k8s-1.27-0", "k8s-1.28-0"]
         }
       },
       "schema_supported_but_unadmitted_members": [],
@@ -98484,24 +98289,13 @@
           "native_constraints": [
             {
               "rule": "enum",
-              "values": [
-                "Object",
-                "Pods",
-                "Resource",
-                "External",
-                "ContainerResource"
-              ],
+              "values": ["Object", "Pods", "Resource", "External", "ContainerResource"],
               "other_values": "preserve_only"
             },
             {
               "rule": "discriminated_union",
               "gated_values": ["ContainerResource"],
-              "unconditional_values": [
-                "Object",
-                "Pods",
-                "Resource",
-                "External"
-              ],
+              "unconditional_values": ["Object", "Pods", "Resource", "External"],
               "exactly_one_corresponding_source": true
             },
             {
@@ -104479,24 +104273,13 @@
           "native_constraints": [
             {
               "rule": "enum",
-              "values": [
-                "Object",
-                "Pods",
-                "Resource",
-                "External",
-                "ContainerResource"
-              ],
+              "values": ["Object", "Pods", "Resource", "External", "ContainerResource"],
               "other_values": "preserve_only"
             },
             {
               "rule": "discriminated_union",
               "gated_values": ["ContainerResource"],
-              "unconditional_values": [
-                "Object",
-                "Pods",
-                "Resource",
-                "External"
-              ],
+              "unconditional_values": ["Object", "Pods", "Resource", "External"],
               "exactly_one_corresponding_source": true
             },
             {
@@ -118322,6 +118105,18 @@
       ],
       "typed_selection": "selected_expected_pending",
       "propagation": "Every admitted root path reaching helper; all named PodSpec/JobSpec template bindings"
+    },
+    {
+      "id": "429f764a558ca795",
+      "definition": "io.k8s.api.core.v1.SecurityContext",
+      "member": "runAsGroup",
+      "gate": "RunAsGroup",
+      "selection": "enabled_stage",
+      "source_id": "RunAsGroup",
+      "variants": [0],
+      "contexts": [{}],
+      "typed_selection": "selected_expected_pending",
+      "propagation": "Every admitted container SecurityContext path, ordinary/init and workload templates; no PodSecurityContext or PSP-derived extension"
     }
   ],
   "graph_relationships": {
@@ -118588,15 +118383,7 @@
     {
       "id": "kubectl-export-yaml",
       "producer_execution_class": "user-only",
-      "literal_argv": [
-        "kubectl",
-        "get",
-        "deployment,service",
-        "-n",
-        "{NAMESPACE}",
-        "-o",
-        "yaml"
-      ],
+      "literal_argv": ["kubectl", "get", "deployment,service", "-n", "{NAMESPACE}", "-o", "yaml"],
       "profile_ids": ["kubectl-1.20.15", "kubectl-1.37.0"],
       "expected_native_outcome": "User runs producer; library parses supplied artifact offline.",
       "forbidden_flags": [],
@@ -118650,15 +118437,7 @@
     {
       "id": "kubectl-export-json",
       "producer_execution_class": "user-only",
-      "literal_argv": [
-        "kubectl",
-        "get",
-        "deployment,service",
-        "-n",
-        "{NAMESPACE}",
-        "-o",
-        "json"
-      ],
+      "literal_argv": ["kubectl", "get", "deployment,service", "-n", "{NAMESPACE}", "-o", "json"],
       "profile_ids": ["kubectl-1.20.15", "kubectl-1.37.0"],
       "expected_native_outcome": "User runs producer; status/server metadata remain observation.",
       "forbidden_flags": [],
@@ -118712,14 +118491,7 @@
     {
       "id": "helm-release-manifest",
       "producer_execution_class": "user-only",
-      "literal_argv": [
-        "helm",
-        "get",
-        "manifest",
-        "{RELEASE}",
-        "-n",
-        "{NAMESPACE}"
-      ],
+      "literal_argv": ["helm", "get", "manifest", "{RELEASE}", "-n", "{NAMESPACE}"],
       "profile_ids": ["helm-3.22.0", "helm-4.3.0"],
       "expected_native_outcome": "Never invoked by library; offline supplied release artifact.",
       "forbidden_flags": [],
@@ -118773,14 +118545,7 @@
     {
       "id": "helm-release-hooks",
       "producer_execution_class": "user-only",
-      "literal_argv": [
-        "helm",
-        "get",
-        "hooks",
-        "{RELEASE}",
-        "-n",
-        "{NAMESPACE}"
-      ],
+      "literal_argv": ["helm", "get", "hooks", "{RELEASE}", "-n", "{NAMESPACE}"],
       "profile_ids": ["helm-3.22.0", "helm-4.3.0"],
       "expected_native_outcome": "Never invoked by library; preserve hook/lifecycle findings.",
       "forbidden_flags": [],
@@ -119128,10 +118893,7 @@
       "id": "kubectl-kustomize",
       "producer_execution_class": "explicit-offline-renderer",
       "literal_argv": ["kubectl", "kustomize", "{LOCAL_PROJECT}"],
-      "profile_ids": [
-        "kubectl-1.20.15-kustomize-2.0.3",
-        "kubectl-1.37.0-kustomize-5.8.1"
-      ],
+      "profile_ids": ["kubectl-1.20.15-kustomize-2.0.3", "kubectl-1.37.0-kustomize-5.8.1"],
       "expected_native_outcome": "Separate embedded oracle; no apply operation.",
       "forbidden_flags": [
         "--enable-helm",
@@ -119420,13 +119182,7 @@
     {
       "id": "kind-delete",
       "producer_execution_class": "external-owned-harness",
-      "literal_argv": [
-        "kind",
-        "delete",
-        "cluster",
-        "--name",
-        "{OWNED_PROFILE}"
-      ],
+      "literal_argv": ["kind", "delete", "cluster", "--name", "{OWNED_PROFILE}"],
       "profile_ids": ["kind-0.14.0", "kind-0.33.0"],
       "expected_native_outcome": "Cleanup only recorded owned cluster; preserve unrelated clusters.",
       "forbidden_flags": [],
@@ -465418,7 +465174,7 @@
     "source_rules": [
       {
         "path": "schemas/capabilities/native-naming-contract.json",
-        "sha256": "0678bed4e573777e5b6882fa763ef7795f7639e930c60907021166f7f8d243e8"
+        "sha256": "dd39f20a56db68c20366eaf0e82969a7cb3a3c718d8fc15e23c8630e55d086dc"
       },
       {
         "path": "schemas/capabilities/native-naming-independent-cases.json",
@@ -497401,12 +497157,7 @@
       {
         "schema_shape": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "source_schema_ids": [
           "k8s-1.20-0",
@@ -497489,12 +497240,7 @@
       {
         "schema_shape": {
           "type": "object",
-          "required": [
-            "name",
-            "clientConfig",
-            "sideEffects",
-            "admissionReviewVersions"
-          ]
+          "required": ["name", "clientConfig", "sideEffects", "admissionReviewVersions"]
         },
         "source_schema_ids": [
           "k8s-1.20-0",
@@ -497784,13 +497530,7 @@
           "type": "object",
           "required": ["name", "container"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.autoscaling.v2beta1.CrossVersionObjectReference": [
@@ -497799,13 +497539,7 @@
           "type": "object",
           "required": ["kind", "name"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.autoscaling.v2beta1.ExternalMetricSource": [
@@ -497814,13 +497548,7 @@
           "type": "object",
           "required": ["metricName"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.autoscaling.v2beta1.MetricSpec": [
@@ -497829,13 +497557,7 @@
           "type": "object",
           "required": ["type"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.autoscaling.v2beta1.ObjectMetricSource": [
@@ -497844,13 +497566,7 @@
           "type": "object",
           "required": ["target", "metricName", "targetValue"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.autoscaling.v2beta1.PodsMetricSource": [
@@ -497859,13 +497575,7 @@
           "type": "object",
           "required": ["metricName", "targetAverageValue"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.autoscaling.v2beta1.ResourceMetricSource": [
@@ -497874,13 +497584,7 @@
           "type": "object",
           "required": ["name"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.autoscaling.v2beta2.ContainerResourceMetricSource": [
@@ -498106,13 +497810,7 @@
         "schema_shape": {
           "type": "object"
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.core.v1.AWSElasticBlockStoreVolumeSource": [
@@ -501280,13 +500978,7 @@
           "type": "object",
           "required": ["addresses"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.discovery.v1beta1.EndpointConditions": [
@@ -501294,13 +500986,7 @@
         "schema_shape": {
           "type": "object"
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.discovery.v1beta1.EndpointPort": [
@@ -501308,13 +500994,7 @@
         "schema_shape": {
           "type": "object"
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.extensions.v1beta1.HTTPIngressPath": [
@@ -501793,13 +501473,7 @@
         "schema_shape": {
           "type": "object"
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.node.v1beta1.Scheduling": [
@@ -501807,13 +501481,7 @@
         "schema_shape": {
           "type": "object"
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.policy.v1beta1.AllowedCSIDriver": [
@@ -501822,13 +501490,7 @@
           "type": "object",
           "required": ["name"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.policy.v1beta1.AllowedFlexVolume": [
@@ -501837,13 +501499,7 @@
           "type": "object",
           "required": ["driver"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.policy.v1beta1.AllowedHostPath": [
@@ -501851,13 +501507,7 @@
         "schema_shape": {
           "type": "object"
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.policy.v1beta1.FSGroupStrategyOptions": [
@@ -501865,13 +501515,7 @@
         "schema_shape": {
           "type": "object"
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.policy.v1beta1.HostPortRange": [
@@ -501880,13 +501524,7 @@
           "type": "object",
           "required": ["min", "max"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.policy.v1beta1.IDRange": [
@@ -501895,13 +501533,7 @@
           "type": "object",
           "required": ["min", "max"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.policy.v1beta1.PodSecurityPolicySpec": [
@@ -501910,13 +501542,7 @@
           "type": "object",
           "required": ["seLinux", "runAsUser", "supplementalGroups", "fsGroup"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.policy.v1beta1.RunAsGroupStrategyOptions": [
@@ -501925,13 +501551,7 @@
           "type": "object",
           "required": ["rule"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.policy.v1beta1.RunAsUserStrategyOptions": [
@@ -501940,13 +501560,7 @@
           "type": "object",
           "required": ["rule"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.policy.v1beta1.RuntimeClassStrategyOptions": [
@@ -501955,13 +501569,7 @@
           "type": "object",
           "required": ["allowedRuntimeClassNames"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.policy.v1beta1.SELinuxStrategyOptions": [
@@ -501970,13 +501578,7 @@
           "type": "object",
           "required": ["rule"]
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.policy.v1beta1.SupplementalGroupsStrategyOptions": [
@@ -501984,13 +501586,7 @@
         "schema_shape": {
           "type": "object"
         },
-        "source_schema_ids": [
-          "k8s-1.20-0",
-          "k8s-1.21-0",
-          "k8s-1.22-0",
-          "k8s-1.23-0",
-          "k8s-1.24-0"
-        ]
+        "source_schema_ids": ["k8s-1.20-0", "k8s-1.21-0", "k8s-1.22-0", "k8s-1.23-0", "k8s-1.24-0"]
       }
     ],
     "io.k8s.api.rbac.v1.AggregationRule": [
@@ -503452,12 +503048,7 @@
           "type": "object",
           "required": ["action", "onPodConditions"]
         },
-        "source_schema_ids": [
-          "k8s-1.25-0",
-          "k8s-1.26-0",
-          "k8s-1.27-0",
-          "k8s-1.28-0"
-        ]
+        "source_schema_ids": ["k8s-1.25-0", "k8s-1.26-0", "k8s-1.27-0", "k8s-1.28-0"]
       },
       {
         "schema_shape": {
@@ -503593,5 +503184,6 @@
         ]
       }
     ]
-  }
+  },
+  "finite_native_contract_file": "schemas/capabilities/kubernetes-finite-native-contract.json"
 }

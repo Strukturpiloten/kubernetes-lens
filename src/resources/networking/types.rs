@@ -42,7 +42,7 @@ native_object! {
         "nodePort" => node_port: i32,
         "port" => port: i32,
         "protocol" => protocol: String,
-        "targetPort" => target_port: IntOrString,
+        "targetPort" => target_port: IntOrString [non_null],
     }
 }
 native_object! {

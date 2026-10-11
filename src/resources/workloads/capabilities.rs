@@ -1303,7 +1303,7 @@ static FIELDS_0: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/containers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -2357,7 +2357,7 @@ static FIELDS_0: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/initContainers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -5276,7 +5276,7 @@ static FIELDS_1: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/template/spec/containers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -6530,7 +6530,7 @@ static FIELDS_1: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/template/spec/initContainers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -10239,7 +10239,7 @@ static FIELDS_2: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/template/spec/containers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -11493,7 +11493,7 @@ static FIELDS_2: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/template/spec/initContainers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -15503,7 +15503,7 @@ static FIELDS_3: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/template/spec/containers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -16757,7 +16757,7 @@ static FIELDS_3: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/template/spec/initContainers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -20443,7 +20443,7 @@ static FIELDS_4: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/template/spec/containers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -21697,7 +21697,7 @@ static FIELDS_4: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/template/spec/initContainers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -25341,7 +25341,7 @@ static FIELDS_5: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/template/spec/containers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -26595,7 +26595,7 @@ static FIELDS_5: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/template/spec/initContainers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -30396,7 +30396,7 @@ static FIELDS_6: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/template/spec/containers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -31650,7 +31650,7 @@ static FIELDS_6: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/template/spec/initContainers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -41047,7 +41047,7 @@ static FIELDS_8: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/jobTemplate/spec/template/spec/containers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(
@@ -42351,7 +42351,7 @@ static FIELDS_8: LazyLock<Vec<FieldCapability>> = LazyLock::new(|| {
         field(
             "/spec/jobTemplate/spec/template/spec/initContainers/*/securityContext/runAsGroup",
             20,
-            None,
+            Some(FeatureGateId::RunAsGroup),
             MergeStrategy::Scalar,
         ),
         field(

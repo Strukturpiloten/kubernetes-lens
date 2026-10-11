@@ -21,3 +21,7 @@
 | [0017](0017-generated-native-artifact-bytes.md)              | Accepted                                   | Generated native bytes, source-order associations and grouped minimal patches                          |
 
 Add a new numbered ADR when an accepted decision changes; preserve and supersede historical decisions.
+
+[ADR 0018](0018-finite-native-target-contract.md) refines ADRs 0002–0004, 0006, 0010, 0013 and
+0017 with reviewed finite native predicates, complete target finding facets and the explicit
+external host-authority boundary; it does not close native conformance or #43.

@@ -20,6 +20,12 @@ const RULES_0: &[Rule] = &[
         None,
     ),
     (
+        "/spec/containers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
+        20,
+        None,
+    ),
+    (
         "/spec/containers/*/securityContext/procMount",
         FeatureGateId::ProcMountType,
         36,
@@ -40,6 +46,12 @@ const RULES_0: &[Rule] = &[
     (
         "/spec/initContainers/*/restartPolicy",
         FeatureGateId::SidecarContainers,
+        20,
+        None,
+    ),
+    (
+        "/spec/initContainers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
         20,
         None,
     ),
@@ -87,6 +99,12 @@ const RULES_1: &[Rule] = &[
         None,
     ),
     (
+        "/spec/template/spec/containers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
+        20,
+        None,
+    ),
+    (
         "/spec/template/spec/containers/*/securityContext/procMount",
         FeatureGateId::ProcMountType,
         36,
@@ -107,6 +125,12 @@ const RULES_1: &[Rule] = &[
     (
         "/spec/template/spec/initContainers/*/restartPolicy",
         FeatureGateId::SidecarContainers,
+        20,
+        None,
+    ),
+    (
+        "/spec/template/spec/initContainers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
         20,
         None,
     ),
@@ -187,6 +211,12 @@ const RULES_2: &[Rule] = &[
         None,
     ),
     (
+        "/spec/template/spec/containers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
+        20,
+        None,
+    ),
+    (
         "/spec/template/spec/containers/*/securityContext/procMount",
         FeatureGateId::ProcMountType,
         36,
@@ -207,6 +237,12 @@ const RULES_2: &[Rule] = &[
     (
         "/spec/template/spec/initContainers/*/restartPolicy",
         FeatureGateId::SidecarContainers,
+        20,
+        None,
+    ),
+    (
+        "/spec/template/spec/initContainers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
         20,
         None,
     ),
@@ -274,6 +310,12 @@ const RULES_3: &[Rule] = &[
         None,
     ),
     (
+        "/spec/template/spec/containers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
+        20,
+        None,
+    ),
+    (
         "/spec/template/spec/containers/*/securityContext/procMount",
         FeatureGateId::ProcMountType,
         36,
@@ -294,6 +336,12 @@ const RULES_3: &[Rule] = &[
     (
         "/spec/template/spec/initContainers/*/restartPolicy",
         FeatureGateId::SidecarContainers,
+        20,
+        None,
+    ),
+    (
+        "/spec/template/spec/initContainers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
         20,
         None,
     ),
@@ -367,6 +415,12 @@ const RULES_4: &[Rule] = &[
         None,
     ),
     (
+        "/spec/template/spec/containers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
+        20,
+        None,
+    ),
+    (
         "/spec/template/spec/containers/*/securityContext/procMount",
         FeatureGateId::ProcMountType,
         36,
@@ -387,6 +441,12 @@ const RULES_4: &[Rule] = &[
     (
         "/spec/template/spec/initContainers/*/restartPolicy",
         FeatureGateId::SidecarContainers,
+        20,
+        None,
+    ),
+    (
+        "/spec/template/spec/initContainers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
         20,
         None,
     ),
@@ -454,6 +514,12 @@ const RULES_5: &[Rule] = &[
         None,
     ),
     (
+        "/spec/template/spec/containers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
+        20,
+        None,
+    ),
+    (
         "/spec/template/spec/containers/*/securityContext/procMount",
         FeatureGateId::ProcMountType,
         36,
@@ -474,6 +540,12 @@ const RULES_5: &[Rule] = &[
     (
         "/spec/template/spec/initContainers/*/restartPolicy",
         FeatureGateId::SidecarContainers,
+        20,
+        None,
+    ),
+    (
+        "/spec/template/spec/initContainers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
         20,
         None,
     ),
@@ -562,6 +634,12 @@ const RULES_6: &[Rule] = &[
         None,
     ),
     (
+        "/spec/template/spec/containers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
+        20,
+        None,
+    ),
+    (
         "/spec/template/spec/containers/*/securityContext/procMount",
         FeatureGateId::ProcMountType,
         36,
@@ -582,6 +660,12 @@ const RULES_6: &[Rule] = &[
     (
         "/spec/template/spec/initContainers/*/restartPolicy",
         FeatureGateId::SidecarContainers,
+        20,
+        None,
+    ),
+    (
+        "/spec/template/spec/initContainers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
         20,
         None,
     ),
@@ -686,6 +770,12 @@ const RULES_7: &[Rule] = &[
         None,
     ),
     (
+        "/spec/jobTemplate/spec/template/spec/containers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
+        20,
+        None,
+    ),
+    (
         "/spec/jobTemplate/spec/template/spec/containers/*/securityContext/procMount",
         FeatureGateId::ProcMountType,
         36,
@@ -706,6 +796,12 @@ const RULES_7: &[Rule] = &[
     (
         "/spec/jobTemplate/spec/template/spec/initContainers/*/restartPolicy",
         FeatureGateId::SidecarContainers,
+        20,
+        None,
+    ),
+    (
+        "/spec/jobTemplate/spec/template/spec/initContainers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
         20,
         None,
     ),
@@ -816,6 +912,12 @@ const RULES_8: &[Rule] = &[
         None,
     ),
     (
+        "/spec/jobTemplate/spec/template/spec/containers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
+        20,
+        None,
+    ),
+    (
         "/spec/jobTemplate/spec/template/spec/containers/*/securityContext/procMount",
         FeatureGateId::ProcMountType,
         36,
@@ -836,6 +938,12 @@ const RULES_8: &[Rule] = &[
     (
         "/spec/jobTemplate/spec/template/spec/initContainers/*/restartPolicy",
         FeatureGateId::SidecarContainers,
+        20,
+        None,
+    ),
+    (
+        "/spec/jobTemplate/spec/template/spec/initContainers/*/securityContext/runAsGroup",
+        FeatureGateId::RunAsGroup,
         20,
         None,
     ),
@@ -959,7 +1067,12 @@ fn visit(node: &TreeNode, remaining: &[String], path: &FieldPath, check: &GateCh
             None
         };
         if let Some(code) = code {
-            out.push(Finding::error(code, Phase::Validation).at_path(path.clone()));
+            let finding = if code == FindingCode::UnadmittedField {
+                Finding::warning(code, Phase::Validation)
+            } else {
+                Finding::error(code, Phase::Validation)
+            };
+            out.push(finding.at_path(path.clone()));
         }
         return;
     };

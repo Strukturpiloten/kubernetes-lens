@@ -713,7 +713,11 @@ fn review_identity_preserves_presence_until_selected_native_naming_validation() 
         for minor in [20, 37] {
             let findings = kubernetes_lens::validate_for_target(&set, &target(minor)?);
             assert!(findings.iter().any(|finding| {
-                finding.code == FindingCode::NativeFieldInvalid && finding.path.as_ref() == Some(&name_path)
+                finding.code == FindingCode::InvalidIdentity
+                    && finding.phase == Phase::Validation
+                    && finding.source.is_none()
+                    && finding.resource == Some(document.id())
+                    && finding.path.as_ref() == Some(&name_path)
             }));
         }
     }
@@ -728,7 +732,9 @@ fn review_identity_preserves_presence_until_selected_native_naming_validation() 
         assert!(findings.iter().any(|finding| {
             finding.code == FindingCode::NativeContextRequired
                 && finding.path.as_ref() == Some(&prefix_path)
-                && finding.source.is_some()
+                && finding.phase == Phase::Validation
+                && finding.resource == Some(set.documents()[0].id())
+                && finding.source.is_none()
         }));
     }
     Ok(())
@@ -992,6 +998,26 @@ fn review_known_wrapper_metadata_cannot_hide_malformed_private_containers() -> T
                         && finding.source.is_some()
                         && finding.path.is_some())
             );
+            let generation = errors
+                .iter()
+                .find(|finding| {
+                    finding.code == FindingCode::NativeFieldInvalid
+                        && finding.phase == Phase::Generation
+                        && finding.source.is_some()
+                })
+                .ok_or("generation metadata evidence missing")?;
+            assert_eq!(generation.resource, None);
+            assert_eq!(
+                generation.wrapper.map(|subject| subject.list),
+                Some(set.lists()[0].id())
+            );
+            assert!(errors.iter().any(|finding| {
+                finding.code == generation.code
+                    && finding.phase == Phase::Validation
+                    && finding.source.is_none()
+                    && finding.path == generation.path
+                    && finding.wrapper == generation.wrapper
+            }));
         }
     }
     let set = parsed(

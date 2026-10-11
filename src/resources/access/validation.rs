@@ -2,7 +2,7 @@
 use crate::{
     diagnostic::{FieldPath, Finding, FindingCode, Phase},
     model::GroupVersionKind,
-    registry::{FieldDecodeContext, FindingSink, ValidationContext, codec::FieldCodec},
+    registry::{FieldDecodeContext, FindingSink, UnknownBoundaryOwner, ValidationContext, codec::FieldCodec},
     resources::common::{UnknownScopeVisitor, UnknownScopes},
     syntax::{TreeNode, TreeValue},
 };
@@ -306,16 +306,18 @@ pub(super) fn validate<T: Profile>(resource: &T, ctx: &ValidationContext<'_>, in
     if out.exhausted() {
         return;
     }
-    let fields = out.fields().clone();
-    let mut emit = |path| {
-        if out.exhausted() {
-            return false;
+    if ctx.unknown_boundary_owner == UnknownBoundaryOwner::NativeValidation {
+        let fields = out.fields().clone();
+        let mut emit = |path| {
+            if out.exhausted() {
+                return false;
+            }
+            out.push(Finding::warning(FindingCode::UnadmittedField, Phase::Validation).at_path(path));
+            !out.exhausted()
+        };
+        if !resource.visit_unknown_scopes(&FieldPath::default(), &mut UnknownScopeVisitor::new(&fields, &mut emit)) {
+            return;
         }
-        out.push(Finding::warning(FindingCode::UnadmittedField, Phase::Validation).at_path(path));
-        !out.exhausted()
-    };
-    if !resource.visit_unknown_scopes(&FieldPath::default(), &mut UnknownScopeVisitor::new(&fields, &mut emit)) {
-        return;
     }
     match T::KIND {
         "Namespace" => super::policy::namespace(&tree, ctx.target.kubernetes.minor(), out),

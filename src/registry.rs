@@ -250,9 +250,15 @@ impl<'a> EncodeContext<'a> {
         }
     }
 }
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum UnknownBoundaryOwner {
+    NativeValidation,
+    TargetTraversal,
+}
 pub(crate) struct ValidationContext<'a> {
     pub(crate) intent: crate::generation::NativeValidationIntent,
     pub(crate) target: &'a TargetProfile,
+    pub(crate) unknown_boundary_owner: UnknownBoundaryOwner,
     pub(crate) fields: FieldDecodeContext,
 }
 impl<'a> ValidationContext<'a> {
@@ -367,7 +373,16 @@ pub(crate) mod codec {
             Some(value) => T::decode(value, ctx, &path.child(key))
                 .map(Presence::Value)
                 .map_err(|mut finding| {
-                    if finding.source.is_none() {
+                    if ctx.phase != Phase::Decoding
+                        && matches!(
+                            finding.code,
+                            FindingCode::MalformedDocument | FindingCode::NativeFieldInvalid
+                        )
+                    {
+                        finding.code = FindingCode::NativeFieldInvalid;
+                        finding.phase = ctx.phase;
+                    }
+                    if ctx.phase == Phase::Decoding && finding.source.is_none() {
                         finding.source = value.start;
                     }
                     finding
@@ -520,18 +535,73 @@ pub(crate) mod codec {
             ctx.string(self.native_lexeme(), path)
         }
     }
+    fn invalid_int_or_string(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Finding {
+        let code = if ctx.phase == Phase::Decoding {
+            FindingCode::MalformedDocument
+        } else {
+            FindingCode::NativeFieldInvalid
+        };
+        let mut finding = Finding::error(code, ctx.phase).at_path(path.clone());
+        if ctx.phase == Phase::Decoding {
+            finding.source = node.start;
+        }
+        finding
+    }
+    pub(crate) fn read_non_null_int_or_string(
+        node: &TreeNode,
+        key: &str,
+        ctx: &FieldDecodeContext,
+        path: &FieldPath,
+    ) -> Result<Presence<IntOrString>, Finding> {
+        object(node, path)?;
+        match node.get(key) {
+            Some(
+                value @ TreeNode {
+                    value: TreeValue::Null, ..
+                },
+            ) => IntOrString::decode(value, ctx, &path.child(key)).map(Presence::Value),
+            _ => read_presence(node, key, ctx, path),
+        }
+    }
+    pub(crate) fn write_non_null_int_or_string(
+        entries: &mut Vec<(String, TreeNode)>,
+        key: &str,
+        value: &Presence<IntOrString>,
+        ctx: &EncodeContext<'_>,
+        path: &FieldPath,
+    ) -> Result<(), Finding> {
+        if matches!(value, Presence::Null) {
+            return Err(Finding::error(FindingCode::NativeFieldInvalid, ctx.budget.phase()).at_path(path.child(key)));
+        }
+        write_presence(entries, key, value, ctx, path)
+    }
     impl FieldCodec for IntOrString {
         fn decode(node: &TreeNode, ctx: &FieldDecodeContext, path: &FieldPath) -> Result<Self, Finding> {
             ctx.processing.work(1, ctx.phase)?;
             match &node.value {
                 TreeValue::String(value) => Ok(Self::String(value.clone())),
-                TreeValue::Number(_) => i64::decode(node, ctx, path).map(Self::Int),
-                _ => Err(invalid(path)),
+                TreeValue::Number(_) => i32::decode(node, ctx, path)
+                    .map(|value| Self::Int(i64::from(value)))
+                    .map_err(|finding| {
+                        if finding.code == FindingCode::NativeFieldInvalid {
+                            invalid_int_or_string(node, ctx, path)
+                        } else {
+                            finding
+                        }
+                    }),
+                _ => Err(invalid_int_or_string(node, ctx, path)),
             }
         }
         fn encode(&self, ctx: &EncodeContext<'_>, path: &FieldPath) -> Result<TreeNode, Finding> {
             match self {
-                Self::Int(value) => ctx.integer(*value, path),
+                Self::Int(value) => {
+                    if i32::try_from(*value).is_err() {
+                        return Err(
+                            Finding::error(FindingCode::NativeFieldInvalid, ctx.budget.phase()).at_path(path.clone())
+                        );
+                    }
+                    ctx.integer(*value, path)
+                }
                 Self::String(value) => ctx.string(value, path),
             }
         }
@@ -1149,6 +1219,56 @@ mod scoped_occurrence_tests {
             serde_json::from_slice(artifact.reveal_bytes(&ExplicitArtifactAccess::explicitly_allow_raw_artifact()))
                 .map_err(|_| "generated schema JSON failed")?;
         assert_eq!(output, original);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod field_null_contract_tests {
+    use super::*;
+    use crate::{
+        diagnostic::FieldPath,
+        registry::codec::FieldCodec,
+        resources::{access, networking, workloads},
+        value::Presence,
+    };
+
+    #[test]
+    fn eleven_optional_int_or_string_occurrences_keep_explicit_null() -> Result<(), Finding> {
+        let fields = FieldDecodeContext::standalone();
+        let encoding = EncodeContext::new(None);
+        let path = FieldPath::default();
+        macro_rules! pointer_nulls {
+            ($ty:ty; $($wire:literal => $member:ident),+ $(,)?) => {{
+                let tree = TreeNode::mapping(vec![$(($wire.into(), TreeNode::new(TreeValue::Null))),+]);
+                let native = <$ty>::decode(&tree, &fields, &path)?;
+                $(assert!(matches!(native.$member, Presence::Null));)+
+                let encoded = native.encode(&encoding, &path)?;
+                $(assert!(encoded.get($wire).is_some_and(|node| node.value == TreeValue::Null));)+
+            }};
+        }
+        pointer_nulls!(access::PodDisruptionBudgetV1Spec;
+            "minAvailable" => min_available, "maxUnavailable" => max_unavailable);
+        pointer_nulls!(access::PodDisruptionBudgetV1Beta1Spec;
+            "minAvailable" => min_available, "maxUnavailable" => max_unavailable);
+        pointer_nulls!(workloads::RollingUpdateDeployment;
+            "maxSurge" => max_surge, "maxUnavailable" => max_unavailable);
+        pointer_nulls!(workloads::RollingUpdateDaemonSet;
+            "maxSurge" => max_surge, "maxUnavailable" => max_unavailable);
+        pointer_nulls!(networking::NetworkPolicyPortNetworkingV1; "port" => port);
+        pointer_nulls!(networking::IngressBackendExtensionsV1beta1; "servicePort" => service_port);
+        pointer_nulls!(networking::IngressBackendNetworkingV1beta1; "servicePort" => service_port);
+        Ok(())
+    }
+
+    #[test]
+    fn direct_int_or_string_value_decoder_still_refuses_null() -> Result<(), &'static str> {
+        let fields = FieldDecodeContext::standalone();
+        let result = crate::value::IntOrString::decode(&TreeNode::new(TreeValue::Null), &fields, &FieldPath::default());
+        let finding = result.err().ok_or("null value union accepted")?;
+        assert_eq!(finding.code, FindingCode::MalformedDocument);
+        assert_eq!(finding.phase, Phase::Decoding);
+        assert!(finding.source.is_none());
         Ok(())
     }
 }

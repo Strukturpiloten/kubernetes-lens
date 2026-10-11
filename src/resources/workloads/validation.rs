@@ -156,7 +156,7 @@ fn invalid(path: &FieldPath, out: &mut dyn FindingSink) {
 fn text<'a>(node: &'a TreeNode, key: &str) -> Option<&'a str> {
     node.get(key).and_then(TreeNode::as_str)
 }
-fn integer(node: &TreeNode) -> Option<i64> {
+pub(super) fn integer(node: &TreeNode) -> Option<i64> {
     if let TreeValue::Number(value) = &node.value {
         value.parse().ok()
     } else {
@@ -691,6 +691,10 @@ fn validate_bound_node(
         if !matches!(binding, MergeStrategy::Object) {
             return;
         }
+        if let Err(finding) = super::finite::object(node, path, fields, out) {
+            out.push(finding);
+            return;
+        }
         validate_native_scalars(node, path, out);
         if node.get("optional").is_some_and(|n| matches!(n.value, TreeValue::Null)) {
             invalid(&path.child("optional"), out);
@@ -711,6 +715,11 @@ fn validate_bound_node(
         validate_native_expressions(node, last, path, opaque, out);
         validate_native_items(node, path, target, opaque, out);
     } else if let Some(list) = node.as_sequence() {
+        if last == "drop" && path.0.iter().rev().nth(1).is_some_and(|field| field == "capabilities") {
+            if let Err(finding) = super::finite::drops(node, path, fields, out) {
+                out.push(finding);
+            }
+        }
         if last == "ports" {
             let mut names = BTreeSet::new();
             for (i, port) in list.iter().enumerate() {
@@ -958,6 +967,17 @@ fn validate_controller(
     }
 }
 
+fn validate_mount_path_context(mount: &TreeNode, path: &FieldPath, target: &TargetProfile, out: &mut dyn FindingSink) {
+    if text(mount, "mountPath").is_some_and(|value| value.contains(':')) {
+        let finding = if target.kubernetes.minor() == 20 {
+            Finding::error(FindingCode::NativeFieldInvalid, Phase::Validation)
+        } else {
+            Finding::warning(FindingCode::NativeContextRequired, Phase::Validation)
+        };
+        out.push(finding.at_path(path.child("mountPath")));
+    }
+}
+
 fn validate_containers(
     spec: &TreeNode,
     path: &FieldPath,
@@ -1024,6 +1044,7 @@ fn validate_containers(
                 if text(mount, "mountPath").is_none_or(|m| m.is_empty() || !mounts.insert(m)) {
                     invalid(&mp.child("mountPath"), out);
                 }
+                validate_mount_path_context(mount, &mp, target, out);
             }
             for (j, device) in items(container, "volumeDevices").iter().enumerate() {
                 if out.exhausted() {

@@ -21,7 +21,11 @@ fn invalid_at(value: &Value, minor: u8, path: &str) -> TestResult<()> {
     assert!(
         has(
             &checks(value, minor, Intent::Create)?,
-            FindingCode::NativeFieldInvalid,
+            if matches!(path, "/metadata/name" | "/metadata/namespace") {
+                FindingCode::InvalidIdentity
+            } else {
+                FindingCode::NativeFieldInvalid
+            },
             path
         )?,
         "{path}"
@@ -1063,7 +1067,7 @@ fn service_metadata_uses_native_label_and_prefix_callbacks_at_relaxed_gate_bound
         let parsed = resources(&numeric)?;
         let fresh = ResourceSet::from_authored(vec![author(&parsed)?], &target(minor)?, &AuthoringLimits::default());
         let code = if minor <= 33 {
-            FindingCode::NativeFieldInvalid
+            FindingCode::InvalidIdentity
         } else {
             FindingCode::UnadmittedField
         };
@@ -1096,6 +1100,11 @@ fn service_metadata_uses_native_label_and_prefix_callbacks_at_relaxed_gate_bound
         long["metadata"].as_object_mut().required()?.remove("name");
         long["metadata"]["generateName"] = json!(format!("{}-", "a".repeat(64)));
         invalid_at(&long, minor, "/metadata/generateName")?;
+        let code = if minor <= 33 {
+            FindingCode::NativeFieldInvalid
+        } else {
+            FindingCode::UnadmittedField
+        };
         let mut numeric_prefix = service();
         numeric_prefix["metadata"].as_object_mut().required()?.remove("name");
         numeric_prefix["metadata"]["generateName"] = json!("1svc-");

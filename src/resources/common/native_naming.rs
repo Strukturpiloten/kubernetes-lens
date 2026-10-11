@@ -153,16 +153,27 @@ fn emit(
 ) -> Result<(), Finding> {
     budget.payload(2 * size_of::<String>() + 8 + field.len(), phase)?;
     let path = FieldPath::default().child("metadata").child(field);
+    let code = if phase == Phase::Validation
+        && code == FindingCode::NativeFieldInvalid
+        && matches!(field, "name" | "namespace")
+    {
+        FindingCode::InvalidIdentity
+    } else {
+        code
+    };
     let mut finding = if matches!(
         code,
         FindingCode::NativeContextRequired | FindingCode::NativeNamingUnverified
-    ) {
+    ) || (phase == Phase::Validation && code == FindingCode::UnadmittedField)
+    {
         Finding::warning(code, phase)
     } else {
         Finding::error(code, phase)
     }
     .at_path(path);
-    finding.source = node.and_then(|value| value.start);
+    if phase != Phase::Validation {
+        finding.source = node.and_then(|value| value.start);
+    }
     out.push(finding);
     Ok(())
 }

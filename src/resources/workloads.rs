@@ -32,6 +32,7 @@ pub(crate) mod roots;
 pub use roots::*;
 mod capabilities;
 mod facts;
+mod finite;
 mod gates;
 mod rules;
 mod schedule;

@@ -1,0 +1,256 @@
+{
+  "format": "finite-native-target-contract-v1",
+  "issue": 47,
+  "decision": "docs/decisions/0018-finite-native-target-contract.md",
+  "native_conformance": "pending",
+  "native_success_count": 0,
+  "supported_kubernetes_versions": [],
+  "independent_rule_basis": {
+    "finite_rules_sha256": "5c963a8c2ef28ecce79122e2ed067a20c3aca19e63baa0eb1b85f50a99339d98",
+    "public_decisions_sha256": "1c8949e2cd5d6f8c942cb5c60bf84538cd7ffb14eb9cebb2a744b382de05e609",
+    "decision_ids": [
+      "D-FINDING-TRANSPORT",
+      "D-AUTHORITY",
+      "D-RUNASGROUP",
+      "D-PRIMITIVES",
+      "D-PRESENT-PREDICATES",
+      "D-ENV-UNIQUENESS",
+      "D-CONFIGMAP-DOT"
+    ],
+    "implementation_is_not_oracle": true
+  },
+  "int_or_string": {
+    "carrier": "fallible-i64",
+    "native_wire_minimum": -2147483648,
+    "native_wire_maximum": 2147483647,
+    "boundaries": ["admitted-wire-decoding", "authored-validation", "generation"],
+    "string_coercion": false,
+    "null_discriminant_admitted": false,
+    "null_refusal_fields": ["ServicePort.targetPort", "HTTPGetAction.port", "TCPSocketAction.port"],
+    "nullable_presence_fields": [
+      "PodDisruptionBudgetV1Spec.minAvailable",
+      "PodDisruptionBudgetV1Spec.maxUnavailable",
+      "PodDisruptionBudgetV1Beta1Spec.minAvailable",
+      "PodDisruptionBudgetV1Beta1Spec.maxUnavailable",
+      "RollingUpdateDeployment.maxSurge",
+      "RollingUpdateDeployment.maxUnavailable",
+      "RollingUpdateDaemonSet.maxSurge",
+      "RollingUpdateDaemonSet.maxUnavailable",
+      "NetworkPolicyPortNetworkingV1.port",
+      "IngressBackendExtensionsV1beta1.servicePort",
+      "IngressBackendNetworkingV1beta1.servicePort"
+    ],
+    "nullable_presence_is_native_admission": false,
+    "contextual_port_range": [1, 65535],
+    "iana_port_name_maximum_bytes": 15
+  },
+  "quantity": {
+    "native_magnitude_maximum": 9223372036854775807,
+    "native_exact_precision": 3,
+    "cpu": "nonnegative-exact-integral-millicores",
+    "memory": "nonnegative-exact-integral-bytes",
+    "out_of_domain": "NativeContextRequired",
+    "broader_exact_arithmetic_unchanged": true,
+    "explicit_container_request_lte_limit": true,
+    "default_missing_limit": false,
+    "borrow_container_rules_for_pvc": false
+  },
+  "metadata": {
+    "qualified_key_prefix_maximum_bytes": 253,
+    "qualified_key_name_maximum_bytes": 63,
+    "label_value_maximum_bytes": 63,
+    "annotation_key_plus_value_maximum_utf8_bytes": 262144,
+    "annotation_failure_path": "first-supplied-annotation-leaf-crossing-ceiling"
+  },
+  "security": {
+    "all_supplied_group_elements_nonnegative": true,
+    "overridden_values_still_checked": true,
+    "nonroot_uid_zero_native_rejection": false,
+    "drop_reviewed_names": ["ALL"],
+    "drop_duplicates_invalid": false,
+    "other_drop_names": "NativeContextRequired"
+  },
+  "run_as_group": {
+    "definition": "io.k8s.api.core.v1.SecurityContext",
+    "member": "runAsGroup",
+    "gate": "RunAsGroup",
+    "selection": "enabled_stage",
+    "beta_through": "1.20",
+    "stable_from": "1.21",
+    "stable_through": "1.22",
+    "toggle_removed_from": "1.23",
+    "pod_binding_added": false,
+    "psp_inference": false
+  },
+  "container_ports": {
+    "uniqueness_scope": "all-admitted-ContainerPort-occurrences-per-Pod-template",
+    "roles": ["containers", "initContainers"],
+    "cross_pod_template_isolation": true,
+    "unnamed_empty_preserved": true
+  },
+  "mount_path": {
+    "colon_1_20": "NativeFieldInvalid",
+    "colon_1_37": "NativeContextRequired",
+    "intervening_native_removal_boundary_claimed": false,
+    "filesystem_operation": false
+  },
+  "environment": {
+    "duplicate_merge_key": "projection-ambiguity",
+    "external_assertion": "P-ENV-AMBIGUITY",
+    "universal_native_invalidity": false,
+    "legacy_grammar_narrowed": false
+  },
+  "configmap": {
+    "key_maximum_bytes": 253,
+    "contextual_keys": [".", "..", "leading-.."],
+    "contextual_outcome": "NativeContextRequired",
+    "contextual_key_facts": "Unknown",
+    "ordinary_leading_single_dot_admitted": true,
+    "body_maximum_bytes": 1048576,
+    "body_counts": ["utf8-values", "decoded-binary-values"],
+    "body_counts_keys": false,
+    "secret_corner_contract_changed": false
+  },
+  "finding_rows": [
+    {
+      "id": "F-SHAPE",
+      "code": "MalformedDocument",
+      "severity": "Error",
+      "phase": "Decoding",
+      "path": "actual-contextual-field-or-null",
+      "source": "genuine-decoder-position-or-null"
+    },
+    {
+      "id": "F-NATIVE-INVALID",
+      "code": "NativeFieldInvalid",
+      "severity": "Error",
+      "phase": "Validation",
+      "path": "exact-offending-supplied-leaf",
+      "source": null
+    },
+    {
+      "id": "F-IDENTITY",
+      "code": "InvalidIdentity",
+      "severity": "Error",
+      "phase": "Validation",
+      "path": "/metadata/name-or-/metadata/namespace",
+      "source": null
+    },
+    {
+      "id": "F-DUPLICATE-IDENTITY",
+      "code": "DuplicateIdentity",
+      "severity": "Error",
+      "phase": "Validation",
+      "path": "/metadata-on-every-conflicting-resource-once",
+      "source": null
+    },
+    {
+      "id": "F-GATE",
+      "code": "FeatureGateRequired",
+      "severity": "Error",
+      "phase": "Validation",
+      "path": "exact-concrete-gated-field",
+      "source": null
+    },
+    {
+      "id": "F-UNADMITTED",
+      "code": "UnadmittedField",
+      "severity": "Warning",
+      "phase": "Validation",
+      "path": "each-retained-unadmitted-boundary-including-empty-objects",
+      "source": null
+    },
+    {
+      "id": "F-NATIVE-CONTEXT",
+      "code": "NativeContextRequired",
+      "severity": "Warning",
+      "phase": "Validation",
+      "path": "exact-unreviewed-boundary",
+      "source": null
+    },
+    {
+      "id": "F-PVC-CONTEXT",
+      "code": "NativeContextRequired",
+      "severity": "Warning",
+      "phase": "Validation",
+      "path": "/spec",
+      "source": null
+    },
+    {
+      "id": "F-SERVICE-MERGE",
+      "code": "MergeConflict",
+      "severity": "Error",
+      "phase": "Generation",
+      "path": "/spec/ports",
+      "source": null
+    },
+    {
+      "id": "F-UNADMITTED-GENERATION",
+      "code": "UnadmittedField",
+      "severity": "Error",
+      "phase": "Generation",
+      "path": "exact-refused-authored-name-unselected-Service-value-or-failed-access-mode/topology-proof",
+      "source": null
+    },
+    {
+      "id": "F-PRESERVATION-EVIDENCE",
+      "code": "UnadmittedField",
+      "severity": "Warning",
+      "phase": "Generation",
+      "path": "maximal-boundary-qualified-through-every-containing-List",
+      "source": "genuine-unchanged-source-proof-position-or-null-for-edited/authored-occurrences"
+    },
+    {
+      "id": "F-WRAPPER-METADATA",
+      "code": "NativeFieldInvalid",
+      "severity": "Error",
+      "phase": "Generation",
+      "path": "actual-invalid-List-metadata-member-or-/metadata",
+      "source": "genuine-immutable-wrapper-node-position-or-null"
+    }
+  ],
+  "finding_association": {
+    "resource": "actual-input-local-ResourceId-or-genuine-attempted-root-or-null",
+    "wrapper": "existing-actual-List-subject-preserved;null-in-original-finite-cohort",
+    "source_coordinates": "separate-immutable-source-evidence-and-authenticated-host-envelope",
+    "ordering": [
+      "source-slot",
+      "document",
+      "wrapper-path",
+      "exact-field-pointer",
+      "code",
+      "phase",
+      "severity"
+    ],
+    "authored_failure_provenance": "actual-operation-not-fabricated-Decoding",
+    "analysis_contract_separate": true
+  },
+  "host_authority": {
+    "implementation": "external-primary-owned-bridge-pending",
+    "native_role_self_authentication": false,
+    "digest_or_reviewed_blob_grants_authority": false,
+    "missing_genuine_authority": "external-missing-independent-authority",
+    "ordinary_static_runtime_demand": false,
+    "explicit_supplemental_runtime_missing_result": "external-unsupported-runtime-context",
+    "native_runtime_demand_field_added": false
+  },
+  "original_obligations": {
+    "requests": 22,
+    "tuples": 180,
+    "cells": 90,
+    "graphs": 3,
+    "cnpg_sources": 30,
+    "cnpg_edges": 29,
+    "cnpg_roots": 26,
+    "source_closures": 32,
+    "state": "pending",
+    "cnpg_cpu_200m_request_100m_limit": "negative-at-varied-requests-cpu-no-partial-artifact",
+    "positive_cnpg_obligation_preserved": true
+  },
+  "offline_controls": {
+    "path": "tests/finite_native.rs",
+    "state": "independent-repository-regressions;not-native-conformance",
+    "expected_results": "independently-authored-literals-and-adopted-constants;never-returned-product-values-as-oracle"
+  },
+  "processing": "unchanged-sticky-operation-limits;all-added-scans-paths-reports-comparisons-precharged;no-partial-output-on-exhaustion"
+}

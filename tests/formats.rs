@@ -1383,7 +1383,9 @@ fn native_private_and_unverified_names_survive_explicit_renderer_artifacts_only(
             assert_eq!(warning.is_some(), unverified);
             if let Some(warning) = warning {
                 assert_eq!(warning.severity, kubernetes_lens::diagnostic::Severity::Warning);
-                assert!(warning.source.is_some());
+                assert_eq!(warning.phase, kubernetes_lens::diagnostic::Phase::Validation);
+                assert_eq!(warning.resource, Some(resources.documents()[0].id()));
+                assert!(warning.source.is_none());
             }
             assert!(!format!("{artifact:?}").contains(expected_name));
         }

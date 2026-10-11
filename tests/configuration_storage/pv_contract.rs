@@ -1,7 +1,7 @@
 //! Independent PV/source expectations from the authenticated specification, never native execution.
 use super::{TestResult, set, target};
 use kubernetes_lens::{
-    diagnostic::{FieldPath, Finding, FindingCode, Severity},
+    diagnostic::{FieldPath, Finding, FindingCode, Phase, Severity},
     generate,
     generation::{
         ExplicitArtifactAccess, GenerationOptions, JsonShape, NativeValidationIntent as Intent, OpaqueFieldPolicy,
@@ -428,50 +428,54 @@ fn pv_processing_refuses_budget_exhaustion_without_payload_echo() -> TestResult<
     Ok(())
 }
 
+fn assert_partial_mode_and_portworx_preservation(minor: u8) -> TestResult<()> {
+    let mut value = volume("hostPath", json!({"path":"relative"}));
+    value["spec"]["accessModes"] = json!(["ReadWriteOncePod"]);
+    let supplied = set(&serde_json::to_string(&value)?)?;
+    let typed = supplied.documents()[0].resource::<PersistentVolume>().ok_or("PV")?;
+    assert!(
+        ResourceSet::from_authored(vec![typed.clone().into()], &target(minor)?, &AuthoringLimits::default()).is_err()
+    );
+    let value = volume("portworxVolume", json!({"volumeID":"opaque","vendorFuture":true}));
+    let supplied = set(&serde_json::to_string(&value)?)?;
+    let report = validate_for_target_with_intent(&supplied, &target(minor)?, Intent::Create);
+    assert!(
+        report
+            .iter()
+            .any(|finding| finding.code == FindingCode::UnadmittedField),
+        "{report:?}"
+    );
+    assert!(
+        !report
+            .iter()
+            .any(|finding| finding.code == FindingCode::NativeFieldInvalid)
+    );
+    assert!(
+        generate(
+            &supplied,
+            &target(minor)?,
+            OutputFormat::Json,
+            &GenerationOptions {
+                validation_intent: Intent::Create,
+                json_shape: JsonShape::SingleResource,
+                ..Default::default()
+            }
+        )
+        .is_err()
+    );
+    let artifact =
+        generate(&supplied, &target(minor)?, OutputFormat::Json, &options()).map_err(|_| "Portworx preservation")?;
+    assert!(
+        std::str::from_utf8(artifact.reveal_bytes(&ExplicitArtifactAccess::explicitly_allow_raw_artifact()))?
+            .contains("vendorFuture")
+    );
+    Ok(())
+}
+
 #[test]
 fn preservation_and_uncertain_source_domains_remain_explicit() -> TestResult<()> {
     for minor in [20, 37] {
-        let mut value = volume("hostPath", json!({"path":"relative"}));
-        value["spec"]["accessModes"] = json!(["ReadWriteOncePod"]);
-        let supplied = set(&serde_json::to_string(&value)?)?;
-        let typed = supplied.documents()[0].resource::<PersistentVolume>().ok_or("PV")?;
-        assert!(
-            ResourceSet::from_authored(vec![typed.clone().into()], &target(minor)?, &AuthoringLimits::default())
-                .is_err()
-        );
-        let value = volume("portworxVolume", json!({"volumeID":"opaque","vendorFuture":true}));
-        let supplied = set(&serde_json::to_string(&value)?)?;
-        let report = validate_for_target_with_intent(&supplied, &target(minor)?, Intent::Create);
-        assert!(
-            report
-                .iter()
-                .any(|finding| finding.code == FindingCode::UnadmittedField),
-            "{report:?}"
-        );
-        assert!(
-            !report
-                .iter()
-                .any(|finding| finding.code == FindingCode::NativeFieldInvalid)
-        );
-        assert!(
-            generate(
-                &supplied,
-                &target(minor)?,
-                OutputFormat::Json,
-                &GenerationOptions {
-                    validation_intent: Intent::Create,
-                    json_shape: JsonShape::SingleResource,
-                    ..Default::default()
-                }
-            )
-            .is_err()
-        );
-        let artifact = generate(&supplied, &target(minor)?, OutputFormat::Json, &options())
-            .map_err(|_| "Portworx preservation")?;
-        assert!(
-            std::str::from_utf8(artifact.reveal_bytes(&ExplicitArtifactAccess::explicitly_allow_raw_artifact()))?
-                .contains("vendorFuture")
-        );
+        assert_partial_mode_and_portworx_preservation(minor)?;
         for (branch, source) in [
             ("hostPath", json!({"path":"a\\..\\b"})),
             ("quobyte", json!({"registry":"[::1]:7861","volume":"volume"})),
@@ -491,11 +495,15 @@ fn preservation_and_uncertain_source_domains_remain_explicit() -> TestResult<()>
         for spec in [json!([]), json!("invalid"), json!(false)] {
             let mut value = volume("hostPath", json!({"path":"relative"}));
             value["spec"] = spec;
-            assert!(
-                findings(&value, minor, Intent::Create)?
-                    .iter()
-                    .any(|finding| finding.code == FindingCode::NativeFieldInvalid)
-            );
+            assert!(findings(&value, minor, Intent::Create)?.iter().any(|finding| {
+                finding.code == FindingCode::NativeFieldInvalid
+                    && finding.phase == Phase::Decoding
+                    && finding.severity == Severity::Error
+                    && finding.source.is_some()
+                    && finding.path.as_ref().is_some_and(|path| {
+                        path.reveal(&ExplicitSourceAccess::explicitly_allow_raw_source()) == "/spec"
+                    })
+            }));
         }
         for reference in [
             json!({}),

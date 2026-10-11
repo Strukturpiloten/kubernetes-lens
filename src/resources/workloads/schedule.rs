@@ -30,7 +30,7 @@ pub(super) fn validate_schedule(
             return;
         };
         let zone = prefix.split_once('=').map_or("", |(_, zone)| zone);
-        inline_valid = validate_zone(zone, path, out);
+        inline_valid = validate_zone_in(zone, path, out, true);
         body = rest.trim_start();
     }
     if !valid_body(body) {
@@ -187,6 +187,10 @@ fn valid_duration(duration: &str) -> bool {
     component
 }
 pub(super) fn validate_zone(zone: &str, path: &FieldPath, out: &mut dyn FindingSink) -> bool {
+    validate_zone_in(zone, path, out, false)
+}
+
+fn validate_zone_in(zone: &str, path: &FieldPath, out: &mut dyn FindingSink, inline: bool) -> bool {
     let lexical = !zone.is_empty()
         && !zone.eq_ignore_ascii_case("Local")
         && zone.split('/').all(|part| {
@@ -204,7 +208,13 @@ pub(super) fn validate_zone(zone: &str, path: &FieldPath, out: &mut dyn FindingS
         return false;
     }
     if !jiff_tzdb::available().any(|name| name == zone) {
-        out.push(Finding::error(FindingCode::UnadmittedField, Phase::Validation).at_path(path.clone()));
+        if inline {
+            // Inline TZ is part of the complete cron expression, so its
+            // unresolved zone is a syntax refusal, not target admission.
+            invalid(path, out);
+        } else {
+            out.push(Finding::warning(FindingCode::UnadmittedField, Phase::Validation).at_path(path.clone()));
+        }
         return false;
     }
     true

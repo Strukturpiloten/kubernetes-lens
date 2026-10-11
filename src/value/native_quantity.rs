@@ -121,6 +121,45 @@ impl Quantity {
     pub(crate) fn conservative_milli(&self) -> bool {
         self.conservative_scaled(3)
     }
+    /// Reviewed magnitude and milli-precision domain, independent of scaled int64 conversion.
+    pub(crate) fn finite_native_domain(&self) -> bool {
+        let value = &self.value;
+        if self.lexeme.ends_with(['n', 'u', 'K']) || value.scale > 3 {
+            return false;
+        }
+        if value.sign == 0 {
+            return true;
+        }
+        let Some(rank) = i64::try_from(value.digits.len())
+            .ok()
+            .and_then(|length| length.checked_sub(i64::from(value.scale)))
+        else {
+            return false;
+        };
+        if rank != 19 {
+            return rank < 19;
+        }
+        match value
+            .digits
+            .bytes()
+            .chain(std::iter::repeat(b'0'))
+            .take(19)
+            .cmp(b"9223372036854775807".iter().copied())
+        {
+            Ordering::Less => true,
+            Ordering::Equal => value
+                .digits
+                .as_bytes()
+                .get(19..)
+                .is_none_or(|digits| digits.iter().all(|digit| *digit == b'0')),
+            Ordering::Greater => false,
+        }
+    }
+    pub(crate) fn finite_container_domain(&self, resource: &str) -> bool {
+        self.finite_native_domain()
+            && self.value.sign >= 0
+            && (resource == "cpu" || resource == "memory" && self.value.scale <= 0)
+    }
     fn conservative_scaled(&self, shift: i32) -> bool {
         let value = &self.value;
         let Some(scale) = value.scale.checked_sub(shift) else {

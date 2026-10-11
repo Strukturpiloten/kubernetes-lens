@@ -82,6 +82,12 @@ impl StaticChecks for ConfigMap {
                     return Ok(());
                 }
                 check.key("data", key)?;
+                if key == "." || key.starts_with("..") {
+                    check.out.push(
+                        Finding::warning(FindingCode::NativeContextRequired, Phase::Validation)
+                            .at_path(check.path(&["data", key])?),
+                    );
+                }
                 check.add(&mut total, value.native_value().len())?;
                 // Bound the borrowed-map lookup without retaining duplicate value maps.
                 check.lookup(key, self.binary_data.value().map_or(0, BTreeMap::len))?;
@@ -96,6 +102,12 @@ impl StaticChecks for ConfigMap {
                     return Ok(());
                 }
                 check.key("binaryData", key)?;
+                if key == "." || key.starts_with("..") {
+                    check.out.push(
+                        Finding::warning(FindingCode::NativeContextRequired, Phase::Validation)
+                            .at_path(check.path(&["binaryData", key])?),
+                    );
+                }
                 check.add(&mut total, value.native_bytes().len())?;
             }
         }

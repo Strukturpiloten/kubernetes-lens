@@ -413,7 +413,7 @@ super::native_object! {
     "host" => host: String,
     "httpHeaders" => http_headers: Vec<HTTPHeader>,
     "path" => path: String,
-    "port" => port: IntOrString,
+    "port" => port: IntOrString [non_null],
     "scheme" => scheme: String,
     }
 }
@@ -825,7 +825,7 @@ super::native_object! {
     /// Selected native `TCPSocketAction` members; unadmitted descendants remain private.
     pub struct TCPSocketAction {
     "host" => host: String,
-    "port" => port: IntOrString,
+    "port" => port: IntOrString [non_null],
     }
 }
 

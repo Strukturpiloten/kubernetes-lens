@@ -2288,13 +2288,7 @@
       ],
       "evidence_level": "All18 profile sources narrowed; naming entrypoint applies only when this kind/GVK is available in the frozen interval. No raw-GVK-specific runtime acceptance.",
       "scope_expansion": false,
-      "frozen_kind_supported_target_minors": [
-        "1.20",
-        "1.21",
-        "1.22",
-        "1.23",
-        "1.24"
-      ]
+      "frozen_kind_supported_target_minors": ["1.20", "1.21", "1.22", "1.23", "1.24"]
     },
     {
       "kind": "CustomResourceDefinition",
@@ -5167,386 +5161,242 @@
       {
         "kind": "Pod",
         "api_version": "v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "Deployment",
         "api_version": "apps/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "StatefulSet",
         "api_version": "apps/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "DaemonSet",
         "api_version": "apps/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "ReplicaSet",
         "api_version": "apps/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "ReplicationController",
         "api_version": "v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "Job",
         "api_version": "batch/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "CronJob",
         "api_version": "batch/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "CronJob",
         "api_version": "batch/v1beta1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "Service",
         "api_version": "v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "Endpoints",
         "api_version": "v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "EndpointSlice",
         "api_version": "discovery.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "EndpointSlice",
         "api_version": "discovery.k8s.io/v1beta1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "Ingress",
         "api_version": "extensions/v1beta1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "Ingress",
         "api_version": "networking.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "Ingress",
         "api_version": "networking.k8s.io/v1beta1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "IngressClass",
         "api_version": "networking.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "IngressClass",
         "api_version": "networking.k8s.io/v1beta1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "NetworkPolicy",
         "api_version": "networking.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "ConfigMap",
         "api_version": "v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "Secret",
         "api_version": "v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "PersistentVolumeClaim",
         "api_version": "v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "PersistentVolume",
         "api_version": "v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "StorageClass",
         "api_version": "storage.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "Namespace",
         "api_version": "v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "ServiceAccount",
         "api_version": "v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "Role",
         "api_version": "rbac.authorization.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "RoleBinding",
         "api_version": "rbac.authorization.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "ClusterRole",
         "api_version": "rbac.authorization.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "ClusterRoleBinding",
         "api_version": "rbac.authorization.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "HorizontalPodAutoscaler",
         "api_version": "autoscaling/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "HorizontalPodAutoscaler",
         "api_version": "autoscaling/v2",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "HorizontalPodAutoscaler",
         "api_version": "autoscaling/v2beta1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "HorizontalPodAutoscaler",
         "api_version": "autoscaling/v2beta2",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "PodDisruptionBudget",
         "api_version": "policy/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "PodDisruptionBudget",
         "api_version": "policy/v1beta1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "ResourceQuota",
         "api_version": "v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "LimitRange",
         "api_version": "v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "PriorityClass",
         "api_version": "scheduling.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "RuntimeClass",
         "api_version": "node.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "RuntimeClass",
         "api_version": "node.k8s.io/v1beta1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "PodSecurityPolicy",
         "api_version": "policy/v1beta1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "CustomResourceDefinition",
         "api_version": "apiextensions.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "CustomResourceDefinition",
         "api_version": "apiextensions.k8s.io/v1beta1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "MutatingWebhookConfiguration",
         "api_version": "admissionregistration.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "MutatingWebhookConfiguration",
         "api_version": "admissionregistration.k8s.io/v1beta1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "ValidatingWebhookConfiguration",
         "api_version": "admissionregistration.k8s.io/v1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       },
       {
         "kind": "ValidatingWebhookConfiguration",
         "api_version": "admissionregistration.k8s.io/v1beta1",
-        "already_selected_pointers": [
-          "/metadata/name",
-          "/metadata/generateName"
-        ]
+        "already_selected_pointers": ["/metadata/name", "/metadata/generateName"]
       }
     ]
   },
@@ -5563,13 +5413,7 @@
   "source_manifest": "schemas/capabilities/native-naming-source-manifest.json",
   "independent_cases": "schemas/capabilities/native-naming-independent-cases.json",
   "lookup_identity": {
-    "fields": [
-      "group",
-      "kind",
-      "scope",
-      "explicit_namespace_when_required",
-      "exact_concrete_name"
-    ],
+    "fields": ["group", "kind", "scope", "explicit_namespace_when_required", "exact_concrete_name"],
     "served_api_version_in_key": false,
     "source_gvk_retained": true,
     "generated_names_not_inferred": true,

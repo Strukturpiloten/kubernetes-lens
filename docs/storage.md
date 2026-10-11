@@ -160,3 +160,9 @@ malformed suppliers remain unsupported, and graph Debug reveals no protected pay
 PVC `volumeName` and `storageClassName` retain absent versus explicitly empty values in typed
 input and generated output. Empty names express unbound or classless intent and do not create
 object references; nonempty names retain supplied/missing object resolution.
+
+ConfigMap keys `.`, `..` and leading `..` require a separately reviewed native key/filesystem
+contract. [ADR 0018](decisions/0018-finite-native-target-contract.md) retains them with an exact
+NativeContextRequired/Warning/Validation finding and Unknown graph key domains. Ordinary leading
+single-dot keys such as `.UPPER`, existing body/syntax boundaries and Secret key behavior remain
+unchanged. No filesystem operation is introduced.

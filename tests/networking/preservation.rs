@@ -144,6 +144,9 @@ fn unselected_traffic_distribution_is_retained_but_explicit_preservation_cannot_
         let path = FieldPath::parse("/spec/trafficDistribution")?;
         assert!(errors.iter().any(|finding| finding.code == FindingCode::UnadmittedField
             && finding.severity == Severity::Error
+            && finding.phase == kubernetes_lens::diagnostic::Phase::Generation
+            && finding.source.is_none()
+            && finding.resource == Some(set.documents()[0].id())
             && finding.path.as_ref() == Some(&path)));
         assert_eq!(
             set.documents()[0]
@@ -245,7 +248,13 @@ fn stable_topology_is_exportable_only_as_unchanged_source_backed_observation() -
         findings
             .iter()
             .any(|finding| finding.code == FindingCode::UnadmittedField
-                && finding.severity == kubernetes_lens::diagnostic::Severity::Error)
+                && finding.severity == kubernetes_lens::diagnostic::Severity::Error
+                && finding.phase == kubernetes_lens::diagnostic::Phase::Generation
+                && finding.source.is_none()
+                && finding.path.as_ref().is_some_and(|path| {
+                    path.reveal(&ExplicitSourceAccess::explicitly_allow_raw_source())
+                        == "/endpoints/0/deprecatedTopology"
+                }))
     );
     let baseline = resources(&value)?;
     let native = baseline.documents()[0]

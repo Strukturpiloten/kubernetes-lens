@@ -4,7 +4,7 @@ use crate::{
     diagnostic::{FieldPath, Finding, FindingCode, Phase, ResourceId, Severity, WrapperSubject, has_errors},
     model::{FieldEdit, ResourceSet},
     processing::{NativeOperationBudget, NativeProcessingLimits, ProcessingReport},
-    registry::ValidationContext,
+    registry::{FindingSink, UnknownBoundaryOwner, ValidationContext},
     syntax::{TreeNode, TreeValue},
 };
 use std::{
@@ -145,9 +145,9 @@ impl fmt::Debug for GeneratedArtifact {
             .finish_non_exhaustive()
     }
 }
-fn validate_wrapper(list: &crate::model::ListDocument, target: &TargetProfile, findings: &mut ProcessingReport) {
+fn validate_wrapper_metadata(list: &crate::model::ListDocument, phase: Phase, findings: &mut ProcessingReport) {
     let processing = findings.processing().clone();
-    if findings.failed() || processing.work(1, Phase::Validation).is_err() {
+    if findings.failed() || processing.work(1, phase).is_err() {
         return;
     }
     let root_lookup_work = list
@@ -155,18 +155,16 @@ fn validate_wrapper(list: &crate::model::ListDocument, target: &TargetProfile, f
         .as_mapping()
         .map_or(Some(0), |entries| entries.len().checked_mul(5));
     let Some(root_lookup_work) = root_lookup_work else {
-        processing.fail(Phase::Validation);
+        processing.fail(phase);
         return;
     };
-    if processing.work(root_lookup_work, Phase::Validation).is_err() {
+    if processing.work(root_lookup_work, phase).is_err() {
         return;
     }
     if let Some(metadata) = list.original.get("metadata") {
         if let Some(entries) = metadata.as_mapping() {
             for (key, node) in entries {
-                if findings.failed()
-                    || processing.work(1, Phase::Validation).is_err()
-                    || processing.work(key.len(), Phase::Validation).is_err()
+                if findings.failed() || processing.work(1, phase).is_err() || processing.work(key.len(), phase).is_err()
                 {
                     return;
                 }
@@ -181,10 +179,15 @@ fn validate_wrapper(list: &crate::model::ListDocument, target: &TargetProfile, f
                     _ => true,
                 };
                 if !valid {
+                    if processing.payload_array::<String>(2, phase).is_err()
+                        || processing.payload_sizes(["metadata".len(), key.len()], phase).is_err()
+                    {
+                        return;
+                    }
                     findings.push(wrapper_finding(
                         list,
                         FindingCode::NativeFieldInvalid,
-                        Phase::Validation,
+                        phase,
                         FieldPath(vec!["metadata".into(), key.clone()]),
                         true,
                     ));
@@ -194,15 +197,25 @@ fn validate_wrapper(list: &crate::model::ListDocument, target: &TargetProfile, f
                 }
             }
         } else {
+            if processing.payload_array::<String>(1, phase).is_err()
+                || processing.payload("metadata".len(), phase).is_err()
+            {
+                return;
+            }
             findings.push(wrapper_finding(
                 list,
                 FindingCode::NativeFieldInvalid,
-                Phase::Validation,
+                phase,
                 FieldPath(vec!["metadata".into()]),
                 true,
             ));
         }
     }
+}
+
+fn validate_wrapper(list: &crate::model::ListDocument, target: &TargetProfile, findings: &mut ProcessingReport) {
+    validate_wrapper_metadata(list, Phase::Validation, findings);
+    let processing = findings.processing().clone();
     if findings.failed() {
         return;
     }
@@ -284,7 +297,12 @@ pub(crate) fn validate_in(
     };
     let mut findings = ProcessingReport::new(processing, Phase::Validation);
     findings.extend(target.findings());
-    resources.identity_findings_into(false, Some(&construction), &mut findings);
+    resources.identity_findings_into(
+        false,
+        Some(&construction),
+        crate::model::IdentityFindingMode::TargetValidation,
+        &mut findings,
+    );
     for list in &resources.lists {
         if findings.failed() {
             break;
@@ -300,11 +318,7 @@ pub(crate) fn validate_in(
             Ok(tree) => tree,
             Err(error) => {
                 if error.code == FindingCode::MergeConflict {
-                    let mut native =
-                        Finding::error(FindingCode::NativeFieldInvalid, Phase::Validation).for_resource(document.id);
-                    native.path.clone_from(&error.path);
-                    native.source = error.source;
-                    findings.push(native);
+                    validate_native_without_projection(document, target, intent, &context, &mut findings);
                 }
                 findings.push(error.for_resource(document.id));
                 continue;
@@ -324,59 +338,296 @@ pub(crate) fn validate_in(
         };
         validate_api(&identity, document.id, target, &mut findings);
         validate_source_fields(&tree, &identity.gvk, document.id, target, &mut findings);
+        let unknown_boundary_owner = validate_unknown_field_boundaries(document, &tree, &context, &mut findings);
         validate_naming(&tree, &identity.gvk, document.id, target, intent, &mut findings);
-
-        if let Some(capability) = &document.capability {
-            if target.kubernetes < capability.api_since
-                || capability
-                    .api_removed
-                    .is_some_and(|removed| target.kubernetes >= removed)
-            {
-                findings.push(Finding::error(FindingCode::UnavailableApi, Phase::Validation).for_resource(document.id));
-            }
-            for field in capability.fields {
-                if findings.failed() {
-                    break;
-                }
-                if field_nodes(&tree, field.path).is_empty() {
-                    continue;
-                }
-                let path = FieldPath::parse(field.path).ok();
-                let code = if target.kubernetes < field.since
-                    || field.removed.is_some_and(|removed| target.kubernetes >= removed)
-                {
-                    Some(FindingCode::UnavailableField)
-                } else if field.feature_gate.is_some_and(|gate| {
-                    target.feature_gates.resolve(gate, target.kubernetes) != Ok(FeatureGateState::Enabled)
-                }) {
-                    Some(FindingCode::FeatureGateRequired)
-                } else if field.admission != FieldAdmission::Typed {
-                    Some(FindingCode::UnadmittedField)
-                } else {
-                    None
-                };
-                if let Some(code) = code {
-                    let mut f = Finding::error(code, Phase::Validation).for_resource(document.id);
-                    f.path = path;
-                    findings.push(f);
-                }
-            }
-        } else {
-            findings.push(
-                Finding::warning(
-                    if declaration(&identity.gvk).is_some() {
-                        FindingCode::UnadmittedKind
-                    } else {
-                        FindingCode::UnknownKind
-                    },
-                    Phase::Validation,
-                )
-                .for_resource(document.id),
-            );
-        }
-        validate_native(document, &tree, &identity, target, intent, &context, &mut findings);
+        validate_capability_fields(document, &tree, &identity.gvk, target, &context, &mut findings);
+        let validation = ValidationContext {
+            intent,
+            target,
+            unknown_boundary_owner,
+            fields: context.fields(Phase::Validation),
+        };
+        validate_native(document, &tree, &identity, &context, &validation, &mut findings);
     }
-    findings.into_vec()
+    let processing = findings.processing().clone();
+    let mut entries = findings.into_vec();
+    if let Err(finding) = normalize_target_findings(resources, &mut entries, &processing) {
+        entries.retain(|entry| entry.code != FindingCode::LimitExceeded);
+        entries.push(finding);
+    }
+    entries
+}
+fn validate_capability_fields(
+    document: &crate::model::ResourceDocument,
+    tree: &TreeNode,
+    gvk: &crate::model::GroupVersionKind,
+    target: &TargetProfile,
+    context: &crate::registry::EncodeContext<'_>,
+    findings: &mut ProcessingReport,
+) {
+    if document.capability.is_some() {
+        if let Some(metadata) = tree.get("metadata") {
+            let fields = context.fields(Phase::Validation);
+            let mut sink = crate::registry::ResourceFindingSink {
+                sink: findings,
+                resource: document.id,
+            };
+            match crate::resources::common::child_path(&FieldPath::default(), "metadata", &fields).and_then(|path| {
+                crate::resources::common::finite_metadata::validate(metadata, &path, &fields, &mut sink)
+            }) {
+                Ok(()) => (),
+                Err(finding) => sink.push(finding),
+            }
+        }
+    }
+
+    if let Some(capability) = &document.capability {
+        if target.kubernetes < capability.api_since
+            || capability
+                .api_removed
+                .is_some_and(|removed| target.kubernetes >= removed)
+        {
+            findings.push(Finding::error(FindingCode::UnavailableApi, Phase::Validation).for_resource(document.id));
+        }
+        for field in capability.fields {
+            if findings.failed() {
+                break;
+            }
+            let code = if target.kubernetes < field.since
+                || field.removed.is_some_and(|removed| target.kubernetes >= removed)
+            {
+                Some(FindingCode::UnavailableField)
+            } else if field.feature_gate.is_some_and(|gate| {
+                target.feature_gates.resolve(gate, target.kubernetes) != Ok(FeatureGateState::Enabled)
+            }) {
+                Some(FindingCode::FeatureGateRequired)
+            } else if field.admission != FieldAdmission::Typed {
+                Some(FindingCode::UnadmittedField)
+            } else {
+                None
+            };
+            if let Some(code) = code {
+                if let Ok(pattern) = FieldPath::parse(field.path) {
+                    let fields = context.fields(Phase::Validation);
+                    let mut sink = crate::registry::ResourceFindingSink {
+                        sink: findings,
+                        resource: document.id,
+                    };
+                    if let Err(finding) =
+                        concrete_field_findings(tree, &pattern.0, &FieldPath::default(), code, &fields, &mut sink)
+                    {
+                        sink.push(finding);
+                    }
+                }
+            }
+        }
+    } else {
+        findings.push(
+            Finding::warning(
+                if declaration(gvk).is_some() {
+                    FindingCode::UnadmittedKind
+                } else {
+                    FindingCode::UnknownKind
+                },
+                Phase::Validation,
+            )
+            .for_resource(document.id),
+        );
+    }
+}
+
+fn concrete_field_findings(
+    node: &TreeNode,
+    remaining: &[String],
+    path: &FieldPath,
+    code: FindingCode,
+    fields: &crate::registry::FieldDecodeContext,
+    out: &mut dyn FindingSink,
+) -> Result<(), Finding> {
+    fields.processing.work(1, Phase::Validation)?;
+    if out.exhausted() {
+        return Ok(());
+    }
+    let Some((first, rest)) = remaining.split_first() else {
+        let finding = if code == FindingCode::UnadmittedField {
+            Finding::warning(code, Phase::Validation)
+        } else {
+            Finding::error(code, Phase::Validation)
+        };
+        out.push(finding.at_path(crate::resources::common::copy_path(path, fields)?));
+        return Ok(());
+    };
+    if first == "*" {
+        if let Some(items) = node.as_sequence() {
+            for (index, child) in items.iter().enumerate() {
+                concrete_field_findings(
+                    child,
+                    rest,
+                    &crate::resources::common::index_path(path, index, fields)?,
+                    code,
+                    fields,
+                    out,
+                )?;
+            }
+        } else if let Some(entries) = node.as_mapping() {
+            for (key, child) in entries {
+                concrete_field_findings(
+                    child,
+                    rest,
+                    &crate::resources::common::child_path(path, key, fields)?,
+                    code,
+                    fields,
+                    out,
+                )?;
+            }
+        }
+    } else if let Some(child) = node.get(first) {
+        concrete_field_findings(
+            child,
+            rest,
+            &crate::resources::common::child_path(path, first, fields)?,
+            code,
+            fields,
+            out,
+        )?;
+    }
+    Ok(())
+}
+fn charge_target_finding_normalization(
+    resources: &ResourceSet,
+    findings: &[Finding],
+    processing: &NativeOperationBudget,
+) -> Result<(), Finding> {
+    let count = findings.len();
+    // Conservatively precharge comparison scans, source-slot joins and deduplication.
+    let work = count.saturating_mul(count).saturating_mul(
+        resources
+            .documents
+            .len()
+            .saturating_add(resources.sources.len())
+            .saturating_add(resources.lists.len())
+            .saturating_add(1),
+    );
+    let path_bytes = findings
+        .iter()
+        .try_fold(0usize, |sum, finding| {
+            finding.path.as_ref().map_or(Some(sum), |path| {
+                path.0.iter().try_fold(sum, |sum, segment| {
+                    sum.checked_add(segment.len()).and_then(|sum| sum.checked_add(1))
+                })
+            })
+        })
+        .ok_or_else(|| processing.fail(Phase::Validation))?;
+    let collection_items = resources
+        .documents
+        .iter()
+        .filter_map(|document| document.collection.as_ref())
+        .chain(resources.lists.iter().filter_map(|list| list.collection.as_ref()))
+        .fold(0usize, |sum, collection| sum.saturating_add(collection.items.len()));
+    processing.work(
+        work.saturating_add(path_bytes.saturating_mul(count).saturating_mul(4))
+            .saturating_add(collection_items.saturating_mul(count).saturating_mul(count)),
+        Phase::Validation,
+    )?;
+    processing.payload_array::<Finding>(count, Phase::Validation)?;
+    Ok(())
+}
+
+fn normalize_target_findings(
+    resources: &ResourceSet,
+    findings: &mut Vec<Finding>,
+    processing: &NativeOperationBudget,
+) -> Result<(), Finding> {
+    if processing.exhausted() {
+        return Ok(());
+    }
+    let count = findings.len();
+    if count == 0 {
+        return Ok(());
+    }
+    charge_target_finding_normalization(resources, findings, processing)?;
+    for finding in findings.iter_mut() {
+        if finding.phase == Phase::Validation {
+            finding.source = None;
+            if finding.code == FindingCode::UnadmittedField {
+                finding.severity = Severity::Warning;
+            }
+        }
+    }
+    let location = |finding: &Finding| {
+        let document = finding
+            .resource
+            .and_then(|id| resources.documents.iter().find(|doc| doc.id == id));
+        let list = finding.wrapper.and_then(|wrapper| {
+            resources
+                .lists
+                .iter()
+                .find(|list| list.id == wrapper.list && list.source == wrapper.source)
+        });
+        let source = document
+            .map(|doc| doc.source)
+            .or_else(|| finding.wrapper.map(|wrapper| wrapper.source));
+        let slot = source
+            .and_then(|source| {
+                resources
+                    .sources
+                    .iter()
+                    .position(|evidence| evidence.id == source.source)
+            })
+            .unwrap_or(usize::MAX);
+        let collection = document
+            .and_then(|doc| doc.collection.as_ref())
+            .or_else(|| list.and_then(|list| list.collection.as_ref()));
+        (
+            slot,
+            source.map_or(u32::MAX, |source| source.document_index),
+            collection.map(|collection| &collection.items),
+        )
+    };
+    let wrapper = |finding: &Finding| {
+        finding
+            .wrapper
+            .map(|wrapper| (wrapper.source.source.0, wrapper.source.document_index, wrapper.list))
+    };
+    let position = |finding: &Finding| {
+        finding
+            .source
+            .map(|source| (source.byte_offset, source.line, source.column))
+    };
+    findings.sort_by(|left, right| {
+        location(left)
+            .cmp(&location(right))
+            .then_with(|| pointer_order(left.path.as_ref(), right.path.as_ref()))
+            .then_with(|| left.code.as_str().cmp(right.code.as_str()))
+            .then_with(|| (left.phase as u8).cmp(&(right.phase as u8)))
+            .then_with(|| (left.severity as u8).cmp(&(right.severity as u8)))
+            .then_with(|| left.resource.cmp(&right.resource))
+            .then_with(|| wrapper(left).cmp(&wrapper(right)))
+            .then_with(|| position(left).cmp(&position(right)))
+    });
+    findings.dedup();
+    Ok(())
+}
+// Compare the exact escaped pointer without allocating or granting source access.
+fn pointer_order(left: Option<&FieldPath>, right: Option<&FieldPath>) -> std::cmp::Ordering {
+    fn bytes(path: &FieldPath) -> impl Iterator<Item = u8> + '_ {
+        path.0.iter().flat_map(|segment| {
+            std::iter::once(b'/').chain(segment.bytes().flat_map(|byte| {
+                let (first, second) = match byte {
+                    b'~' => (b'~', Some(b'0')),
+                    b'/' => (b'~', Some(b'1')),
+                    _ => (byte, None),
+                };
+                std::iter::once(first).chain(second)
+            }))
+        })
+    }
+    match (left, right) {
+        (Some(left), Some(right)) => bytes(left).cmp(bytes(right)),
+        (None, None) => std::cmp::Ordering::Equal,
+        (None, Some(_)) => std::cmp::Ordering::Less,
+        (Some(_), None) => std::cmp::Ordering::Greater,
+    }
 }
 fn validate_source_fields(
     tree: &TreeNode,
@@ -442,9 +693,8 @@ fn validate_native(
     document: &crate::model::ResourceDocument,
     tree: &TreeNode,
     identity: &crate::model::ResourceIdentity,
-    target: &TargetProfile,
-    intent: NativeValidationIntent,
     context: &crate::registry::EncodeContext<'_>,
+    validation: &ValidationContext<'_>,
     findings: &mut ProcessingReport,
 ) {
     if findings.failed() {
@@ -465,17 +715,58 @@ fn validate_native(
                     sink: findings,
                     resource: document.id,
                 };
-                resource.validate(
-                    &ValidationContext {
-                        intent,
-                        target,
-                        fields: context.fields(Phase::Validation),
-                    },
-                    &mut sink,
-                );
+                resource.validate(validation, &mut sink);
             }
             Err(errors) => findings.extend(errors.into_iter().map(|finding| finding.for_resource(document.id))),
         }
+    }
+}
+
+/// Native predicates are independent of whether source-delta projection is unambiguous.
+/// This private view never authorizes output or recovers a refused source projection.
+fn validate_native_without_projection(
+    document: &crate::model::ResourceDocument,
+    target: &TargetProfile,
+    intent: NativeValidationIntent,
+    context: &crate::registry::EncodeContext<'_>,
+    findings: &mut ProcessingReport,
+) {
+    if findings.failed() {
+        return;
+    }
+    let Some(resource) = &document.resource else {
+        return;
+    };
+    let context = crate::registry::EncodeContext {
+        include_unknown: true,
+        ..context.for_source(*document.evidence.limits())
+    };
+    let result = (|| {
+        let mut tree = crate::registry::encode_in(resource.as_ref(), &context)?;
+        for edit in &document.edits {
+            apply_edit_in(&mut tree, edit, context.budget.processing(), Phase::Validation)?;
+        }
+        let identity = crate::model::identity_in(
+            &tree,
+            document.original_identity.scope,
+            context.budget.processing(),
+            Phase::Validation,
+        )?;
+        validate_source_fields(&tree, &identity.gvk, document.id, target, findings);
+        let unknown_boundary_owner = validate_unknown_field_boundaries(document, &tree, &context, findings);
+        validate_naming(&tree, &identity.gvk, document.id, target, intent, findings);
+        validate_capability_fields(document, &tree, &identity.gvk, target, &context, findings);
+        let validation = ValidationContext {
+            intent,
+            target,
+            unknown_boundary_owner,
+            fields: context.fields(Phase::Validation),
+        };
+        validate_native(document, &tree, &identity, &context, &validation, findings);
+        Ok::<(), Finding>(())
+    })();
+    if let Err(finding) = result {
+        findings.push(finding.for_resource(document.id));
     }
 }
 fn bounded_json(node: &TreeNode, out: &mut String, processing: &NativeOperationBudget) -> Result<(), Finding> {
@@ -663,28 +954,6 @@ mod bounded_json_capacity_tests {
     }
 }
 
-pub(crate) fn field_nodes<'a>(tree: &'a TreeNode, pointer: &str) -> Vec<&'a TreeNode> {
-    let Ok(path) = FieldPath::parse(pointer) else {
-        return Vec::new();
-    };
-    let mut nodes = vec![tree];
-    for segment in &path.0 {
-        let mut next = Vec::new();
-        for node in nodes {
-            if segment == "*" {
-                match &node.value {
-                    TreeValue::Sequence(items) => next.extend(items),
-                    TreeValue::Mapping(entries) => next.extend(entries.iter().map(|(_, v)| v)),
-                    _ => {}
-                }
-            } else if let Some(value) = node.get(segment) {
-                next.push(value);
-            }
-        }
-        nodes = next;
-    }
-    nodes
-}
 /// Generate current native values without files, processes, clusters, or implicit migration.
 /// # Errors
 /// Blocks invalid targets/identities, unavailable APIs/fields, opaque/private output, and lossy edits.
@@ -860,7 +1129,11 @@ fn preserve_access_mode_findings(
     {
         return;
     }
-    for finding in findings.entries_mut() {
+    let fields =
+        crate::registry::FieldDecodeContext::new(*document.evidence.limits(), processing.clone(), Phase::Generation);
+    let original_count = findings.len();
+    for index in 0..original_count {
+        let finding = &mut findings.entries_mut()[index];
         if processing.work(1, Phase::Generation).is_err() {
             return;
         }
@@ -894,7 +1167,19 @@ fn preserve_access_mode_findings(
         }
         match supplied_access_mode_occurrence(document, tree, occurrences, &collection, processing) {
             Ok(true) => finding.severity = Severity::Warning,
-            Ok(false) => {}
+            Ok(false) => {
+                let Ok(path) = crate::resources::common::copy_path(path, &fields) else {
+                    return;
+                };
+                let mut refusal = Finding::error(FindingCode::UnadmittedField, Phase::Generation)
+                    .for_resource(document.id)
+                    .at_path(path);
+                refusal.wrapper = finding.wrapper;
+                findings.push(refusal);
+                if findings.failed() {
+                    return;
+                }
+            }
             Err(_) => return,
         }
     }
@@ -1236,6 +1521,12 @@ fn prepare_wrappers(
         if findings.failed() {
             break;
         }
+        // Target validation has no source positions. A separate output-boundary
+        // refusal retains the offending immutable wrapper node's evidence.
+        validate_wrapper_metadata(list, Phase::Generation, findings);
+        if findings.failed() {
+            break;
+        }
         // Resource projections already own each replacement item. Retain only
         // this wrapper's fields; copying its source items would duplicate all
         // descendants, again at every enclosing List level.
@@ -1505,6 +1796,79 @@ mod wrapper_ownership_tests {
             json_shape: JsonShape::SingleResource,
             ..GenerationOptions::default()
         }
+    }
+    #[test]
+    fn finite_findings_use_nested_wrapper_coordinates_and_full_record_deduplication() -> TestResult {
+        let resources = parse(&serde_json::json!({"apiVersion":"v1","kind":"List","items":[
+            {"apiVersion":"v1","kind":"List","items":[]},
+            {"apiVersion":"v1","kind":"List","items":[]}
+        ]}))?;
+        let first = resources.lists.get(1).ok_or("first nested wrapper")?;
+        let second = resources.lists.get(2).ok_or("second nested wrapper")?;
+        let record = |list: &crate::model::ListDocument, path: &str| -> TestResult<Finding> {
+            let mut finding =
+                Finding::warning(FindingCode::UnadmittedField, Phase::Validation).at_path(FieldPath::parse(path)?);
+            finding.wrapper = Some(WrapperSubject {
+                source: list.source,
+                list: list.id,
+            });
+            Ok(finding)
+        };
+        let mut findings = vec![record(second, "/aaa")?, record(first, "/zzz")?, record(second, "/aaa")?];
+        normalize_target_findings(
+            &resources,
+            &mut findings,
+            &NativeOperationBudget::new(NativeProcessingLimits::default()),
+        )?;
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].wrapper.map(|subject| subject.list), Some(first.id));
+        assert_eq!(findings[1].wrapper.map(|subject| subject.list), Some(second.id));
+
+        // Equal primary keys with distinct authentic decoder positions remain distinct;
+        // identical full records separated by that tie must still deduplicate.
+        let mut start = record(first, "/items")?;
+        start.phase = Phase::Decoding;
+        start.source = first.original.start;
+        let mut kind = start.clone();
+        kind.source = first.original.get("kind").and_then(|node| node.start);
+        assert_ne!(start.source, kind.source);
+        let mut findings = vec![start.clone(), kind.clone(), start];
+        normalize_target_findings(
+            &resources,
+            &mut findings,
+            &NativeOperationBudget::new(NativeProcessingLimits::default()),
+        )?;
+        assert_eq!(findings.len(), 2);
+        assert!(findings.contains(&kind));
+
+        let mut findings = [
+            "/metadata/annotations/~1",
+            "/metadata/annotations/~0",
+            "/metadata/annotations/0",
+            "/metadata/annotations/!",
+        ]
+        .into_iter()
+        .map(|path| record(first, path))
+        .collect::<TestResult<Vec<_>>>()?;
+        normalize_target_findings(
+            &resources,
+            &mut findings,
+            &NativeOperationBudget::new(NativeProcessingLimits::default()),
+        )?;
+        let access = ExplicitSourceAccess::explicitly_allow_raw_source();
+        assert_eq!(
+            findings
+                .iter()
+                .filter_map(|finding| finding.path.as_ref().map(|path| path.reveal(&access)))
+                .collect::<Vec<_>>(),
+            [
+                "/metadata/annotations/!",
+                "/metadata/annotations/0",
+                "/metadata/annotations/~0",
+                "/metadata/annotations/~1"
+            ]
+        );
+        Ok(())
     }
     fn replacement_trees(resources: &ResourceSet) -> BTreeMap<ResourceId, TreeNode> {
         resources
@@ -1905,7 +2269,7 @@ struct WrapperFindingSink<'a> {
     list: &'a crate::model::ListDocument,
     findings: &'a mut ProcessingReport,
 }
-impl crate::registry::FindingSink for WrapperFindingSink<'_> {
+impl FindingSink for WrapperFindingSink<'_> {
     fn push(&mut self, mut finding: Finding) {
         // Emergency findings remain pathless and value-free. Attribution is attached
         // before the report sink preflights ordinary finding retention.
@@ -1914,7 +2278,9 @@ impl crate::registry::FindingSink for WrapperFindingSink<'_> {
                 source: self.list.source,
                 list: self.list.id,
             });
-            if finding.source.is_none() {
+            if finding.phase == Phase::Validation {
+                finding.source = None;
+            } else if finding.source.is_none() {
                 finding.source = finding
                     .path
                     .as_ref()
@@ -1942,11 +2308,13 @@ fn wrapper_finding(
     } else {
         Finding::warning(code, phase)
     };
-    finding.source = list
-        .original
-        .get_path(&path)
-        .and_then(|node| node.start)
-        .or(list.original.start);
+    if phase != Phase::Validation {
+        finding.source = list
+            .original
+            .get_path(&path)
+            .and_then(|node| node.start)
+            .or(list.original.start);
+    }
     finding.path = Some(path);
     finding.for_wrapper(WrapperSubject {
         source: list.source,
@@ -2074,6 +2442,76 @@ fn strip_observation_paths(
         findings.push(error);
     }
 }
+/// The finite relaxed-name and trafficDistribution branches remain unselected.
+/// A target warning never supplies generation authority for these native values.
+fn refuse_unselected_service_values(
+    doc: &crate::model::ResourceDocument,
+    tree: &TreeNode,
+    processing: &NativeOperationBudget,
+    findings: &mut ProcessingReport,
+) {
+    let phase = Phase::Generation;
+    let gvk = &doc.original_identity.gvk;
+    if processing
+        .work(gvk.version.len().saturating_add(gvk.kind.len()), phase)
+        .is_err()
+    {
+        return;
+    }
+    if gvk.group.is_some() || gvk.version != "v1" || gvk.kind != "Service" {
+        return;
+    }
+    let fields = crate::registry::FieldDecodeContext::new(*doc.evidence.limits(), processing.clone(), phase);
+    let original_count = findings.len();
+    for index in 0..original_count {
+        if processing.work(1, phase).is_err() {
+            return;
+        }
+        let finding = &findings[index];
+        if finding.code != FindingCode::UnadmittedField
+            || finding.phase != Phase::Validation
+            || finding.resource != Some(doc.id)
+        {
+            continue;
+        }
+        let Some(path) = &finding.path else {
+            continue;
+        };
+        if processing
+            .work(
+                path.0
+                    .iter()
+                    .map(String::len)
+                    .sum::<usize>()
+                    .saturating_add(path.depth()),
+                phase,
+            )
+            .is_err()
+        {
+            return;
+        }
+        let selected = path.0.len() == 2
+            && ((path.0[0] == "metadata" && matches!(path.0[1].as_str(), "name" | "generateName"))
+                || (path.0[0] == "spec" && path.0[1] == "trafficDistribution"));
+        if !selected {
+            continue;
+        }
+        match observation_node(tree, path, processing) {
+            Ok(Some(_)) => {}
+            Ok(None) => continue,
+            Err(_) => return,
+        }
+        let Ok(path) = crate::resources::common::copy_path(path, &fields) else {
+            return;
+        };
+        let mut refusal = Finding::error(FindingCode::UnadmittedField, phase)
+            .for_resource(doc.id)
+            .at_path(path);
+        refusal.wrapper = finding.wrapper;
+        findings.push(refusal);
+    }
+}
+
 fn apply_generation_admission(
     doc: &crate::model::ResourceDocument,
     tree: &TreeNode,
@@ -2081,6 +2519,36 @@ fn apply_generation_admission(
     processing: &NativeOperationBudget,
     findings: &mut ProcessingReport,
 ) {
+    refuse_unselected_service_values(doc, tree, processing, findings);
+    if findings.failed() {
+        return;
+    }
+    // Target warnings do not authorize emitting retained, unadmitted native values.
+    if options.opaque_fields == OpaqueFieldPolicy::Block {
+        let mut unadmitted = false;
+        for finding in findings.entries_mut() {
+            if processing.work(1, Phase::Generation).is_err() {
+                return;
+            }
+            if finding.code == FindingCode::UnadmittedField
+                && finding.resource == Some(doc.id)
+                && match &finding.path {
+                    Some(path) => match observation_node(tree, path, processing) {
+                        Ok(node) => node.is_some(),
+                        Err(_) => return,
+                    },
+                    None => true,
+                }
+            {
+                unadmitted = true;
+                break;
+            }
+        }
+        if unadmitted {
+            findings.push(Finding::error(FindingCode::OpaqueOutputDenied, Phase::Generation).for_resource(doc.id));
+            return;
+        }
+    }
     let paths = match generation_typed_paths(
         doc.capability.as_ref().map_or(&[], |capability| capability.fields),
         processing,
@@ -2136,10 +2604,69 @@ fn preserve_unknown_field_findings(
     processing: &NativeOperationBudget,
     findings: &mut ProcessingReport,
 ) -> Result<(), Finding> {
-    let phase = Phase::Generation;
+    let mut source_proofs = PreservationSourceProofs::new(document, tree, processing);
+    unknown_field_boundaries(
+        document,
+        tree,
+        paths,
+        include_protected_schema_payload,
+        processing,
+        Phase::Generation,
+        &mut |path| preservation_field_warning(&mut source_proofs, path, findings),
+    )
+}
+fn validate_unknown_field_boundaries(
+    document: &crate::model::ResourceDocument,
+    tree: &TreeNode,
+    context: &crate::registry::EncodeContext<'_>,
+    findings: &mut ProcessingReport,
+) -> UnknownBoundaryOwner {
+    let Some(capability) = &document.capability else {
+        return UnknownBoundaryOwner::NativeValidation;
+    };
+    let processing = context.budget.processing();
+    let fields = context.fields(Phase::Validation);
+    let result = native_typed_paths(capability.fields, processing, Phase::Validation).and_then(|paths| {
+        unknown_field_boundaries(
+            document,
+            tree,
+            &paths,
+            true,
+            processing,
+            Phase::Validation,
+            &mut |path| {
+                let mut finding = Finding::warning(FindingCode::UnadmittedField, Phase::Validation)
+                    .for_resource(document.id)
+                    .at_path(crate::resources::common::copy_path(path, &fields)?);
+                finding.wrapper = document
+                    .collection
+                    .as_ref()
+                    .and_then(|collection| collection.items.last())
+                    .map(|(list, _)| WrapperSubject {
+                        source: document.source,
+                        list: *list,
+                    });
+                findings.push(finding);
+                processing.work(0, Phase::Validation)
+            },
+        )
+    });
+    if let Err(finding) = result {
+        findings.push(finding.for_resource(document.id));
+    }
+    UnknownBoundaryOwner::TargetTraversal
+}
+fn unknown_field_boundaries(
+    document: &crate::model::ResourceDocument,
+    tree: &TreeNode,
+    paths: &[GenerationPattern],
+    include_protected_schema_payload: bool,
+    processing: &NativeOperationBudget,
+    phase: Phase,
+    emit: &mut dyn FnMut(&FieldPath) -> Result<(), Finding>,
+) -> Result<(), Finding> {
     processing.payload_array::<(&TreeNode, FieldPath)>(1, phase)?;
     let mut pending = vec![(tree, FieldPath::default())];
-    let mut source_proofs = PreservationSourceProofs::new(document, tree, processing);
     while let Some((node, path)) = pending.pop() {
         processing.work(1, phase)?;
         if path.0.len() == 1 && matches!(path.0[0].as_str(), "apiVersion" | "kind") {
@@ -2166,13 +2693,13 @@ fn preserve_unknown_field_findings(
                 processing.work(1, phase)?;
                 if candidate.merge == MergeStrategy::AtomicList
                     && candidate.depth.checked_add(1) == Some(path.depth())
-                    && generation_list_index(&path, processing)?
-                    && generation_pattern_prefix(candidate, &path, candidate.depth, processing)?
+                    && native_list_index(&path, processing, phase)?
+                    && native_pattern_prefix(candidate, &path, candidate.depth, processing, phase)?
                 {
                     admitted = true;
                 }
                 if candidate.depth >= path.depth()
-                    && generation_pattern_prefix(candidate, &path, path.depth(), processing)?
+                    && native_pattern_prefix(candidate, &path, path.depth(), processing, phase)?
                 {
                     admitted |= candidate.depth == path.depth();
                     descendants |= candidate.depth > path.depth();
@@ -2188,19 +2715,27 @@ fn preserve_unknown_field_findings(
             _ => true,
         };
         if !admitted && (empty || !descendants) {
-            preservation_field_warning(&mut source_proofs, &path, findings)?;
+            emit(&path)?;
             continue;
         }
         match &node.value {
             TreeValue::Mapping(entries) => {
                 for (key, child) in entries.iter().rev() {
-                    preservation_push_child(&mut pending, child, key, &path, document, processing)?;
+                    preservation_push_child(&mut pending, child, key, &path, document, processing, phase)?;
                 }
             }
             TreeValue::Sequence(items) => {
                 for (index, child) in items.iter().enumerate().rev() {
                     processing.payload(20, phase)?;
-                    preservation_push_child(&mut pending, child, &index.to_string(), &path, document, processing)?;
+                    preservation_push_child(
+                        &mut pending,
+                        child,
+                        &index.to_string(),
+                        &path,
+                        document,
+                        processing,
+                        phase,
+                    )?;
                 }
             }
             _ => {}
@@ -2215,8 +2750,8 @@ fn preservation_push_child<'a>(
     path: &FieldPath,
     document: &crate::model::ResourceDocument,
     processing: &NativeOperationBudget,
+    phase: Phase,
 ) -> Result<(), Finding> {
-    let phase = Phase::Generation;
     let depth = path.depth().checked_add(1).ok_or_else(|| processing.fail(phase))?;
     if depth > document.evidence.limits().max_depth {
         return Err(processing.fail(phase));
@@ -2239,7 +2774,10 @@ fn preservation_field_warning(
     let phase = Phase::Generation;
     for existing in findings.iter() {
         processing.work(1, phase)?;
-        if existing.code == FindingCode::UnadmittedField && existing.resource == Some(document.id) {
+        if existing.code == FindingCode::UnadmittedField
+            && existing.phase == phase
+            && existing.resource == Some(document.id)
+        {
             if let Some(previous) = &existing.path {
                 processing.work(previous.depth().saturating_add(path.depth()), phase)?;
                 processing.work(previous.0.iter().chain(&path.0).map(String::len).sum(), phase)?;
@@ -2396,7 +2934,29 @@ fn generation_typed_paths(
     fields: &[FieldCapability],
     processing: &NativeOperationBudget,
 ) -> Result<Vec<GenerationPattern>, Finding> {
-    let phase = Phase::Generation;
+    native_typed_paths(fields, processing, Phase::Generation)
+}
+fn generation_static_admission(
+    paths: &[GenerationPattern],
+    path: &FieldPath,
+    processing: &NativeOperationBudget,
+) -> Result<bool, Finding> {
+    native_static_admission(paths, path, processing, Phase::Generation)
+}
+#[cfg(test)]
+fn generation_pattern_prefix(
+    candidate: &GenerationPattern,
+    path: &FieldPath,
+    depth: usize,
+    processing: &NativeOperationBudget,
+) -> Result<bool, Finding> {
+    native_pattern_prefix(candidate, path, depth, processing, Phase::Generation)
+}
+fn native_typed_paths(
+    fields: &[FieldCapability],
+    processing: &NativeOperationBudget,
+    phase: Phase,
+) -> Result<Vec<GenerationPattern>, Finding> {
     processing.payload_array::<GenerationPattern>(fields.len(), phase)?;
     let mut paths = Vec::new();
     paths
@@ -2438,43 +2998,43 @@ fn generation_typed_paths(
     Ok(paths)
 }
 
-fn generation_static_admission(
+fn native_static_admission(
     paths: &[GenerationPattern],
     path: &FieldPath,
     processing: &NativeOperationBudget,
+    phase: Phase,
 ) -> Result<bool, Finding> {
-    let phase = Phase::Generation;
     for candidate in paths {
         processing.work(1, phase)?;
         let exact = candidate.depth == path.depth();
         let list_item = candidate.merge == MergeStrategy::AtomicList
             && candidate.depth.checked_add(1) == Some(path.depth())
-            && generation_list_index(path, processing)?;
+            && native_list_index(path, processing, phase)?;
         if !exact && !list_item {
             continue;
         }
-        if generation_pattern_prefix(candidate, path, candidate.depth, processing)? {
+        if native_pattern_prefix(candidate, path, candidate.depth, processing, phase)? {
             return Ok(true);
         }
     }
     Ok(false)
 }
 
-fn generation_list_index(path: &FieldPath, processing: &NativeOperationBudget) -> Result<bool, Finding> {
+fn native_list_index(path: &FieldPath, processing: &NativeOperationBudget, phase: Phase) -> Result<bool, Finding> {
     let Some(index) = path.0.last() else {
         return Ok(false);
     };
-    processing.work(index.len(), Phase::Generation)?;
+    processing.work(index.len(), phase)?;
     Ok(!index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
-fn generation_pattern_prefix(
+fn native_pattern_prefix(
     candidate: &GenerationPattern,
     path: &FieldPath,
     depth: usize,
     processing: &NativeOperationBudget,
+    phase: Phase,
 ) -> Result<bool, Finding> {
-    let phase = Phase::Generation;
     processing.work(0, phase)?;
     if depth > candidate.depth || depth > path.depth() {
         return Ok(false);
@@ -2485,12 +3045,12 @@ fn generation_pattern_prefix(
     let mut offset = 1;
     for actual in path.0.iter().take(depth) {
         processing.work(1, phase)?;
-        let mut raw = generation_pattern_byte(pointer, offset, processing)?;
+        let mut raw = native_pattern_byte(pointer, offset, processing, phase)?;
         let mut peeked = None;
         if raw == Some(b'*') {
             // Look ahead once to distinguish a wildcard from a literal such
             // as "*suffix". A non-wildcard reuses this charged byte below.
-            let next = generation_pattern_byte(pointer, offset + 1, processing)?;
+            let next = native_pattern_byte(pointer, offset + 1, processing, phase)?;
             if matches!(next, None | Some(b'/')) {
                 offset += 1 + usize::from(next.is_some());
                 continue;
@@ -2502,7 +3062,7 @@ fn generation_pattern_prefix(
         while let Some(byte) = raw.filter(|byte| *byte != b'/') {
             let byte = if byte == b'~' {
                 offset += 1;
-                match generation_pattern_byte(pointer, offset, processing)? {
+                match native_pattern_byte(pointer, offset, processing, phase)? {
                     Some(b'0') => b'~',
                     Some(b'1') => b'/',
                     _ => return Ok(false),
@@ -2510,7 +3070,7 @@ fn generation_pattern_prefix(
             } else {
                 byte
             };
-            if generation_pattern_byte(actual, actual_offset, processing)? != Some(byte) {
+            if native_pattern_byte(actual, actual_offset, processing, phase)? != Some(byte) {
                 return Ok(false);
             }
             actual_offset += 1;
@@ -2518,10 +3078,10 @@ fn generation_pattern_prefix(
             raw = if let Some(next) = peeked.take() {
                 next
             } else {
-                generation_pattern_byte(pointer, offset, processing)?
+                native_pattern_byte(pointer, offset, processing, phase)?
             };
         }
-        if generation_pattern_byte(actual, actual_offset, processing)?.is_some() {
+        if native_pattern_byte(actual, actual_offset, processing, phase)?.is_some() {
             return Ok(false);
         }
         offset += usize::from(raw.is_some());
@@ -2529,14 +3089,15 @@ fn generation_pattern_prefix(
     Ok(true)
 }
 
-fn generation_pattern_byte(
+fn native_pattern_byte(
     bytes: &[u8],
     offset: usize,
     processing: &NativeOperationBudget,
+    phase: Phase,
 ) -> Result<Option<u8>, Finding> {
     // EOF/boundary checks cost one unit too; a failed reservation never reads
     // the byte, and exhaustion remains shared and terminal.
-    processing.work(1, Phase::Generation)?;
+    processing.work(1, phase)?;
     Ok(bytes.get(offset).copied())
 }
 
@@ -4268,41 +4829,33 @@ fn apply_observation_output(
             role: crate::source::ObservationRole::ServerOwned,
         }));
         strip_observation_paths(tree, Some(doc.id), &observations, findings);
-    } else if options.opaque_fields == OpaqueFieldPolicy::PreserveWithFinding
-        && options.protected_output == ProtectedOutput::Include
-        && doc.evidence.origin != crate::source::EvidenceOrigin::NativeAuthored
-        && !topology.is_empty()
-    {
-        for path in &topology {
+    } else {
+        for path in topology {
             processing.work(path.0.len(), Phase::Generation)?;
-            let Some((original, effective)) =
-                observation_node(&doc.original, path, processing)?.zip(observation_node(tree, path, processing)?)
-            else {
-                return Ok(());
-            };
-            if !same_observation_payload(original, effective, processing)? {
-                return Ok(());
-            }
-        }
-        for finding in findings.entries_mut() {
-            processing.work(1, Phase::Generation)?;
-            if finding.resource == Some(doc.id) && finding.code == FindingCode::UnadmittedField {
-                if let Some(path) = &finding.path {
-                    processing.work(
-                        topology.iter().fold(1_usize, |total, observation| {
-                            total
-                                .saturating_add(observation.0.iter().map(String::len).sum::<usize>())
-                                .saturating_add(path.0.iter().map(String::len).sum::<usize>())
-                                .saturating_add(path.0.len())
-                        }),
-                        Phase::Generation,
-                    )?;
-                    if path.0 == ["endpoints", "*", "deprecatedTopology"]
-                        || topology.iter().any(|observation| path.0.starts_with(&observation.0))
-                    {
-                        finding.severity = Severity::Warning;
-                    }
+            let permitted = options.opaque_fields == OpaqueFieldPolicy::PreserveWithFinding
+                && options.protected_output == ProtectedOutput::Include
+                && doc.evidence.origin != crate::source::EvidenceOrigin::NativeAuthored;
+            let unchanged = if permitted {
+                match observation_node(&doc.original, &path, processing)?
+                    .zip(observation_node(tree, &path, processing)?)
+                {
+                    Some((original, effective)) => same_observation_payload(original, effective, processing)?,
+                    None => false,
                 }
+            } else {
+                false
+            };
+            if !unchanged {
+                let mut refusal = Finding::error(FindingCode::UnadmittedField, Phase::Generation)
+                    .for_resource(doc.id)
+                    .at_path(path);
+                refusal.wrapper = doc.collection.as_ref().and_then(|collection| {
+                    collection.items.last().map(|(list, _)| WrapperSubject {
+                        source: doc.source,
+                        list: *list,
+                    })
+                });
+                return Err(refusal);
             }
         }
     }

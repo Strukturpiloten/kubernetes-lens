@@ -334,3 +334,21 @@ unverified naming. No-profile graphs retain supplied equality semantics. Generat
 have no concrete collision key. Broader names and owner names require explicit protected output.
 The additive `FindingCode::NativeNamingUnverified` variant preserves the existing Finding shape;
 exhaustive code matches must handle it. See [ADR 0013](decisions/0013-native-naming-and-source-identity.md).
+
+## Finite target findings and transport
+
+[ADR 0018](decisions/0018-finite-native-target-contract.md) and the
+[finite machine contract](../schemas/capabilities/kubernetes-finite-native-contract.json) define
+complete selected target records and primitive boundaries. Validation findings use actual
+ResourceIds, exact concrete paths and null original positions; source coordinates remain in
+immutable ResourceSet evidence. Decoder positions and existing List subjects remain separate.
+Duplicate identity groups report every resource once at /metadata. Retained unadmitted boundaries
+are target warnings, including empty objects. Separate preservation Generation warnings keep their
+actual source proof, qualified List pointers and wrapper subjects. An unsupported authored name,
+unselected Service name/prefix or traffic distribution, or failed access-mode/topology proof still
+refuses generation at the actual field; target warnings never grant that authority. Invalid List
+metadata also retains a separate Generation refusal with genuine immutable node evidence. External env ambiguity, authority and explicit supplemental
+runtime-proof refusals are not invented native codes. Source/artifact access tokens are distinct
+in-process opt-ins; an external host must independently bind opaque capability scope/lifetime,
+review identity, decoder tree and the actual resource/source cohort. No external bridge is delivered
+by this native contract.
