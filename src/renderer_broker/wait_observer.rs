@@ -53,7 +53,7 @@ pub(super) fn sha_argument(raw: &str) -> Result<[u8; 32]> {
         return Err("observer-sha-argument");
     }
     let mut out = [0; 32];
-    for (i, pair) in raw.as_bytes().chunks_exact(2).enumerate() {
+    for (i, pair) in raw.as_bytes().as_chunks::<2>().0.iter().enumerate() {
         let value = std::str::from_utf8(pair).map_err(|_| "observer-sha-argument")?;
         out[i] = u8::from_str_radix(value, 16).map_err(|_| "observer-sha-argument")?;
     }
@@ -222,8 +222,8 @@ impl Observation {
             archive_child("trace.bin", &origin.trace, 0)?;
             archive_child("ack.bin", &origin.ack, 0)?;
         }
-        if let Some(p) = &self.proof {
-            if self.origin.is_none()
+        if let Some(p) = &self.proof
+            && (self.origin.is_none()
                 || [p.origin_sha256, p.trace_sha256, p.ack_sha256].contains(&[0; 32])
                 || !p.natural_eof
                 || !p.tracer_dead
@@ -234,10 +234,9 @@ impl Observation {
                 || p.ack_bytes > ACK_LIMIT
                 || p.ack_complete_ns == 0
                 || p.consuming_wait_complete_ns == 0
-                || p.terminal_complete_ns == 0
-            {
-                return Err("observer-proof-incomplete");
-            }
+                || p.terminal_complete_ns == 0)
+        {
+            return Err("observer-proof-incomplete");
         }
         Ok(())
     }
@@ -1515,8 +1514,8 @@ pub(super) fn authenticate_archive_metadata(
 /// Shared admission and cold-recovery scalar checks; never reads evidence bodies.
 pub(super) fn validate_record_binding(record: &super::journal::Record) -> Result<()> {
     let observation = record.observer.as_ref().ok_or("observer-record-selection")?;
-    if let Some(origin) = &observation.origin {
-        if origin.nonce != record.ownership.nonce
+    if let Some(origin) = &observation.origin
+        && (origin.nonce != record.ownership.nonce
             || origin.boot != record.boot
             || origin.execution_ns != record.execution_ns
             || origin.total_ns != record.total_end_ns()?
@@ -1528,13 +1527,12 @@ pub(super) fn validate_record_binding(record: &super::journal::Record) -> Result
             || origin.controller.pid != record.controller_pid
             || origin.controller.start != record.controller_start
             || origin.readiness_complete_ns == 0
-            || origin.readiness_complete_ns > record.execution_ns
-        {
-            return Err("observer-archive-origin-binding");
-        }
+            || origin.readiness_complete_ns > record.execution_ns)
+    {
+        return Err("observer-archive-origin-binding");
     }
-    if let Some(proof) = &observation.proof {
-        if proof.retired_ns == 0
+    if let Some(proof) = &observation.proof
+        && (proof.retired_ns == 0
             || proof.retired_ns > record.total_end_ns()?
             || [
                 proof.ack_complete_ns,
@@ -1542,23 +1540,21 @@ pub(super) fn validate_record_binding(record: &super::journal::Record) -> Result
                 proof.terminal_complete_ns,
             ]
             .iter()
-            .any(|ns| *ns == 0 || *ns > proof.retired_ns)
-        {
-            return Err("observer-archive-clock-binding");
-        }
+            .any(|ns| *ns == 0 || *ns > proof.retired_ns))
+    {
+        return Err("observer-archive-clock-binding");
     }
-    if let (Some(origin), Some(proof)) = (&observation.origin, &observation.proof) {
-        if proof.consuming_wait_complete_ns > proof.terminal_complete_ns
+    if let (Some(origin), Some(proof)) = (&observation.origin, &observation.proof)
+        && (proof.consuming_wait_complete_ns > proof.terminal_complete_ns
             || [
                 proof.ack_complete_ns,
                 proof.consuming_wait_complete_ns,
                 proof.terminal_complete_ns,
             ]
             .iter()
-            .any(|ns| *ns < origin.readiness_complete_ns)
-        {
-            return Err("observer-record-clock-order");
-        }
+            .any(|ns| *ns < origin.readiness_complete_ns))
+    {
+        return Err("observer-record-clock-order");
     }
     Ok(())
 }

@@ -2441,26 +2441,26 @@ fn queue_unknown_children(
     }
     if let Presence::Value(dependencies) = &fields.dependencies {
         for (name, dependency) in dependencies {
-            if let JSONSchemaPropsOrStringArrayCrdV1::Schema(child) = dependency {
-                if !enqueue_unknown_child(pending, child, current_path, "dependencies", Some(name), visitor) {
-                    return false;
-                }
+            if let JSONSchemaPropsOrStringArrayCrdV1::Schema(child) = dependency
+                && !enqueue_unknown_child(pending, child, current_path, "dependencies", Some(name), visitor)
+            {
+                return false;
             }
         }
     }
-    if let Presence::Value(child) = &fields.not {
-        if !enqueue_unknown_child(pending, child, current_path, "not", None, visitor) {
-            return false;
-        }
+    if let Presence::Value(child) = &fields.not
+        && !enqueue_unknown_child(pending, child, current_path, "not", None, visitor)
+    {
+        return false;
     }
     for (key, value) in [
         ("additionalItems", &fields.additional_items),
         ("additionalProperties", &fields.additional_properties),
     ] {
-        if let Presence::Value(JSONSchemaPropsOrBoolCrdV1::Schema(child)) = value {
-            if !enqueue_unknown_child(pending, child, current_path, key, None, visitor) {
-                return false;
-            }
+        if let Presence::Value(JSONSchemaPropsOrBoolCrdV1::Schema(child)) = value
+            && !enqueue_unknown_child(pending, child, current_path, key, None, visitor)
+        {
+            return false;
         }
     }
     if let Presence::Value(items) = &fields.items {

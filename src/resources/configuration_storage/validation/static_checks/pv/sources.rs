@@ -112,10 +112,10 @@ fn namespace(
     arbitrary: bool,
     check: &mut Check<'_, '_>,
 ) -> Result<(), Finding> {
-    if let Some(value) = text(node, field, check)? {
-        if value.is_empty() || !arbitrary && !label(value) {
-            check.invalid(&["spec", branch, field])?;
-        }
+    if let Some(value) = text(node, field, check)?
+        && (value.is_empty() || !arbitrary && !label(value))
+    {
+        check.invalid(&["spec", branch, field])?;
     }
     Ok(())
 }
@@ -144,21 +144,14 @@ fn path_source(
             check.invalid(&["spec", "persistentVolumeReclaimPolicy"])?;
         }
     }
-    if branch == "hostPath" {
-        if let Some(value) = text(node, "type", check)? {
-            if !matches!(
-                value,
-                "" | "DirectoryOrCreate"
-                    | "Directory"
-                    | "FileOrCreate"
-                    | "File"
-                    | "Socket"
-                    | "CharDevice"
-                    | "BlockDevice"
-            ) {
-                check.invalid(&["spec", branch, "type"])?;
-            }
-        }
+    if branch == "hostPath"
+        && let Some(value) = text(node, "type", check)?
+        && !matches!(
+            value,
+            "" | "DirectoryOrCreate" | "Directory" | "FileOrCreate" | "File" | "Socket" | "CharDevice" | "BlockDevice"
+        )
+    {
+        check.invalid(&["spec", branch, "type"])?;
     }
     Ok(())
 }
@@ -292,10 +285,10 @@ fn csi(node: &TreeNode, check: &mut Check<'_, '_>) -> Result<(), Finding> {
 fn iscsi(node: &TreeNode, volume: &PersistentVolume, check: &mut Check<'_, '_>) -> Result<(), Finding> {
     bounded_integer(node, "iscsi", "lun", check)?;
     for field in ["iqn", "initiatorName"] {
-        if let Some(value) = text(node, field, check)? {
-            if !identifiers::iscsi(value, check)? {
-                check.invalid(&["spec", "iscsi", field])?;
-            }
+        if let Some(value) = text(node, field, check)?
+            && !identifiers::iscsi(value, check)?
+        {
+            check.invalid(&["spec", "iscsi", field])?;
         }
     }
     if get(node, "initiatorName", check)?.is_some() {
@@ -323,10 +316,10 @@ fn iscsi(node: &TreeNode, volume: &PersistentVolume, check: &mut Check<'_, '_>) 
     secret(node, "iscsi", "secretRef", true, check)
 }
 fn quobyte(node: &TreeNode, check: &mut Check<'_, '_>) -> Result<(), Finding> {
-    if let Some(tenant) = text(node, "tenant", check)? {
-        if tenant.len() > 64 {
-            check.invalid(&["spec", "quobyte", "tenant"])?;
-        }
+    if let Some(tenant) = text(node, "tenant", check)?
+        && tenant.len() > 64
+    {
+        check.invalid(&["spec", "quobyte", "tenant"])?;
     }
     if let Some(registry) = text(node, "registry", check)? {
         for address in registry.split(',') {

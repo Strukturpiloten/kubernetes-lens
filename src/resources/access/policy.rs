@@ -347,11 +347,11 @@ pub(super) fn quota(tree: &TreeNode, target: &TargetProfile, out: &mut dyn super
         if out.exhausted() {
             return;
         }
-        if scope_requirement(value, target, &leaf, out) {
-            if let Some(name) = text(value, "scopeName") {
-                selector |= conflict_bit(name);
-                scope_resources(spec, name, &leaf, out);
-            }
+        if scope_requirement(value, target, &leaf, out)
+            && let Some(name) = text(value, "scopeName")
+        {
+            selector |= conflict_bit(name);
+            scope_resources(spec, name, &leaf, out);
         }
     }
     if conflicting(selector) {
@@ -689,16 +689,16 @@ pub(super) fn security(tree: &TreeNode, out: &mut dyn super::validation::AccessS
             out,
         );
     }
-    if present(spec, "runAsGroup") {
-        if let Some(value) = spec.get("runAsGroup") {
-            let leaf = path.child("runAsGroup");
-            strategy(value, &["MustRunAs", "MayRunAs", "RunAsAny"], &leaf, out);
-            let ranges_empty = sequence(value, "ranges").is_empty();
-            if (text(value, "rule") == Some("RunAsAny") && !ranges_empty)
-                || (matches!(text(value, "rule"), Some("MustRunAs" | "MayRunAs")) && ranges_empty)
-            {
-                invalid(&leaf.child("ranges"), out);
-            }
+    if present(spec, "runAsGroup")
+        && let Some(value) = spec.get("runAsGroup")
+    {
+        let leaf = path.child("runAsGroup");
+        strategy(value, &["MustRunAs", "MayRunAs", "RunAsAny"], &leaf, out);
+        let ranges_empty = sequence(value, "ranges").is_empty();
+        if (text(value, "rule") == Some("RunAsAny") && !ranges_empty)
+            || (matches!(text(value, "rule"), Some("MustRunAs" | "MayRunAs")) && ranges_empty)
+        {
+            invalid(&leaf.child("ranges"), out);
         }
     }
     for key in ["fsGroup", "supplementalGroups"] {

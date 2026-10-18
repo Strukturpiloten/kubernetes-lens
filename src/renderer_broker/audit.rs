@@ -22,10 +22,10 @@ pub fn status(pid: u32) -> Result<BTreeMap<String, String>> {
 fn parse_status(raw: &[u8]) -> Result<BTreeMap<String, String>> {
     let mut r = BTreeMap::new();
     for l in std::str::from_utf8(raw).map_err(|_| "status-encoding")?.lines() {
-        if let Some((k, v)) = l.split_once(':') {
-            if r.insert(k.into(), v.trim().into()).is_some() {
-                return Err("status-duplicate");
-            }
+        if let Some((k, v)) = l.split_once(':')
+            && r.insert(k.into(), v.trim().into()).is_some()
+        {
+            return Err("status-duplicate");
         }
     }
     Ok(r)
@@ -359,13 +359,13 @@ fn proc_visibility(pid: u32) -> Result<()> {
     let mut n = 0;
     for e in fs::read_dir(&root).map_err(|_| "sandbox-proc")? {
         let e = e.map_err(|_| "sandbox-proc-entry")?;
-        if let Some(s) = e.file_name().to_str() {
-            if s.bytes().all(|b| b.is_ascii_digit()) {
-                if s != "1" {
-                    return Err("outer-process-visible");
-                }
-                n += 1;
+        if let Some(s) = e.file_name().to_str()
+            && s.bytes().all(|b| b.is_ascii_digit())
+        {
+            if s != "1" {
+                return Err("outer-process-visible");
             }
+            n += 1;
         }
     }
     if n != 1 {

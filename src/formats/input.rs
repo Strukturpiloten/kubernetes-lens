@@ -360,11 +360,10 @@ pub(crate) fn lifecycle(tree: &TreeNode, findings: &mut Vec<FormatCode>) {
         .get("kind")
         .and_then(TreeNode::as_str)
         .is_some_and(|k| k.ends_with("List"))
+        && let Some(items) = tree.get("items").and_then(TreeNode::as_sequence)
     {
-        if let Some(items) = tree.get("items").and_then(TreeNode::as_sequence) {
-            for item in items {
-                lifecycle(item, findings);
-            }
+        for item in items {
+            lifecycle(item, findings);
         }
     }
 }

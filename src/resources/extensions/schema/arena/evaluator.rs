@@ -628,10 +628,10 @@ fn eval_scalar(
     let mut issue = |kind, path: &FieldPath| emit_issue(report, processing, kind, path);
     let is_null = matches!(value, JsonNode::Null);
     let nullable = matches!(&fields.nullable, Presence::Value(true));
-    if let Presence::Value(expected) = &fields.type_name {
-        if !(matches_type(expected, value) || is_null && nullable) {
-            issue(SchemaIssueKind::TypeMismatch, &step.value_path)?;
-        }
+    if let Presence::Value(expected) = &fields.type_name
+        && !(matches_type(expected, value) || is_null && nullable)
+    {
+        issue(SchemaIssueKind::TypeMismatch, &step.value_path)?;
     }
     if let Presence::Value(values) = &fields.enum_values {
         let mut matched = false;
@@ -740,19 +740,19 @@ fn eval_node(
             }
         }
     }
-    if let JsonNode::Array(items) = value {
-        if let Presence::Value(super::JSONSchemaPropsOrArrayCrdV1::Schema(schema)) = &fields.items {
-            for (index, child) in items.iter().enumerate() {
-                enqueue_eval(
-                    pending,
-                    schema,
-                    *child,
-                    &step.schema_path.child("items"),
-                    &step.value_path.child(index.to_string()),
-                    step.depth,
-                    context,
-                )?;
-            }
+    if let JsonNode::Array(items) = value
+        && let Presence::Value(super::JSONSchemaPropsOrArrayCrdV1::Schema(schema)) = &fields.items
+    {
+        for (index, child) in items.iter().enumerate() {
+            enqueue_eval(
+                pending,
+                schema,
+                *child,
+                &step.schema_path.child("items"),
+                &step.value_path.child(index.to_string()),
+                step.depth,
+                context,
+            )?;
         }
     }
     Ok(())

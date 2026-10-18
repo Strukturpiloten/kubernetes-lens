@@ -16,7 +16,9 @@ name=${0##*/}
 line="$name $*"
 printf '%s\n' "$line" >> "$GATE_TEST_LOG"
 case "$line" in
-  python3\ -c*) printf '1.85.0\n' ;;
+  python3\ -c*)
+    if [ "${GATE_TEST_REAL_MSRV:-}" = 1 ]; then exec /usr/bin/python3 "$@"; fi
+    printf '1.98.1\n' ;;
   realpath*) /usr/bin/realpath "$@" ;;
   git\ ls-files*) printf 'README.md\000' ;;
   bash\ scripts/run-checks.sh*)
@@ -94,10 +96,27 @@ class GateTests(unittest.TestCase):
             self.assertEqual(self.commands(), [])
 
     def test_missing_msrv_or_renovate_cannot_become_a_success(self) -> None:
-        for failure in ("rustup run 1.85.0", "node -e"):
+        for failure in ("rustup run 1.98.1", "node -e"):
             result = self.run_script("check-all.sh", "--check", GATE_TEST_FAILURE=failure)
             self.assertEqual(result.returncode, 17)
             self.assertFalse(any(line.startswith("bash ") for line in self.commands()))
+
+    def test_local_preflight_and_msrv_phase_follow_manifest(self) -> None:
+        for minimum in ("1.98.1", "1.99.0"):
+            with self.subTest(minimum=minimum):
+                (self.root / "Cargo.toml").write_text(
+                    f'[package]\nrust-version = "{minimum}"\n'
+                )
+                result = self.run_script("check-all.sh", "--check", GATE_TEST_REAL_MSRV="1")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"rustup run {minimum} rustc --version", self.commands())
+                result = self.run_script("run-checks.sh", "msrv", GATE_TEST_REAL_MSRV="1")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.commands()[1:], [
+                    f"rustup run {minimum} rustc --version",
+                    f"cargo +{minimum} ci-check",
+                    f"cargo +{minimum} ci-policy",
+                ])
 
     def test_format_lint_executes_no_tests_and_caps_clippy(self) -> None:
         result = self.run_script("format-lint.sh", "--check")
@@ -115,7 +134,7 @@ class GateTests(unittest.TestCase):
 
     def prepare_real_policy_with_synthetic_fixtures(self) -> Path:
         # Only the pure policy runner is real; Cargo/build/runtime/tool commands remain fake.
-        paths = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "release-plz.toml", "CHANGELOG.md",
+        paths = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "release-plz.toml", "CHANGELOG.md",
                  ".codex/config.toml", "scripts/validation-policy.json", ".github/workflows/ci.yml",
                  ".github/workflows/release.yml", "scripts/renovate-tool.json", "LICENSE",
                  "scripts/test-repository-policy.py"]
@@ -183,7 +202,7 @@ class GateTests(unittest.TestCase):
 
     def test_shared_phase_failure_propagates(self) -> None:
         for phase, failure, later in (("rust", "cargo ci-check", "cargo ci-clippy"),
-                                      ("msrv", "rustup run", "cargo +1.85.0 ci-check"),
+                                      ("msrv", "rustup run", "cargo +1.98.1 ci-check"),
                                       ("documentation", "actionlint", "node scripts/test-renovate.mjs"),
                                       ("documentation", "python3 scripts/test-file-config.py", "python3 scripts/test-renovate-tool.py"),
                                       ("documentation", "python3 scripts/compatibility-ledger.py", "python3 scripts/test-compatibility-ledger.py"),

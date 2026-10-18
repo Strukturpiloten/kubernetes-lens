@@ -81,7 +81,7 @@ impl NativeBytes {
             count = count.checked_add(1).ok_or_else(|| budget.fail(ctx.phase))?;
             padding = if byte == b'=' { padding + 1 } else { 0 };
         }
-        if count % 4 != 0 || padding > 2 {
+        if !count.is_multiple_of(4) || padding > 2 {
             return Err(invalid(ctx.phase, path));
         }
         let capacity = (count / 4).checked_mul(3).ok_or_else(|| budget.fail(ctx.phase))?;

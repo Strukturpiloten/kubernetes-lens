@@ -1039,10 +1039,12 @@ fn resolve_one(
         return (None, CustomDocumentCheck::InvalidBinding);
     }
     let selected = if let Some(found) = version_matches.first() {
-        if let Some(legacy) = &crd.legacy_beta {
-            if legacy.name == version && legacy.schema.is_some() && found.schema.is_some() {
-                return (None, CustomDocumentCheck::InvalidBinding);
-            }
+        if let Some(legacy) = &crd.legacy_beta
+            && legacy.name == version
+            && legacy.schema.is_some()
+            && found.schema.is_some()
+        {
+            return (None, CustomDocumentCheck::InvalidBinding);
         }
         *found
     } else if crd.versions.is_empty() {

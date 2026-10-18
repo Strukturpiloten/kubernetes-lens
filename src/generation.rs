@@ -365,19 +365,19 @@ fn validate_capability_fields(
     context: &crate::registry::EncodeContext<'_>,
     findings: &mut ProcessingReport,
 ) {
-    if document.capability.is_some() {
-        if let Some(metadata) = tree.get("metadata") {
-            let fields = context.fields(Phase::Validation);
-            let mut sink = crate::registry::ResourceFindingSink {
-                sink: findings,
-                resource: document.id,
-            };
-            match crate::resources::common::child_path(&FieldPath::default(), "metadata", &fields).and_then(|path| {
-                crate::resources::common::finite_metadata::validate(metadata, &path, &fields, &mut sink)
-            }) {
-                Ok(()) => (),
-                Err(finding) => sink.push(finding),
-            }
+    if document.capability.is_some()
+        && let Some(metadata) = tree.get("metadata")
+    {
+        let fields = context.fields(Phase::Validation);
+        let mut sink = crate::registry::ResourceFindingSink {
+            sink: findings,
+            resource: document.id,
+        };
+        match crate::resources::common::child_path(&FieldPath::default(), "metadata", &fields)
+            .and_then(|path| crate::resources::common::finite_metadata::validate(metadata, &path, &fields, &mut sink))
+        {
+            Ok(()) => (),
+            Err(finding) => sink.push(finding),
         }
     }
 
@@ -406,18 +406,18 @@ fn validate_capability_fields(
             } else {
                 None
             };
-            if let Some(code) = code {
-                if let Ok(pattern) = FieldPath::parse(field.path) {
-                    let fields = context.fields(Phase::Validation);
-                    let mut sink = crate::registry::ResourceFindingSink {
-                        sink: findings,
-                        resource: document.id,
-                    };
-                    if let Err(finding) =
-                        concrete_field_findings(tree, &pattern.0, &FieldPath::default(), code, &fields, &mut sink)
-                    {
-                        sink.push(finding);
-                    }
+            if let Some(code) = code
+                && let Ok(pattern) = FieldPath::parse(field.path)
+            {
+                let fields = context.fields(Phase::Validation);
+                let mut sink = crate::registry::ResourceFindingSink {
+                    sink: findings,
+                    resource: document.id,
+                };
+                if let Err(finding) =
+                    concrete_field_findings(tree, &pattern.0, &FieldPath::default(), code, &fields, &mut sink)
+                {
+                    sink.push(finding);
                 }
             }
         }
@@ -1541,16 +1541,16 @@ fn prepare_wrappers(
         if findings.failed() {
             break;
         }
-        if options.opaque_fields == OpaqueFieldPolicy::Block {
-            if let Some(path) = &unknown {
-                findings.push(wrapper_finding(
-                    list,
-                    FindingCode::OpaqueOutputDenied,
-                    Phase::Generation,
-                    path.clone(),
-                    true,
-                ));
-            }
+        if options.opaque_fields == OpaqueFieldPolicy::Block
+            && let Some(path) = &unknown
+        {
+            findings.push(wrapper_finding(
+                list,
+                FindingCode::OpaqueOutputDenied,
+                Phase::Generation,
+                path.clone(),
+                true,
+            ));
         }
         if options.protected_output == ProtectedOutput::Deny
             && (unknown.is_some()
@@ -1598,18 +1598,18 @@ fn prepare_wrappers(
                     .and_then(|node| node.start);
             }
         }
-        if options.collections == CollectionOutput::Flatten {
-            if let Some(entries) = tree.as_mapping() {
-                for (key, _) in entries {
-                    if !matches!(key.as_str(), "apiVersion" | "kind" | "items") {
-                        findings.push(wrapper_finding(
-                            list,
-                            FindingCode::CollectionFieldRemoved,
-                            Phase::Generation,
-                            FieldPath(vec![key.clone()]),
-                            false,
-                        ));
-                    }
+        if options.collections == CollectionOutput::Flatten
+            && let Some(entries) = tree.as_mapping()
+        {
+            for (key, _) in entries {
+                if !matches!(key.as_str(), "apiVersion" | "kind" | "items") {
+                    findings.push(wrapper_finding(
+                        list,
+                        FindingCode::CollectionFieldRemoved,
+                        Phase::Generation,
+                        FieldPath(vec![key.clone()]),
+                        false,
+                    ));
                 }
             }
         }
@@ -2402,29 +2402,30 @@ fn strip_observation_paths(
             )?;
             for finding in findings.entries_mut() {
                 processing.work(1, Phase::Generation)?;
-                if finding.resource == id && finding.code == FindingCode::UnadmittedField {
-                    if let Some(found) = &finding.path {
-                        processing.work(
-                            found
+                if finding.resource == id
+                    && finding.code == FindingCode::UnadmittedField
+                    && let Some(found) = &finding.path
+                {
+                    processing.work(
+                        found
+                            .0
+                            .iter()
+                            .map(String::len)
+                            .sum::<usize>()
+                            .saturating_add(path.0.iter().map(String::len).sum::<usize>())
+                            .saturating_add(found.0.len())
+                            .saturating_mul(2),
+                        Phase::Generation,
+                    )?;
+                    if found.0.starts_with(&path.0)
+                        || found.0.len() == path.0.len()
+                            && found
                                 .0
                                 .iter()
-                                .map(String::len)
-                                .sum::<usize>()
-                                .saturating_add(path.0.iter().map(String::len).sum::<usize>())
-                                .saturating_add(found.0.len())
-                                .saturating_mul(2),
-                            Phase::Generation,
-                        )?;
-                        if found.0.starts_with(&path.0)
-                            || found.0.len() == path.0.len()
-                                && found
-                                    .0
-                                    .iter()
-                                    .zip(&path.0)
-                                    .all(|(part, actual)| part == "*" || part == actual)
-                        {
-                            finding.severity = Severity::Warning;
-                        }
+                                .zip(&path.0)
+                                .all(|(part, actual)| part == "*" || part == actual)
+                    {
+                        finding.severity = Severity::Warning;
                     }
                 }
             }
@@ -2578,17 +2579,16 @@ fn apply_generation_admission(
             if !findings.failed()
                 && options.opaque_fields == OpaqueFieldPolicy::PreserveWithFinding
                 && doc.resource.is_some()
-            {
-                if let Err(finding) = preserve_unknown_field_findings(
+                && let Err(finding) = preserve_unknown_field_findings(
                     doc,
                     tree,
                     &paths,
                     options.protected_output == ProtectedOutput::Include,
                     processing,
                     findings,
-                ) {
-                    findings.push(finding);
-                }
+                )
+            {
+                findings.push(finding);
             }
         }
         Err(finding) => findings.push(finding.for_resource(doc.id)),
@@ -2777,19 +2777,18 @@ fn preservation_field_warning(
         if existing.code == FindingCode::UnadmittedField
             && existing.phase == phase
             && existing.resource == Some(document.id)
+            && let Some(previous) = &existing.path
         {
-            if let Some(previous) = &existing.path {
-                processing.work(previous.depth().saturating_add(path.depth()), phase)?;
-                processing.work(previous.0.iter().chain(&path.0).map(String::len).sum(), phase)?;
-                if previous.0.len() == path.0.len()
-                    && previous
-                        .0
-                        .iter()
-                        .zip(&path.0)
-                        .all(|(expected, actual)| expected == "*" || expected == actual)
-                {
-                    return Ok(());
-                }
+            processing.work(previous.depth().saturating_add(path.depth()), phase)?;
+            processing.work(previous.0.iter().chain(&path.0).map(String::len).sum(), phase)?;
+            if previous.0.len() == path.0.len()
+                && previous
+                    .0
+                    .iter()
+                    .zip(&path.0)
+                    .all(|(expected, actual)| expected == "*" || expected == actual)
+            {
+                return Ok(());
             }
         }
     }
@@ -4248,12 +4247,11 @@ fn merge_delta_inner(
                 let new = keyed(after_items, keys, path, context)?;
                 for (key, previous) in &old {
                     context.tick()?;
-                    if !new.contains_key(key) {
-                        if let Some(original) = raw.get(key) {
-                            if unknown_descendants(original, previous, context)? {
-                                return Err(conflict().at_path(path.clone()));
-                            }
-                        }
+                    if !new.contains_key(key)
+                        && let Some(original) = raw.get(key)
+                        && unknown_descendants(original, previous, context)?
+                    {
+                        return Err(conflict().at_path(path.clone()));
                     }
                 }
                 context
@@ -4331,10 +4329,11 @@ fn merge_mapping(
                 };
                 child.0.starts_with(&edit.0)
             });
-            if let Some(raw) = context.get(raw, key)? {
-                if unknown_descendants(raw, old, context)? && !explicit {
-                    return Err(conflict().at_path(child));
-                }
+            if let Some(raw) = context.get(raw, key)?
+                && unknown_descendants(raw, old, context)?
+                && !explicit
+            {
+                return Err(conflict().at_path(child));
             }
             context.set_child(&mut out, key, None)?;
         }
@@ -4586,10 +4585,10 @@ fn check_supplied_list_duplicates(
                     if context.processing.exhausted() {
                         return Err(context.processing.fail(context.phase));
                     }
-                    if let Ok(key) = key {
-                        if !seen.insert(key) {
-                            return Err(conflict().at_path(path.clone()));
-                        }
+                    if let Ok(key) = key
+                        && !seen.insert(key)
+                    {
+                        return Err(conflict().at_path(path.clone()));
                     }
                 }
             }

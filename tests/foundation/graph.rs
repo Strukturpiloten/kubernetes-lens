@@ -410,28 +410,27 @@ fn emit_key_facts(ctx: &registry::ProjectionContext<'_>, out: &mut Vec<NativeFac
     }
 }
 fn emit_claim_facts(ctx: &registry::ProjectionContext<'_>, out: &mut Vec<NativeFact>) {
-    if ctx.gvk.kind == "StatefulSet" {
-        if let Some(items) = ctx
+    if ctx.gvk.kind == "StatefulSet"
+        && let Some(items) = ctx
             .tree
             .get_path(&path("/spec/volumeClaimTemplates"))
             .and_then(TreeNode::as_sequence)
-        {
-            for (index, item) in items.iter().enumerate() {
-                let template_path = path("/spec/volumeClaimTemplates").child(index.to_string());
-                ctx.emit_fact(
-                    NativeFact::ClaimExpectation {
-                        path: template_path.clone(),
-                        pattern: ClaimPatternDraft::StatefulSet {
-                            template_path,
-                            template_name: string_presence(item.get_path(&path("/metadata/name"))),
-                            controller_name: string_presence(ctx.tree.get_path(&path("/metadata/name"))),
-                            replicas: int_presence(ctx.tree.get_path(&path("/spec/replicas"))),
-                            start_ordinal: int_presence(ctx.tree.get_path(&path("/spec/ordinals/start"))),
-                        },
+    {
+        for (index, item) in items.iter().enumerate() {
+            let template_path = path("/spec/volumeClaimTemplates").child(index.to_string());
+            ctx.emit_fact(
+                NativeFact::ClaimExpectation {
+                    path: template_path.clone(),
+                    pattern: ClaimPatternDraft::StatefulSet {
+                        template_path,
+                        template_name: string_presence(item.get_path(&path("/metadata/name"))),
+                        controller_name: string_presence(ctx.tree.get_path(&path("/metadata/name"))),
+                        replicas: int_presence(ctx.tree.get_path(&path("/spec/replicas"))),
+                        start_ordinal: int_presence(ctx.tree.get_path(&path("/spec/ordinals/start"))),
                     },
-                    out,
-                );
-            }
+                },
+                out,
+            );
         }
     }
     let mut subjects = vec![(LocalSubject::Object, FieldPath::default())];
@@ -493,11 +492,11 @@ fn decode(
         "/binaryData",
         "/stringData",
     ] {
-        if let Some(node) = tree.get_path(&path(location)) {
-            if node.value != TreeValue::Null {
-                <BTreeMap<String, String> as registry::codec::FieldCodec>::decode(node, &ctx.fields, &path(location))
-                    .map_err(|finding| vec![finding])?;
-            }
+        if let Some(node) = tree.get_path(&path(location))
+            && node.value != TreeValue::Null
+        {
+            <BTreeMap<String, String> as registry::codec::FieldCodec>::decode(node, &ctx.fields, &path(location))
+                .map_err(|finding| vec![finding])?;
         }
     }
     Ok(Box::new(Fixture {

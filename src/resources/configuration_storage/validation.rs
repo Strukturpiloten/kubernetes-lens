@@ -104,65 +104,65 @@ pub(super) fn references(kind: &str, tree: &TreeNode, out: &mut dyn ReferenceSin
 
 fn claim_references(tree: &TreeNode, out: &mut dyn ReferenceSink) {
     if let Some(spec) = tree.get("spec") {
-        if let Some(name) = text(spec, "volumeName").filter(|name| !name.is_empty()) {
-            if let Ok(gvk) = GroupVersionKind::new("v1", "PersistentVolume") {
-                out.push(Reference {
-                    from: crate::diagnostic::ResourceId(0),
-                    path: FieldPath(vec!["spec".into(), "volumeName".into()]),
-                    relation: RelationshipKind::Storage,
-                    target: ReferenceTarget::CheckedObject {
-                        gvk,
-                        name: name.to_owned(),
-                        predicate: None,
-                        optional: crate::value::Presence::Absent,
-                    },
-                    scope: ReferenceScope::Cluster,
-                });
-            }
+        if let Some(name) = text(spec, "volumeName").filter(|name| !name.is_empty())
+            && let Ok(gvk) = GroupVersionKind::new("v1", "PersistentVolume")
+        {
+            out.push(Reference {
+                from: crate::diagnostic::ResourceId(0),
+                path: FieldPath(vec!["spec".into(), "volumeName".into()]),
+                relation: RelationshipKind::Storage,
+                target: ReferenceTarget::CheckedObject {
+                    gvk,
+                    name: name.to_owned(),
+                    predicate: None,
+                    optional: crate::value::Presence::Absent,
+                },
+                scope: ReferenceScope::Cluster,
+            });
         }
-        if let Some(name) = text(spec, "storageClassName").filter(|name| !name.is_empty()) {
-            if let Ok(gvk) = GroupVersionKind::new("storage.k8s.io/v1", "StorageClass") {
-                out.push(Reference {
-                    from: crate::diagnostic::ResourceId(0),
-                    path: FieldPath(vec!["spec".into(), "storageClassName".into()]),
-                    relation: RelationshipKind::Storage,
-                    target: ReferenceTarget::CheckedObject {
-                        gvk,
-                        name: name.to_owned(),
-                        predicate: None,
-                        optional: crate::value::Presence::Absent,
-                    },
-                    scope: ReferenceScope::Cluster,
-                });
-            }
+        if let Some(name) = text(spec, "storageClassName").filter(|name| !name.is_empty())
+            && let Ok(gvk) = GroupVersionKind::new("storage.k8s.io/v1", "StorageClass")
+        {
+            out.push(Reference {
+                from: crate::diagnostic::ResourceId(0),
+                path: FieldPath(vec!["spec".into(), "storageClassName".into()]),
+                relation: RelationshipKind::Storage,
+                target: ReferenceTarget::CheckedObject {
+                    gvk,
+                    name: name.to_owned(),
+                    predicate: None,
+                    optional: crate::value::Presence::Absent,
+                },
+                scope: ReferenceScope::Cluster,
+            });
         }
-        if let Some(source) = spec.get("dataSource") {
-            if let (Some(target_name), Some(target_kind)) = (text(source, "name"), text(source, "kind")) {
-                let api_group = source
-                    .get("apiGroup")
-                    .and_then(TreeNode::as_str)
-                    .filter(|g| !g.is_empty());
-                if target_kind == "PersistentVolumeClaim" && api_group.is_none() {
-                    if let Ok(gvk) = GroupVersionKind::new("v1", target_kind) {
-                        out.push(Reference {
-                            from: crate::diagnostic::ResourceId(0),
-                            path: FieldPath(vec!["spec".into(), "dataSource".into()]),
-                            relation: RelationshipKind::Storage,
-                            target: ReferenceTarget::CheckedObject {
-                                gvk,
-                                name: target_name.to_owned(),
-                                predicate: None,
-                                optional: crate::value::Presence::Absent,
-                            },
-                            scope: ReferenceScope::SameNamespace,
-                        });
-                    }
-                } else {
-                    out.push(external(
-                        FieldPath(vec!["spec".into(), "dataSource".into()]),
-                        RelationshipKind::Storage,
-                    ));
+        if let Some(source) = spec.get("dataSource")
+            && let (Some(target_name), Some(target_kind)) = (text(source, "name"), text(source, "kind"))
+        {
+            let api_group = source
+                .get("apiGroup")
+                .and_then(TreeNode::as_str)
+                .filter(|g| !g.is_empty());
+            if target_kind == "PersistentVolumeClaim" && api_group.is_none() {
+                if let Ok(gvk) = GroupVersionKind::new("v1", target_kind) {
+                    out.push(Reference {
+                        from: crate::diagnostic::ResourceId(0),
+                        path: FieldPath(vec!["spec".into(), "dataSource".into()]),
+                        relation: RelationshipKind::Storage,
+                        target: ReferenceTarget::CheckedObject {
+                            gvk,
+                            name: target_name.to_owned(),
+                            predicate: None,
+                            optional: crate::value::Presence::Absent,
+                        },
+                        scope: ReferenceScope::SameNamespace,
+                    });
                 }
+            } else {
+                out.push(external(
+                    FieldPath(vec!["spec".into(), "dataSource".into()]),
+                    RelationshipKind::Storage,
+                ));
             }
         }
     }
@@ -170,35 +170,33 @@ fn claim_references(tree: &TreeNode, out: &mut dyn ReferenceSink) {
 
 fn volume_references(tree: &TreeNode, out: &mut dyn ReferenceSink) {
     let spec = tree.get("spec");
-    if let Some(claim) = spec.and_then(|spec| spec.get("claimRef")) {
-        if let (Some(claim_name), Some(namespace)) = (text(claim, "name"), text(claim, "namespace")) {
-            if let Ok(gvk) = GroupVersionKind::new("v1", "PersistentVolumeClaim") {
-                out.push(Reference {
-                    from: crate::diagnostic::ResourceId(0),
-                    path: FieldPath(vec!["spec".into(), "claimRef".into()]),
-                    relation: RelationshipKind::Storage,
-                    target: ReferenceTarget::CheckedObject {
-                        gvk,
-                        name: claim_name.to_owned(),
-                        predicate: None,
-                        optional: crate::value::Presence::Absent,
-                    },
-                    scope: ReferenceScope::Namespace(crate::value::Presence::Value(namespace.to_owned())),
-                });
-            }
-        }
+    if let Some(claim) = spec.and_then(|spec| spec.get("claimRef"))
+        && let (Some(claim_name), Some(namespace)) = (text(claim, "name"), text(claim, "namespace"))
+        && let Ok(gvk) = GroupVersionKind::new("v1", "PersistentVolumeClaim")
+    {
+        out.push(Reference {
+            from: crate::diagnostic::ResourceId(0),
+            path: FieldPath(vec!["spec".into(), "claimRef".into()]),
+            relation: RelationshipKind::Storage,
+            target: ReferenceTarget::CheckedObject {
+                gvk,
+                name: claim_name.to_owned(),
+                predicate: None,
+                optional: crate::value::Presence::Absent,
+            },
+            scope: ReferenceScope::Namespace(crate::value::Presence::Value(namespace.to_owned())),
+        });
     }
     if let Some(driver) = spec
         .and_then(|spec| spec.get("csi"))
         .and_then(|csi| csi.get("driver"))
         .and_then(TreeNode::as_str)
+        && !driver.is_empty()
     {
-        if !driver.is_empty() {
-            out.push(external(
-                FieldPath(vec!["spec".into(), "csi".into(), "driver".into()]),
-                RelationshipKind::Storage,
-            ));
-        }
+        out.push(external(
+            FieldPath(vec!["spec".into(), "csi".into(), "driver".into()]),
+            RelationshipKind::Storage,
+        ));
     }
     if let Some(csi) = spec.and_then(|spec| spec.get("csi")) {
         for field in [

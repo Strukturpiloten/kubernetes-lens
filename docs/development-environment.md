@@ -25,5 +25,5 @@ Run `cargo ci-check`, `cargo ci-clippy`, `cargo ci-test`, `cargo ci-doctest`, `c
 `KUBERNETES_LENS_LINT_JOBS` is set. Finish with `./scripts/check-all.sh --check` after the final edit.
 Use `python3 scripts/validation-plan.py run-local` for feedback, never as publication evidence.
 
-The complete gate requires MSRV 1.85.0 already installed; a missing toolchain fails preflight.
+The complete gate requires MSRV 1.98.1 already installed; a missing toolchain fails preflight.
 It accepts only worktree-local CARGO_TARGET_DIR. Keep build artifacts, caches and local graphs ignored.

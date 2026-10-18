@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Raise the minimum supported Rust version from 1.85.0 to 1.98.1, matching the pinned normal
+  toolchain. Install Rust 1.98.1 or newer before building or validating this unpublished package.
+
 - Add default-off authenticated pre-permit input-view rendezvous with original controlled ends,
   retained process/object bindings and guarded credentialed framing. External witness capture and
   native admission remain pending.

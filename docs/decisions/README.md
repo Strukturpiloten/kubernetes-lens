@@ -2,7 +2,7 @@
 
 | Decision                                                     | Status                                     | Contract                                                                                               |
 | ------------------------------------------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| [0001](0001-independent-unpublished-bootstrap.md)            | Partly superseded by 0003                  | Independent unpublished bootstrap with shared tooling ownership                                        |
+| [0001](0001-independent-unpublished-bootstrap.md)            | Partly superseded by 0003, 0028            | Independent unpublished bootstrap with shared tooling ownership                                        |
 | [0002](0002-frozen-native-compatibility-contract.md)         | Refined by 0007                            | Frozen native versions, fields, predicates and pending evidence                                        |
 | [0003](0003-offline-native-foundation.md)                    | Partly superseded by 0004, 0012            | Offline foundation, private evidence and sealed admission                                              |
 | [0004](0004-native-authoring-facts-observations.md)          | Refined by 0005, 0006 and 0007             | Bounded typed authoring, effective facts and reviewed observations                                     |
@@ -19,6 +19,7 @@
 | [0015](0015-root-selected-native-wait-observer.md)           | Accepted source contract                   | Default-off finite root-selected stock native wait evidence and unchanged-budget archive               |
 | [0016](0016-pre-permit-input-view-rendezvous.md)             | Accepted source contract                   | Default-off authenticated input-view rendezvous before the original permit; external admission pending |
 | [0017](0017-generated-native-artifact-bytes.md)              | Accepted                                   | Generated native bytes, source-order associations and grouped minimal patches                          |
+| [0028](0028-rust-198-minimum.md)                             | Accepted                                   | Rust 1.98.1 minimum with aligned local, CI and release-validation consumers                            |
 
 Add a new numbered ADR when an accepted decision changes; preserve and supersede historical decisions.
 

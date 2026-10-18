@@ -551,30 +551,29 @@ pub(crate) fn check_observation_budget(
         }
         _ => FieldPath::default(),
     };
-    if gvk.group.as_deref() == Some("apps") && gvk.kind == "StatefulSet" {
-        if let Some(items) = tree
+    if gvk.group.as_deref() == Some("apps")
+        && gvk.kind == "StatefulSet"
+        && let Some(items) = tree
             .get_path(&FieldPath(vec!["spec".into(), "volumeClaimTemplates".into()]))
             .and_then(crate::syntax::TreeNode::as_sequence)
-        {
-            descriptors = descriptors.saturating_add(items.len().saturating_mul(9));
-        }
+    {
+        descriptors = descriptors.saturating_add(items.len().saturating_mul(9));
     }
-    if !pod_spec.0.is_empty() {
-        if let Some(volumes) = tree
+    if !pod_spec.0.is_empty()
+        && let Some(volumes) = tree
             .get_path(&pod_spec.child("volumes"))
             .and_then(crate::syntax::TreeNode::as_sequence)
-        {
-            let claims = volumes
-                .iter()
-                .filter(|volume| {
-                    volume
-                        .get("ephemeral")
-                        .and_then(|node| node.get("volumeClaimTemplate"))
-                        .is_some()
-                })
-                .count();
-            descriptors = descriptors.saturating_add(claims.saturating_mul(8));
-        }
+    {
+        let claims = volumes
+            .iter()
+            .filter(|volume| {
+                volume
+                    .get("ephemeral")
+                    .and_then(|node| node.get("volumeClaimTemplate"))
+                    .is_some()
+            })
+            .count();
+        descriptors = descriptors.saturating_add(claims.saturating_mul(8));
     }
     if gvk.group.is_none() && gvk.kind == "Pod" {
         descriptors = descriptors.saturating_add(1);

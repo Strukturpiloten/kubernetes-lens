@@ -804,21 +804,20 @@ pub fn controller(admission: Admission, client: UnixStream) -> Result<Outcome> {
     let mut created_intent = None;
     let _pump = super::wait_observer::install(None);
     let result = controller_inner(admission, client, cleanup_clock.clone(), &mut created_intent);
-    if let (Err(cause), Some(created)) = (&result, created_intent.as_ref()) {
-        if let Ok(mut j) = Journal::load_writer(&dir, &nonce) {
-            if created_intent_binding(Some(created), &j.record).is_ok() {
-                if let Ok(cleanup) = cleanup_clock.begin() {
-                    let _no_pump = super::wait_observer::install(None);
-                    let _ = SystemManager::terminate(&j, cleanup);
-                    let _ = j.reconcile_pending_after_stop();
-                }
-                j.record.phase = "quarantined".into();
-                if j.record.cause.is_none() {
-                    j.record.cause = Some((*cause).into());
-                }
-                let _ = j.persist();
-            }
+    if let (Err(cause), Some(created)) = (&result, created_intent.as_ref())
+        && let Ok(mut j) = Journal::load_writer(&dir, &nonce)
+        && created_intent_binding(Some(created), &j.record).is_ok()
+    {
+        if let Ok(cleanup) = cleanup_clock.begin() {
+            let _no_pump = super::wait_observer::install(None);
+            let _ = SystemManager::terminate(&j, cleanup);
+            let _ = j.reconcile_pending_after_stop();
         }
+        j.record.phase = "quarantined".into();
+        if j.record.cause.is_none() {
+            j.record.cause = Some((*cause).into());
+        }
+        let _ = j.persist();
     }
     result
 }

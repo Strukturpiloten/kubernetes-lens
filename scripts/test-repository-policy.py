@@ -15,7 +15,7 @@ LICENSE_SHA256 = "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d
 
 
 def snapshot() -> dict[str, str]:
-    paths = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "release-plz.toml", "CHANGELOG.md",
+    paths = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "release-plz.toml", "CHANGELOG.md",
              ".codex/config.toml", "scripts/validation-policy.json", ".github/workflows/ci.yml",
              ".github/workflows/release.yml", "scripts/renovate-tool.json", "LICENSE"]
     return {name: (ROOT / name).read_text() for name in paths}
@@ -25,7 +25,8 @@ def validate(files: dict[str, str]) -> None:
     manifest = tomllib.loads(files["Cargo.toml"])
     package = manifest["package"]
     assert package["name"] == "kubernetes-lens"
-    assert package["edition"] == "2024" and package["rust-version"] == "1.85.0"
+    assert package["edition"] == "2024" and package["rust-version"] == "1.98.1"
+    assert tomllib.loads(files["clippy.toml"])["msrv"] == package["rust-version"]
     assert package["license"] == "MPL-2.0" and package["publish"] is False
     assert package["repository"] == "https://github.com/Strukturpiloten/kubernetes-lens"
     assert hashlib.sha256(files["LICENSE"].encode()).hexdigest() == LICENSE_SHA256
@@ -57,6 +58,9 @@ def validate(files: dict[str, str]) -> None:
             assert re.fullmatch(r"[a-f0-9]{64}", entry.get("checksum", "")), "registry integrity required"
     toolchain = tomllib.loads(files["rust-toolchain.toml"])["toolchain"]
     assert re.fullmatch(r"\d+\.\d+\.\d+", toolchain["channel"])
+    assert tuple(map(int, toolchain["channel"].split("."))) >= tuple(
+        map(int, package["rust-version"].split("."))
+    ), "normal toolchain must support the declared minimum"
     assert set(toolchain["components"]) >= {"clippy", "rustfmt"}
     release = tomllib.loads(files["release-plz.toml"])
     for settings in [release["workspace"], *release["package"]]:
@@ -121,8 +125,23 @@ class RepositoryPolicyTests(unittest.TestCase):
 
     def test_license_msrv_and_manager_selection_are_hard_contracts(self) -> None:
         self.rejected("LICENSE", "Mozilla Public License", "Other License")
-        self.rejected("Cargo.toml", 'rust-version = "1.85.0"', 'rust-version = "1.98.1"')
+        self.rejected("Cargo.toml", 'rust-version = "1.98.1"', 'rust-version = "1.85.0"')
         self.rejected(".codex/config.toml", 'model = "gpt-6.1-sol"', 'model = "gpt-6-sol"')
+
+    def test_rust_minimum_and_normal_toolchain_drift_fail(self) -> None:
+        for old_minimum in ("1.85.0", "1.98.0"):
+            with self.subTest(minimum=old_minimum):
+                self.rejected("Cargo.toml", 'rust-version = "1.98.1"',
+                              f'rust-version = "{old_minimum}"')
+                self.rejected("clippy.toml", 'msrv = "1.98.1"',
+                              f'msrv = "{old_minimum}"')
+                self.rejected("rust-toolchain.toml", 'channel = "1.98.1"',
+                              f'channel = "{old_minimum}"')
+        changed = snapshot()
+        changed["rust-toolchain.toml"] = changed["rust-toolchain.toml"].replace(
+            'channel = "1.98.1"', 'channel = "1.99.0"'
+        )
+        validate(changed)
 
     def test_foundation_dependency_integrity_and_packaged_licenses(self) -> None:
         dependency = re.search(r'version = "(=\d+\.\d+\.\d+)"', snapshot()["Cargo.toml"])
