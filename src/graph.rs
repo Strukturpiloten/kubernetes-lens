@@ -377,10 +377,10 @@ fn owner_reference(node: &crate::syntax::TreeNode, path: FieldPath, id: Resource
         return Err(owner_error(node, path.child("uid"), id));
     }
     for key in ["controller", "blockOwnerDeletion"] {
-        if let Some(value) = node.get(key) {
-            if !matches!(value.value, crate::syntax::TreeValue::Bool(_)) {
-                return Err(owner_error(value, path.child(key), id));
-            }
+        if let Some(value) = node.get(key)
+            && !matches!(value.value, crate::syntax::TreeValue::Bool(_))
+        {
+            return Err(owner_error(value, path.child(key), id));
         }
     }
     Ok(Reference {
@@ -570,16 +570,15 @@ fn resolve_one(
         uid: Presence::Value(expected),
         ..
     } = &r.target
+        && matches.len() == 1
     {
-        if matches.len() == 1 {
-            let actual = projections
-                .get(&matches[0])
-                .and_then(|projection| projection.tree.get("metadata"))
-                .and_then(|metadata| metadata.get("uid"))
-                .and_then(crate::syntax::TreeNode::as_str);
-            if actual != Some(expected.as_str()) {
-                return Resolution::Unsupported(SafeReason::OwnerUidMismatch);
-            }
+        let actual = projections
+            .get(&matches[0])
+            .and_then(|projection| projection.tree.get("metadata"))
+            .and_then(|metadata| metadata.get("uid"))
+            .and_then(crate::syntax::TreeNode::as_str);
+        if actual != Some(expected.as_str()) {
+            return Resolution::Unsupported(SafeReason::OwnerUidMismatch);
         }
     }
     if matches.is_empty() {
@@ -1098,22 +1097,21 @@ fn ledger_digest(bytes: &[u8]) -> [u8; 32] {
         0x1f83_d9ab,
         0x5be0_cd19,
     ];
-    let mut chunks = bytes.chunks_exact(64);
-    for block in &mut chunks {
+    let (blocks, remainder) = bytes.as_chunks::<64>();
+    for block in blocks {
         digest_block(block, &mut state);
     }
-    let remainder = chunks.remainder();
     let mut tail = [0u8; 128];
     tail[..remainder.len()].copy_from_slice(remainder);
     tail[remainder.len()] = 128;
     let end = if remainder.len() < 56 { 64 } else { 128 };
     let bits = u64::try_from(bytes.len()).unwrap_or(u64::MAX).wrapping_mul(8);
     tail[end - 8..end].copy_from_slice(&bits.to_be_bytes());
-    for block in tail[..end].chunks_exact(64) {
+    for block in tail[..end].as_chunks::<64>().0 {
         digest_block(block, &mut state);
     }
     let mut digest = [0u8; 32];
-    for (word, slot) in state.iter().zip(digest.chunks_exact_mut(4)) {
+    for (word, slot) in state.iter().zip(digest.as_chunks_mut::<4>().0) {
         slot.copy_from_slice(&word.to_be_bytes());
     }
     digest
@@ -1186,7 +1184,7 @@ fn digest_block(block: &[u8], state: &mut [u32; 8]) {
         0xc671_78f2,
     ];
     let mut schedule = [0u32; 64];
-    for (index, chunk) in block.chunks_exact(4).enumerate() {
+    for (index, chunk) in block.as_chunks::<4>().0.iter().enumerate() {
         schedule[index] = u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
     }
     for index in 16..64 {
@@ -1875,20 +1873,20 @@ fn contribute_custom_descriptor(
     index: &GraphIndex<'_>,
     evidence: &mut Vec<FactEvidence>,
 ) {
-    if matches!(resolution, Resolution::Resolved(_)) {
-        if let ReferenceTarget::SuppliedCustomResourceVersion { descriptor } = &reference.target {
-            let resource = descriptor.resource_id();
-            for path in [descriptor.version_path(), descriptor.schema_path()] {
-                if let Some(field) = contribution(
-                    index.budget,
-                    index.resources,
-                    index.projections,
-                    index.witness,
-                    GraphSubject::Object { resource },
-                    path.clone(),
-                ) {
-                    evidence.push(field);
-                }
+    if matches!(resolution, Resolution::Resolved(_))
+        && let ReferenceTarget::SuppliedCustomResourceVersion { descriptor } = &reference.target
+    {
+        let resource = descriptor.resource_id();
+        for path in [descriptor.version_path(), descriptor.schema_path()] {
+            if let Some(field) = contribution(
+                index.budget,
+                index.resources,
+                index.projections,
+                index.witness,
+                GraphSubject::Object { resource },
+                path.clone(),
+            ) {
+                evidence.push(field);
             }
         }
     }
@@ -2373,10 +2371,10 @@ impl GraphIndex<'_> {
         }) || matches!(optional, Presence::Null) {
             return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
         }
-        if let Some(ReferencePredicate::ServicePortExists { port }) = predicate {
-            if let Err(reason) = self.check_backend_port(reference, name, port, evidence) {
-                return Resolution::Unsupported(reason);
-            }
+        if let Some(ReferencePredicate::ServicePortExists { port }) = predicate
+            && let Err(reason) = self.check_backend_port(reference, name, port, evidence)
+        {
+            return Resolution::Unsupported(reason);
         }
         let namespace = match selected_namespace(reference, identities, context) {
             Ok(namespace) => namespace,
@@ -2434,10 +2432,10 @@ impl GraphIndex<'_> {
         ) {
             evidence.push(field);
         }
-        if let Some(projection) = projections.get(&object) {
-            if !projection.findings.is_empty() {
-                return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
-            }
+        if let Some(projection) = projections.get(&object)
+            && !projection.findings.is_empty()
+        {
+            return Resolution::Unsupported(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
         }
         self.checked_predicate(gvk, object, subject, predicate, optional, evidence)
     }
@@ -4272,19 +4270,18 @@ impl GraphIndex<'_> {
             if identity.gvk.group.is_none()
                 && identity.gvk.kind == "Namespace"
                 && identity.scope.namespaced() == Some(false)
+                && let Some(name) = identity.name.value()
             {
-                if let Some(name) = identity.name.value() {
-                    if !self
-                        .budget
-                        .take(name.len().saturating_mul(self.identities.len().saturating_add(1)))
-                        || !self.budget.retain::<(String, Vec<ResourceId>)>(1)
-                        || !self.budget.retain::<ResourceId>(1)
-                        || self.budget.processing.payload(name.len(), Phase::Analysis).is_err()
-                    {
-                        return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
-                    }
-                    namespaces.entry(name.clone()).or_default().push(*resource);
+                if !self
+                    .budget
+                    .take(name.len().saturating_mul(self.identities.len().saturating_add(1)))
+                    || !self.budget.retain::<(String, Vec<ResourceId>)>(1)
+                    || !self.budget.retain::<ResourceId>(1)
+                    || self.budget.processing.payload(name.len(), Phase::Analysis).is_err()
+                {
+                    return Err(SafeReason::FactUnknown(FactGap::IncompleteSuppliedEvidence));
                 }
+                namespaces.entry(name.clone()).or_default().push(*resource);
             }
         }
         Ok(namespaces)

@@ -446,24 +446,24 @@ impl NativeOccurrences {
         let right = self.entries[index].right;
         if self.height(left) > self.height(right) + 1 {
             if let Some(mut left) = left {
-                if self.height(self.entries[left].right) > self.height(self.entries[left].left) {
-                    if let Some(right) = self.entries[left].right {
-                        left = self.rotate_left(left, right);
-                        self.entries[index].left = Some(left);
-                    }
+                if self.height(self.entries[left].right) > self.height(self.entries[left].left)
+                    && let Some(right) = self.entries[left].right
+                {
+                    left = self.rotate_left(left, right);
+                    self.entries[index].left = Some(left);
                 }
                 return self.rotate_right(index, left);
             }
-        } else if self.height(right) > self.height(left) + 1 {
-            if let Some(mut right) = right {
-                if self.height(self.entries[right].left) > self.height(self.entries[right].right) {
-                    if let Some(left) = self.entries[right].left {
-                        right = self.rotate_right(right, left);
-                        self.entries[index].right = Some(right);
-                    }
-                }
-                return self.rotate_left(index, right);
+        } else if self.height(right) > self.height(left) + 1
+            && let Some(mut right) = right
+        {
+            if self.height(self.entries[right].left) > self.height(self.entries[right].right)
+                && let Some(left) = self.entries[right].left
+            {
+                right = self.rotate_right(right, left);
+                self.entries[index].right = Some(right);
             }
+            return self.rotate_left(index, right);
         }
         index
     }

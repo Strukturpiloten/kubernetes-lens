@@ -192,10 +192,10 @@ fn enumeration(node: &TreeNode, key: &str, values: &[&str], path: &FieldPath, ou
     if out.exhausted() {
         return;
     }
-    if let Some(value) = text(node, key) {
-        if !values.contains(&value) {
-            invalid(&path.child(key), out);
-        }
+    if let Some(value) = text(node, key)
+        && !values.contains(&value)
+    {
+        invalid(&path.child(key), out);
     }
 }
 fn range(node: &TreeNode, key: &str, low: i64, high: i64, path: &FieldPath, out: &mut dyn FindingSink) {
@@ -390,13 +390,12 @@ fn validate_selector_match(
             invalid(path, out);
             return;
         }
-        if let (Some(selected), Some(labels)) = (selector.as_mapping(), map) {
-            if selected
+        if let (Some(selected), Some(labels)) = (selector.as_mapping(), map)
+            && selected
                 .iter()
                 .any(|(k, v)| v.as_str() != labels.get(k).map(String::as_str))
-            {
-                invalid(path, out);
-            }
+        {
+            invalid(path, out);
         }
     } else {
         match LabelSelector::decode(selector, fields, path) {
@@ -435,10 +434,8 @@ fn validate_template(
         return;
     }
     required(template, "spec", path, out);
-    if !job {
-        if let Some(spec) = template.get("spec") {
-            enumeration(spec, "restartPolicy", &["Always"], &path.child("spec"), out);
-        }
+    if !job && let Some(spec) = template.get("spec") {
+        enumeration(spec, "restartPolicy", &["Always"], &path.child("spec"), out);
     }
     if let Some(spec) = template.get("spec") {
         validate_pod(spec, &path.child("spec"), job, target, opaque, out);
@@ -551,10 +548,10 @@ fn validate_job(
     if present(spec, "maxFailedIndexes") && !present(spec, "backoffLimitPerIndex") {
         invalid(&path.child("maxFailedIndexes"), out);
     }
-    if let (Some(max), Some(count)) = (number(spec, "maxFailedIndexes"), number(spec, "completions")) {
-        if max > count {
-            invalid(&path.child("maxFailedIndexes"), out);
-        }
+    if let (Some(max), Some(count)) = (number(spec, "maxFailedIndexes"), number(spec, "completions"))
+        && max > count
+    {
+        invalid(&path.child("maxFailedIndexes"), out);
     }
     if let Some(policy) = spec.get("podFailurePolicy") {
         let rules = items(policy, "rules");
@@ -622,10 +619,10 @@ fn validate_job_success_policy(spec: &TreeNode, path: &FieldPath, indexed: bool,
                 &p,
                 out,
             );
-            if let Some(indexes) = text(rule, "succeededIndexes") {
-                if !valid_indexes(indexes, number(spec, "completions")) {
-                    invalid(&p.child("succeededIndexes"), out);
-                }
+            if let Some(indexes) = text(rule, "succeededIndexes")
+                && !valid_indexes(indexes, number(spec, "completions"))
+            {
+                invalid(&p.child("succeededIndexes"), out);
             }
         }
     }
@@ -715,10 +712,11 @@ fn validate_bound_node(
         validate_native_expressions(node, last, path, opaque, out);
         validate_native_items(node, path, target, opaque, out);
     } else if let Some(list) = node.as_sequence() {
-        if last == "drop" && path.0.iter().rev().nth(1).is_some_and(|field| field == "capabilities") {
-            if let Err(finding) = super::finite::drops(node, path, fields, out) {
-                out.push(finding);
-            }
+        if last == "drop"
+            && path.0.iter().rev().nth(1).is_some_and(|field| field == "capabilities")
+            && let Err(finding) = super::finite::drops(node, path, fields, out)
+        {
+            out.push(finding);
         }
         if last == "ports" {
             let mut names = BTreeSet::new();
@@ -726,10 +724,11 @@ fn validate_bound_node(
                 if out.exhausted() {
                     return;
                 }
-                if let Some(name) = text(port, "name") {
-                    if !name.is_empty() && (!port_name(name) || !names.insert(name)) {
-                        invalid(&path.child(i.to_string()).child("name"), out);
-                    }
+                if let Some(name) = text(port, "name")
+                    && !name.is_empty()
+                    && (!port_name(name) || !names.insert(name))
+                {
+                    invalid(&path.child(i.to_string()).child("name"), out);
                 }
             }
         }
@@ -850,20 +849,20 @@ fn collect_references(tree: &TreeNode, root_kind: &str, bindings: &NativeBinding
                         );
                     }
                 }
-                if key == "imagePullSecrets" {
-                    if let Some(list) = child.as_sequence() {
-                        for (i, item) in list.iter().enumerate() {
-                            if let Some(name) = text(item, "name") {
-                                reference(
-                                    "Secret",
-                                    name,
-                                    None,
-                                    Presence::Absent,
-                                    RelationshipKind::Dependency,
-                                    &path.child(key.clone()).child(i.to_string()).child("name"),
-                                    out,
-                                );
-                            }
+                if key == "imagePullSecrets"
+                    && let Some(list) = child.as_sequence()
+                {
+                    for (i, item) in list.iter().enumerate() {
+                        if let Some(name) = text(item, "name") {
+                            reference(
+                                "Secret",
+                                name,
+                                None,
+                                Presence::Absent,
+                                RelationshipKind::Dependency,
+                                &path.child(key.clone()).child(i.to_string()).child("name"),
+                                out,
+                            );
                         }
                     }
                 }
@@ -906,10 +905,9 @@ fn validate_controller(
         range(spec, "progressDeadlineSeconds", 1, i64::MAX, path, out);
         if let (Some(deadline), Some(min_ready)) =
             (number(spec, "progressDeadlineSeconds"), number(spec, "minReadySeconds"))
+            && deadline <= min_ready
         {
-            if deadline <= min_ready {
-                invalid(&path.child("progressDeadlineSeconds"), out);
-            }
+            invalid(&path.child("progressDeadlineSeconds"), out);
         }
         if let Some(strategy) = spec.get("strategy") {
             let p = path.child("strategy");
@@ -922,19 +920,19 @@ fn validate_controller(
             }
         }
     }
-    if matches!(kind, "StatefulSet" | "DaemonSet") {
-        if let Some(strategy) = spec.get("updateStrategy") {
-            let p = path.child("updateStrategy");
-            enumeration(strategy, "type", &["RollingUpdate", "OnDelete"], &p, out);
-            if text(strategy, "type") == Some("OnDelete") && present(strategy, "rollingUpdate") {
-                invalid(&p.child("rollingUpdate"), out);
-            }
-            if let Some(roll) = strategy.get("rollingUpdate") {
-                if kind == "DaemonSet" {
-                    rollout(roll, fields, &p.child("rollingUpdate"), Some(100), out);
-                } else {
-                    range(roll, "partition", 0, i64::MAX, &p.child("rollingUpdate"), out);
-                }
+    if matches!(kind, "StatefulSet" | "DaemonSet")
+        && let Some(strategy) = spec.get("updateStrategy")
+    {
+        let p = path.child("updateStrategy");
+        enumeration(strategy, "type", &["RollingUpdate", "OnDelete"], &p, out);
+        if text(strategy, "type") == Some("OnDelete") && present(strategy, "rollingUpdate") {
+            invalid(&p.child("rollingUpdate"), out);
+        }
+        if let Some(roll) = strategy.get("rollingUpdate") {
+            if kind == "DaemonSet" {
+                rollout(roll, fields, &p.child("rollingUpdate"), Some(100), out);
+            } else {
+                range(roll, "partition", 0, i64::MAX, &p.child("rollingUpdate"), out);
             }
         }
     }
@@ -1402,31 +1400,32 @@ fn collect_object_references(
                 }
             }
         }
-    } else if last == "persistentVolumeClaim" {
-        if let Some(name) = text(node, "claimName") {
-            reference(
-                "PersistentVolumeClaim",
-                name,
-                None,
-                Presence::Absent,
-                RelationshipKind::Storage,
-                &path.child("claimName"),
-                out,
-            );
-        }
+    } else if last == "persistentVolumeClaim"
+        && let Some(name) = text(node, "claimName")
+    {
+        reference(
+            "PersistentVolumeClaim",
+            name,
+            None,
+            Presence::Absent,
+            RelationshipKind::Storage,
+            &path.child("claimName"),
+            out,
+        );
     }
-    if root_kind == "StatefulSet" && path.0 == ["spec"] {
-        if let Some(name) = text(node, "serviceName") {
-            reference(
-                "Service",
-                name,
-                Some(ReferencePredicate::HeadlessService),
-                Presence::Absent,
-                RelationshipKind::Dependency,
-                &path.child("serviceName"),
-                out,
-            );
-        }
+    if root_kind == "StatefulSet"
+        && path.0 == ["spec"]
+        && let Some(name) = text(node, "serviceName")
+    {
+        reference(
+            "Service",
+            name,
+            Some(ReferencePredicate::HeadlessService),
+            Presence::Absent,
+            RelationshipKind::Dependency,
+            &path.child("serviceName"),
+            out,
+        );
     }
 }
 

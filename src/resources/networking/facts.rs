@@ -210,58 +210,56 @@ fn service_selector_references(tree: &TreeNode, fields: &FieldDecodeContext, out
         .get_path(&path)
         .and_then(TreeNode::as_mapping)
         .filter(|entries| !entries.is_empty())
-    {
-        if let Some(labels) = entries
+        && let Some(labels) = entries
             .iter()
             .map(|(key, value)| value.as_str().map(|value| (key.clone(), value.to_owned())))
             .collect::<Option<BTreeMap<_, _>>>()
+    {
+        let selector = LabelSelector::from_match_labels(labels);
+        if fields.processing.tree_copy(source, fields.phase).is_err() {
+            return;
+        }
+        emit(
+            ReferenceTarget::SubjectSelector {
+                kinds: &[KindId::Pod],
+                selector: selector.clone(),
+                selection: SubjectSelection::PodObjectsAndTemplates,
+            },
+            ReferenceScope::SameNamespace,
+            RelationshipKind::Selector,
+            &path,
+            out,
+        );
+        if let Some(ports) = tree
+            .get("spec")
+            .and_then(|spec| spec.get("ports"))
+            .and_then(TreeNode::as_sequence)
         {
-            let selector = LabelSelector::from_match_labels(labels);
-            if fields.processing.tree_copy(source, fields.phase).is_err() {
-                return;
-            }
-            emit(
-                ReferenceTarget::SubjectSelector {
-                    kinds: &[KindId::Pod],
-                    selector: selector.clone(),
-                    selection: SubjectSelection::PodObjectsAndTemplates,
-                },
-                ReferenceScope::SameNamespace,
-                RelationshipKind::Selector,
-                &path,
-                out,
-            );
-            if let Some(ports) = tree
-                .get("spec")
-                .and_then(|spec| spec.get("ports"))
-                .and_then(TreeNode::as_sequence)
-            {
-                for (index, port) in ports.iter().enumerate() {
-                    if out.exhausted()
-                        || fields.processing.tree_copy(source, fields.phase).is_err()
-                        || fields.processing.tree_copy(port, fields.phase).is_err()
-                    {
-                        return;
-                    }
-                    if let Some(name) = validation::text(port, "targetPort").filter(|name| !name.is_empty()) {
-                        let leaf = FieldPath(vec![
-                            "spec".into(),
-                            "ports".into(),
-                            index.to_string(),
-                            "targetPort".into(),
-                        ]);
-                        emit(
-                            ReferenceTarget::NamedServiceTargetPort {
-                                selector: selector.clone(),
-                                name: crate::value::Protected::new(name.to_owned()),
-                                protocol: string_presence(port, "protocol"),
-                            },
-                            ReferenceScope::SameNamespace,
-                            RelationshipKind::Selector,
-                            &leaf,
-                            out,
-                        );
-                    }
+            for (index, port) in ports.iter().enumerate() {
+                if out.exhausted()
+                    || fields.processing.tree_copy(source, fields.phase).is_err()
+                    || fields.processing.tree_copy(port, fields.phase).is_err()
+                {
+                    return;
+                }
+                if let Some(name) = validation::text(port, "targetPort").filter(|name| !name.is_empty()) {
+                    let leaf = FieldPath(vec![
+                        "spec".into(),
+                        "ports".into(),
+                        index.to_string(),
+                        "targetPort".into(),
+                    ]);
+                    emit(
+                        ReferenceTarget::NamedServiceTargetPort {
+                            selector: selector.clone(),
+                            name: crate::value::Protected::new(name.to_owned()),
+                            protocol: string_presence(port, "protocol"),
+                        },
+                        ReferenceScope::SameNamespace,
+                        RelationshipKind::Selector,
+                        &leaf,
+                        out,
+                    );
                 }
             }
         }
@@ -303,54 +301,55 @@ pub(super) fn references<T: Profile>(value: &T, ctx: &EncodeContext<'_>, out: &m
         if reference_field(T::KIND, last) && fields.processing.tree_copy(node, fields.phase).is_err() {
             return;
         }
-        if T::KIND == "EndpointSlice" && last == "labels" {
-            if let Some(name) = validation::text(node, "kubernetes.io/service-name") {
-                checked(
-                    "v1",
-                    "Service",
-                    name,
-                    ReferenceScope::SameNamespace,
-                    &path.child("kubernetes.io/service-name"),
-                    out,
-                );
-            }
+        if T::KIND == "EndpointSlice"
+            && last == "labels"
+            && let Some(name) = validation::text(node, "kubernetes.io/service-name")
+        {
+            checked(
+                "v1",
+                "Service",
+                name,
+                ReferenceScope::SameNamespace,
+                &path.child("kubernetes.io/service-name"),
+                out,
+            );
         }
         if last == "targetRef" {
             object_reference(node, path, out);
         }
         if T::KIND == "Ingress" {
-            if last == "service" {
-                if let Some(name) = validation::text(node, "name") {
-                    let leaf = path.child("port");
-                    ingress_service(name, node.get("port"), &leaf, out);
-                }
+            if last == "service"
+                && let Some(name) = validation::text(node, "name")
+            {
+                let leaf = path.child("port");
+                ingress_service(name, node.get("port"), &leaf, out);
             }
-            if last == "serviceName" {
-                if let Some(name) = node.as_str() {
-                    let parent = FieldPath(path.0[..path.0.len() - 1].to_vec());
-                    let leaf = parent.child("servicePort");
-                    ingress_service(name, tree.get_path(&leaf), &leaf, out);
-                }
+            if last == "serviceName"
+                && let Some(name) = node.as_str()
+            {
+                let parent = FieldPath(path.0[..path.0.len() - 1].to_vec());
+                let leaf = parent.child("servicePort");
+                ingress_service(name, tree.get_path(&leaf), &leaf, out);
             }
             if last == "resource" && !matches!(node.value, TreeValue::Null) {
                 group_reference(node, ReferenceScope::SameNamespace, path, out);
             }
-            if last == "secretName" {
-                if let Some(name) = node.as_str().filter(|value| !value.is_empty()) {
-                    checked("v1", "Secret", name, ReferenceScope::SameNamespace, path, out);
-                }
+            if last == "secretName"
+                && let Some(name) = node.as_str().filter(|value| !value.is_empty())
+            {
+                checked("v1", "Secret", name, ReferenceScope::SameNamespace, path, out);
             }
-            if last == "ingressClassName" {
-                if let Some(name) = node.as_str() {
-                    checked(
-                        "networking.k8s.io/v1",
-                        "IngressClass",
-                        name,
-                        ReferenceScope::Cluster,
-                        path,
-                        out,
-                    );
-                }
+            if last == "ingressClassName"
+                && let Some(name) = node.as_str()
+            {
+                checked(
+                    "networking.k8s.io/v1",
+                    "IngressClass",
+                    name,
+                    ReferenceScope::Cluster,
+                    path,
+                    out,
+                );
             }
         }
         if T::KIND == "IngressClass" && last == "parameters" && !matches!(node.value, TreeValue::Null) {

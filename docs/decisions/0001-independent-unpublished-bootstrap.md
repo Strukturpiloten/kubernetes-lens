@@ -1,6 +1,7 @@
 # ADR 0001: Independent unpublished bootstrap
 
-Status: Accepted; empty-library/public-API statements superseded by ADR 0003
+Status: Accepted; empty-library/public-API statements superseded by ADR 0003;
+MSRV superseded by [ADR 0028](0028-rust-198-minimum.md)
 
 ## Context
 

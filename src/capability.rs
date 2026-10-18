@@ -2354,12 +2354,11 @@ fn contextual_findings(tree: &crate::syntax::TreeNode, gvk: &GroupVersionKind, s
             return;
         }
         let regular = pattern.replace("/initContainers/", "/containers/");
-        if regular != pattern {
-            if let Ok(path) = crate::diagnostic::FieldPath::parse(&regular) {
-                if contextual_present(tree, &path.0, session) {
-                    session.finding(FindingCode::NativeFieldInvalid, &path);
-                }
-            }
+        if regular != pattern
+            && let Ok(path) = crate::diagnostic::FieldPath::parse(&regular)
+            && contextual_present(tree, &path.0, session)
+        {
+            session.finding(FindingCode::NativeFieldInvalid, &path);
         }
     }
 }

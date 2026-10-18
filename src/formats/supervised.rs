@@ -455,18 +455,18 @@ impl SupervisedRenderer {
             return Err(FormatError::new(FormatCode::RendererFailed));
         }
         let result = self.execute_controlled(request, control);
-        if let Err(error) = &result {
-            if self.last_failure.is_none() {
-                self.last_failure = Some(if control.cancellation.is_cancelled() {
-                    FailureCause::Cancelled
-                } else if Instant::now() >= control.end {
-                    FailureCause::Deadline
-                } else if error.code == FormatCode::RendererUnavailable {
-                    FailureCause::Unavailable
-                } else {
-                    FailureCause::Admission
-                });
-            }
+        if let Err(error) = &result
+            && self.last_failure.is_none()
+        {
+            self.last_failure = Some(if control.cancellation.is_cancelled() {
+                FailureCause::Cancelled
+            } else if Instant::now() >= control.end {
+                FailureCause::Deadline
+            } else if error.code == FormatCode::RendererUnavailable {
+                FailureCause::Unavailable
+            } else {
+                FailureCause::Admission
+            });
         }
         result
     }
@@ -574,14 +574,14 @@ impl OfflineRenderer for SupervisedRenderer {
     fn execute(&mut self, request: &RenderRequest) -> Result<RendererOutput> {
         self.last_failure = None;
         let result = self.execute_inner(request);
-        if let Err(e) = &result {
-            if self.last_failure.is_none() {
-                self.last_failure = Some(if e.code == FormatCode::RendererUnavailable {
-                    FailureCause::Unavailable
-                } else {
-                    FailureCause::Admission
-                });
-            }
+        if let Err(e) = &result
+            && self.last_failure.is_none()
+        {
+            self.last_failure = Some(if e.code == FormatCode::RendererUnavailable {
+                FailureCause::Unavailable
+            } else {
+                FailureCause::Admission
+            });
         }
         result
     }

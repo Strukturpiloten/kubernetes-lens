@@ -1,6 +1,6 @@
 # Platform support
 
-The byte-oriented offline Rust foundation uses edition 2024 and MSRV 1.85.0. Explicit file/directory
+The byte-oriented offline Rust foundation uses edition 2024 and MSRV 1.98.1. Explicit file/directory
 acquisition currently supports Linux only, with regular-file identity and opened-descriptor
 containment verification through procfs. If those checks are unavailable or fail, acquisition
 refuses input. Other platforms can supply bounded UTF-8 bytes directly; acquisition fails closed.

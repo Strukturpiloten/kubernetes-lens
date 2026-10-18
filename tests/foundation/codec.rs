@@ -29,19 +29,18 @@ impl NativeResource for TestPod {
             .get("metadata")
             .and_then(|m| m.get("name"))
             .and_then(TreeNode::as_str)
+            && let Ok(gvk) = GroupVersionKind::new("v1", "Pod")
         {
-            if let Ok(gvk) = GroupVersionKind::new("v1", "Pod") {
-                out.push(crate::graph::Reference {
-                    from: crate::ResourceId(0),
-                    path: FieldPath::default(),
-                    relation: crate::graph::RelationshipKind::Dependency,
-                    target: crate::graph::ReferenceTarget::Exact {
-                        gvk: Some(gvk),
-                        name: name.to_owned(),
-                    },
-                    scope: crate::graph::ReferenceScope::SameNamespace,
-                });
-            }
+            out.push(crate::graph::Reference {
+                from: crate::ResourceId(0),
+                path: FieldPath::default(),
+                relation: crate::graph::RelationshipKind::Dependency,
+                target: crate::graph::ReferenceTarget::Exact {
+                    gvk: Some(gvk),
+                    name: name.to_owned(),
+                },
+                scope: crate::graph::ReferenceScope::SameNamespace,
+            });
         }
     }
     fn collect_protected_paths(&self, _: &EncodeContext<'_>, out: &mut Vec<FieldPath>) {

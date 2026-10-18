@@ -59,12 +59,12 @@ pub(super) fn ip(
             context(path, out);
         }
     }
-    if let IpAddr::V6(address) = parsed {
-        if address.to_ipv4_mapped().is_some() {
-            context(path, out);
-            // No positive family/geometry authority from an unrepresented native parser variant.
-            return None;
-        }
+    if let IpAddr::V6(address) = parsed
+        && address.to_ipv4_mapped().is_some()
+    {
+        context(path, out);
+        // No positive family/geometry authority from an unrepresented native parser variant.
+        return None;
     }
     Some(parsed)
 }

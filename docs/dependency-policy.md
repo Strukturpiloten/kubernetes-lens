@@ -2,7 +2,10 @@
 
 Foundation dependencies use exact reviewed Cargo pins and locked registry integrity. Cargo.lock is committed, exact dependencies must be
 reviewed with license and MSRV evidence, and normal builds use `--locked`. The normal toolchain is
-owned by the native `rust-toolchain` manager; MSRV 1.85.0 is a fixed compatibility anchor.
+owned by the native `rust-toolchain` manager; MSRV 1.98.1 is a fixed compatibility anchor.
+The manifest and Clippy declare the minimum explicitly; local, CI and release-validation MSRV
+checks derive it from Cargo metadata or the manifest. Renovate continues to own only the normal
+toolchain pin, with Dashboard approval and no automerge; minimum-version changes require review.
 
 The operational Renovate test tool is the official slim OCI artifact in `scripts/renovate-tool.json`,
 pinned to an exact version and verified multiarchitecture index digest. There is no local npm product

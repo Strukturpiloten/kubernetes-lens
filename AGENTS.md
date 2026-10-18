@@ -17,7 +17,7 @@ Treat input as fallible, retain source evidence and explicit versions, redact pr
 default, and never silently discard configuration. Do not apply output or mutate runtime resources
 unless a separate explicit task authorizes disposable conformance testing.
 
-Rust 2024, MSRV 1.85.0. Start repository-owned YAML with `---`. Pin Actions to full SHAs with exact
+Rust 2024, MSRV 1.98.1. Start repository-owned YAML with `---`. Pin Actions to full SHAs with exact
 release comments. Keep Cargo and npm locks, Renovate extraction/overlap/replacement and effective
 rule-order tests current with every pin change. Preserve the existing license and unrelated work.
 Shared devcontainer tools and Kubernetes pins belong to BoxFerry; do not create duplicate inventories.

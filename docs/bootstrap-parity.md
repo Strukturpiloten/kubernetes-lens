@@ -28,7 +28,7 @@ Renovate configuration and real-engine tests are authored for this repository.
 
 | Concern                        | Canonical definition                                                                                                           | Existing consumers compared                                                                       | KubernetesLens contract / justified difference                                                                                                                                                           |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cargo/MSRV/lock                | Lens `Cargo.toml`, `.cargo/config.toml`, `rust-toolchain.toml`                                                                 | BoxFerry, Compose, Podman, Quadlet, Docker                                                        | Independent Rust 2024/MSRV 1.85.0; normal 1.98.1 toolchain; no product dependencies; committed lock; local version 0.1.0 is unpublished                                                                  |
+| Cargo/MSRV/lock                | Lens `Cargo.toml`, `.cargo/config.toml`, `rust-toolchain.toml`                                                                 | BoxFerry, Compose, Podman, Quadlet, Docker                                                        | Independent Rust 2024/MSRV 1.98.1; normal 1.98.1 toolchain; no product dependencies; committed lock; local version 0.1.0 is unpublished                                                                  |
 | File quality                   | Compose `scripts/check-files.sh` and lint/editor configs; shared BoxFerry tools                                                | All six references, website uses Node product tools too                                           | Same file formats/YAML markers/offline TOML contract; no duplicated local file-tool package or installer                                                                                                 |
 | Format/lint task               | BoxFerry `scripts/format-lint.sh`                                                                                              | BoxFerry; Docker has a separate task                                                              | Adapted task, same fix/check modes, two-job default and no tests; only environment variable prefix differs                                                                                               |
 | Complete local gate            | Lens `scripts/check-all.sh`; BoxFerry format/check contracts                                                                   | All six, with repository-specific native/product suites                                           | Complete local phases `rust`, `msrv`, `dependencies`, `documentation`; worktree-owned artifacts and immediate failure propagation; no absent native/coverage/SemVer baseline reported as passing         |
@@ -49,6 +49,16 @@ without changing their files, public APIs, tool versions or application suites. 
 claim a new automation rollout in other repositories or that every existing divergence is resolved.
 
 ## Operational pin and integrity inventory
+
+KubernetesLens #54 aligns the active minimum with the existing Rust 1.98.1 normal toolchain.
+`Cargo.toml` is the minimum-version authority: `scripts/check-all.sh` preflight and
+`scripts/run-checks.sh msrv` read it directly; CI's MSRV job reads Cargo metadata and manual
+release validation calls that CI workflow. Clippy's explicit minimum is checked against Cargo.
+The existing native `rust-toolchain` Renovate manager still owns the normal pin once, and its
+later rule retains Dashboard approval and disables automerge. Extraction paths and values,
+shared checkout refs, dependency locks and tool integrity records are unchanged; no Renovate
+configuration change is needed. Original audit commits and native compatibility evidence remain
+historical provenance, not new workspace validation evidence.
 
 Production pin ownership is derived from actual checked-in files in `scripts/test-renovate.mjs`,
 not a second maintained version list. Native `github-actions` owns literal Action SHA/tag pairs and

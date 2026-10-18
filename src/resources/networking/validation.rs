@@ -43,10 +43,10 @@ fn require(node: &TreeNode, key: &str, path: &FieldPath, out: &mut dyn FindingSi
     }
 }
 fn number(node: &TreeNode, key: &str, lower: i64, upper: i64, path: &FieldPath, out: &mut dyn FindingSink) {
-    if let Some(value) = node.get(key) {
-        if !integer(value).is_some_and(|value| (lower..=upper).contains(&value)) {
-            invalid(&path.child(key), out);
-        }
+    if let Some(value) = node.get(key)
+        && !integer(value).is_some_and(|value| (lower..=upper).contains(&value))
+    {
+        invalid(&path.child(key), out);
     }
 }
 pub(super) fn port_name(value: &str) -> bool {
@@ -65,10 +65,10 @@ fn int_or_port(node: &TreeNode, key: &str, path: &FieldPath, out: &mut dyn Findi
     }
 }
 fn named(node: &TreeNode, key: &str, check: fn(&str) -> bool, path: &FieldPath, out: &mut dyn FindingSink) {
-    if let Some(value) = node.get(key) {
-        if !value.as_str().is_some_and(check) {
-            invalid(&path.child(key), out);
-        }
+    if let Some(value) = node.get(key)
+        && !value.as_str().is_some_and(check)
+    {
+        invalid(&path.child(key), out);
     }
 }
 fn nullable_named(node: &TreeNode, key: &str, check: fn(&str) -> bool, path: &FieldPath, out: &mut dyn FindingSink) {
@@ -302,10 +302,12 @@ pub(super) fn validate<T: Profile>(value: &T, ctx: &ValidationContext<'_>, out: 
         if out.exhausted() {
             break;
         }
-        if *kind == T::KIND && *api == T::API && (*first..=*last).contains(&ctx.target.kubernetes.minor()) {
-            if let Ok(path) = FieldPath::parse(pointer) {
-                required_path(&tree, &path.0, &root, out);
-            }
+        if *kind == T::KIND
+            && *api == T::API
+            && (*first..=*last).contains(&ctx.target.kubernetes.minor())
+            && let Ok(path) = FieldPath::parse(pointer)
+        {
+            required_path(&tree, &path.0, &root, out);
         }
     }
     match T::KIND {
@@ -340,26 +342,24 @@ pub(super) fn validate<T: Profile>(value: &T, ctx: &ValidationContext<'_>, out: 
                 field.path.split('/').skip(1).eq(pattern.0.iter().map(String::as_str))
                     && field.merge == MergeStrategy::Object
             });
-        if is_object {
-            if let Some(entries) = node.as_mapping() {
-                for (key, _) in entries {
-                    if out.exhausted() {
-                        break;
-                    }
-                    if pattern.0.is_empty() && matches!(key.as_str(), "apiVersion" | "kind") {
-                        continue;
-                    }
-                    let child = pattern.child(key.clone());
-                    if !capability
-                        .fields
-                        .iter()
-                        .any(|field| field.path.split('/').skip(1).eq(child.0.iter().map(String::as_str)))
-                    {
-                        out.push(
-                            Finding::warning(FindingCode::UnadmittedField, Phase::Validation)
-                                .at_path(path.child(key.clone())),
-                        );
-                    }
+        if is_object && let Some(entries) = node.as_mapping() {
+            for (key, _) in entries {
+                if out.exhausted() {
+                    break;
+                }
+                if pattern.0.is_empty() && matches!(key.as_str(), "apiVersion" | "kind") {
+                    continue;
+                }
+                let child = pattern.child(key.clone());
+                if !capability
+                    .fields
+                    .iter()
+                    .any(|field| field.path.split('/').skip(1).eq(child.0.iter().map(String::as_str)))
+                {
+                    out.push(
+                        Finding::warning(FindingCode::UnadmittedField, Phase::Validation)
+                            .at_path(path.child(key.clone())),
+                    );
                 }
             }
         }
@@ -456,13 +456,13 @@ fn service(spec: &TreeNode, ctx: &ValidationContext<'_>, path: &FieldPath, out: 
             out,
         );
     }
-    if let Some(distribution) = text(spec, "trafficDistribution") {
-        if distribution != "PreferClose" {
-            out.push(
-                Finding::warning(FindingCode::UnadmittedField, Phase::Validation)
-                    .at_path(path.child("trafficDistribution")),
-            );
-        }
+    if let Some(distribution) = text(spec, "trafficDistribution")
+        && distribution != "PreferClose"
+    {
+        out.push(
+            Finding::warning(FindingCode::UnadmittedField, Phase::Validation)
+                .at_path(path.child("trafficDistribution")),
+        );
     }
     service_addresses(spec, kind, ctx, path, out);
 }
@@ -490,10 +490,10 @@ fn service_ports(
                     invalid(&port_path.child("name"), out);
                 }
             }
-            if let Some(name) = text(item, "name") {
-                if !names.insert(name) {
-                    invalid(&port_path.child("name"), out);
-                }
+            if let Some(name) = text(item, "name")
+                && !names.insert(name)
+            {
+                invalid(&port_path.child("name"), out);
             }
             if let Some(node_port) = item.get("nodePort").and_then(integer) {
                 let protocol = text(item, "protocol")
@@ -640,14 +640,13 @@ fn service_addresses(
             }
             first = item.as_str();
         }
-        if let Some(ips) = spec.get("clusterIPs").and_then(TreeNode::as_sequence) {
-            if ips.first().and_then(TreeNode::as_str) != Some("None")
-                && !ips.is_empty()
-                && !items.is_empty()
-                && ips.len() != items.len()
-            {
-                invalid(&path.child("ipFamilies"), out);
-            }
+        if let Some(ips) = spec.get("clusterIPs").and_then(TreeNode::as_sequence)
+            && ips.first().and_then(TreeNode::as_str) != Some("None")
+            && !ips.is_empty()
+            && !items.is_empty()
+            && ips.len() != items.len()
+        {
+            invalid(&path.child("ipFamilies"), out);
         }
     }
     if kind == "ExternalName" && present(spec, "ipFamilyPolicy") {
@@ -715,13 +714,13 @@ fn slice(tree: &TreeNode, ctx: &ValidationContext<'_>, path: &FieldPath, out: &m
                 return;
             }
             let p = path.child("endpoints").child(index.to_string());
-            if text(tree, "apiVersion") == Some("discovery.k8s.io/v1beta1") {
-                if let Some(topology_node) = endpoint.get("topology") {
-                    if topology_node.as_mapping().is_some_and(|labels| labels.len() > 16) {
-                        invalid(&p.child("topology"), out);
-                    }
-                    labels(topology_node, &p.child("topology"), out);
+            if text(tree, "apiVersion") == Some("discovery.k8s.io/v1beta1")
+                && let Some(topology_node) = endpoint.get("topology")
+            {
+                if topology_node.as_mapping().is_some_and(|labels| labels.len() > 16) {
+                    invalid(&p.child("topology"), out);
                 }
+                labels(topology_node, &p.child("topology"), out);
             }
             if let Some(addresses) = endpoint.get("addresses").and_then(TreeNode::as_sequence) {
                 let p = p.child("addresses");
@@ -778,8 +777,8 @@ fn ingress(spec: &TreeNode, api: &str, path: &FieldPath, out: &mut dyn FindingSi
 }
 fn class(spec: &TreeNode, path: &FieldPath, out: &mut dyn FindingSink) {
     require(spec, "controller", path, out);
-    if let Some(controller) = text(spec, "controller") {
-        if controller.len() > 250
+    if let Some(controller) = text(spec, "controller")
+        && (controller.len() > 250
             || !controller.split_once('/').is_some_and(|(domain, path)| {
                 dns_subdomain(domain)
                     && !path.is_empty()
@@ -806,10 +805,9 @@ fn class(spec: &TreeNode, path: &FieldPath, out: &mut dyn FindingSink) {
                                     | b':'
                             )
                     })
-            })
-        {
-            invalid(&path.child("controller"), out);
-        }
+            }))
+    {
+        invalid(&path.child("controller"), out);
     }
     if let Some(parameters) = spec
         .get("parameters")
@@ -922,10 +920,11 @@ fn ingress_path(node: &TreeNode, path: &FieldPath, stable: bool, out: &mut dyn F
         }) {
             invalid(&path.child("path"), out);
         }
-    } else if let Some(value) = text(node, "path") {
-        if !value.is_empty() && !value.starts_with('/') {
-            invalid(&path.child("path"), out);
-        }
+    } else if let Some(value) = text(node, "path")
+        && !value.is_empty()
+        && !value.starts_with('/')
+    {
+        invalid(&path.child("path"), out);
     }
 }
 fn tls_host(value: &str) -> bool {
@@ -1042,10 +1041,10 @@ fn bound_node(
         && kind == "Endpoints"
     {
         require(node, "ip", path, out);
-        if let Some(value) = text(node, "ip") {
-            if ip(value, ctx, &path.child("ip"), out).is_some_and(|ip| !usable_ip(ip)) {
-                invalid(&path.child("ip"), out);
-            }
+        if let Some(value) = text(node, "ip")
+            && ip(value, ctx, &path.child("ip"), out).is_some_and(|ip| !usable_ip(ip))
+        {
+            invalid(&path.child("ip"), out);
         }
         if text(node, "hostname") != Some("") {
             named(node, "hostname", dns_label, path, out);
@@ -1075,21 +1074,22 @@ fn ingress_hosts(
     out: &mut dyn FindingSink,
 ) {
     let last = segments.last().map_or("", String::as_str);
-    if last == "*" && segments.iter().any(|part| part == "rules") {
-        if let Some(value) = text(node, "host") {
-            if !value.is_empty() && !host(value) {
-                if ctx.target.kubernetes.minor() <= 22
-                    && value.parse::<IpAddr>().is_err()
-                    && ip_context::decimal_ipv4(value).is_some()
-                    && tls_host(value)
-                {
-                    // These witnesses use Go's compiler-dependent net.ParseIP;
-                    // the target has no historical Go parser/version evidence.
-                    context(&path.child("host"), out);
-                } else {
-                    invalid(&path.child("host"), out);
-                }
-            }
+    if last == "*"
+        && segments.iter().any(|part| part == "rules")
+        && let Some(value) = text(node, "host")
+        && !value.is_empty()
+        && !host(value)
+    {
+        if ctx.target.kubernetes.minor() <= 22
+            && value.parse::<IpAddr>().is_err()
+            && ip_context::decimal_ipv4(value).is_some()
+            && tls_host(value)
+        {
+            // These witnesses use Go's compiler-dependent net.ParseIP;
+            // the target has no historical Go parser/version evidence.
+            context(&path.child("host"), out);
+        } else {
+            invalid(&path.child("host"), out);
         }
     }
     if last == "http"
@@ -1100,15 +1100,15 @@ fn ingress_hosts(
     {
         invalid(&path.child("paths"), out);
     }
-    if last == "hosts" {
-        if let Some(items) = node.as_sequence() {
-            for (index, item) in items.iter().enumerate() {
-                if out.exhausted() {
-                    break;
-                }
-                if !item.as_str().is_some_and(tls_host) {
-                    invalid(&path.child(index.to_string()), out);
-                }
+    if last == "hosts"
+        && let Some(items) = node.as_sequence()
+    {
+        for (index, item) in items.iter().enumerate() {
+            if out.exhausted() {
+                break;
+            }
+            if !item.as_str().is_some_and(tls_host) {
+                invalid(&path.child(index.to_string()), out);
             }
         }
     }
@@ -1180,16 +1180,15 @@ fn port_object(node: &TreeNode, path: &FieldPath, kind: &str, out: &mut dyn Find
         }
         number(node, "nodePort", 0, 65535, path, out);
     }
-    if let Some(name) = text(node, "name") {
-        if !name.is_empty()
-            && !(if matches!(kind, "Service" | "Endpoints" | "EndpointSlice") {
-                dns_label(name)
-            } else {
-                port_name(name)
-            })
-        {
-            invalid(&path.child("name"), out);
-        }
+    if let Some(name) = text(node, "name")
+        && !name.is_empty()
+        && !(if matches!(kind, "Service" | "Endpoints" | "EndpointSlice") {
+            dns_label(name)
+        } else {
+            port_name(name)
+        })
+    {
+        invalid(&path.child("name"), out);
     }
     if matches!(kind, "Service" | "EndpointSlice") {
         nullable_named(node, "appProtocol", label_key, path, out);

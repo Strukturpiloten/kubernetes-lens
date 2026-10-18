@@ -546,10 +546,11 @@ impl ResourceDocument {
         }
         for length in 0..path.0.len() {
             let prefix = FieldPath(path.0[..length].to_vec());
-            if let (Some(before), Some(after)) = (self.original.get_path(&prefix), tree.get_path(&prefix)) {
-                if matches!(before.value, TreeValue::Sequence(_)) && !equal(&prefix, before, after)? {
-                    return Some(generated);
-                }
+            if let (Some(before), Some(after)) = (self.original.get_path(&prefix), tree.get_path(&prefix))
+                && matches!(before.value, TreeValue::Sequence(_))
+                && !equal(&prefix, before, after)?
+            {
+                return Some(generated);
             }
         }
         match (self.original.get_path(path), tree.get_path(path)) {
@@ -1034,17 +1035,17 @@ impl ResourceSet {
                         out.push(finding.for_resource(document.id));
                         break;
                     }
-                    if let Some(key) = identity.collision_key() {
-                        if let Some(previous) = seen.insert(key, document.id) {
-                            mode.emit(
-                                Finding::error(FindingCode::DuplicateIdentity, phase).for_resource(previous),
-                                out,
-                            );
-                            mode.emit(
-                                Finding::error(FindingCode::DuplicateIdentity, phase).for_resource(document.id),
-                                out,
-                            );
-                        }
+                    if let Some(key) = identity.collision_key()
+                        && let Some(previous) = seen.insert(key, document.id)
+                    {
+                        mode.emit(
+                            Finding::error(FindingCode::DuplicateIdentity, phase).for_resource(previous),
+                            out,
+                        );
+                        mode.emit(
+                            Finding::error(FindingCode::DuplicateIdentity, phase).for_resource(document.id),
+                            out,
+                        );
                     }
                 }
                 Err(finding) => mode.emit(finding.for_resource(document.id), out),
@@ -1291,11 +1292,11 @@ impl ResourceSet {
             if let Some(items) = spec.get("versions").and_then(TreeNode::as_sequence) {
                 for item in items {
                     self.processing.work(1, Phase::Decoding)?;
-                    if item.get("served").is_some_and(|n| n.value == TreeValue::Bool(true)) {
-                        if let Some(version) = item.get("name").and_then(TreeNode::as_str) {
-                            self.processing.payload(version.len(), Phase::Decoding)?;
-                            versions.push(version.to_owned());
-                        }
+                    if item.get("served").is_some_and(|n| n.value == TreeValue::Bool(true))
+                        && let Some(version) = item.get("name").and_then(TreeNode::as_str)
+                    {
+                        self.processing.payload(version.len(), Phase::Decoding)?;
+                        versions.push(version.to_owned());
                     }
                 }
             } else if let Some(version) = spec.get("version").and_then(TreeNode::as_str) {
