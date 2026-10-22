@@ -33,7 +33,7 @@ Renovate configuration and real-engine tests are authored for this repository.
 | Format/lint task               | BoxFerry `scripts/format-lint.sh`                                                                                              | BoxFerry; Docker has a separate task                                                              | Adapted task, same fix/check modes, two-job default and no tests; only environment variable prefix differs                                                                                               |
 | Complete local gate            | Lens `scripts/check-all.sh`; BoxFerry format/check contracts                                                                   | All six, with repository-specific native/product suites                                           | Complete local phases `rust`, `msrv`, `dependencies`, `documentation`; worktree-owned artifacts and immediate failure propagation; no absent native/coverage/SemVer baseline reported as passing         |
 | Change-aware planning          | Compose/BoxFerry `scripts/validation-plan.py`, policy, regression tests                                                        | Compose, Podman, Quadlet, website and BoxFerry                                                    | Vendored standard-library contract; trusted PR base; rollout fails full; prose only documentation+age, executable/unknown full; main/manual/release full                                                 |
-| PR/main/manual checks          | Compose `.github/workflows/ci.yml`                                                                                             | BoxFerry/Compose/Podman/Quadlet/website `ci.yml`; Docker `check.yml`/`native-validation.yml`      | Stable Rust/MSRV/dependency/documentation/age job names and tested aggregate `PR gate`; no placeholder API or coverage jobs                                                                              |
+| PR/main/manual checks          | Compose `.github/workflows/ci.yml`                                                                                             | BoxFerry/Compose/Podman/Quadlet/website `ci.yml`; Docker `check.yml`/`native-validation.yml`      | Stable Rust/MSRV/dependency/documentation/age job names and tested aggregate `Required CI`; no placeholder API or coverage jobs                                                                          |
 | Shared/reusable infrastructure | BoxFerry `.devcontainer/Dockerfile`, `scripts/install-file-tools.sh`, `package{,-lock}.json`; shared `.github` lockfile policy | All workspace repositories; existing standalone definitions are upstream-owned                    | Immutable tool checkout; provision only needed file tools, reading upstream versions/locks/checksums; no second image, Kubernetes pin inventory or cross-repository product suite                        |
 | Editor/workspace setup         | Compose `.vscode/settings.json` / `.editorconfig`; BoxFerry workspace mounts                                                   | All six                                                                                           | Shared sibling checkout, Rust analyzer/formatting settings; no standalone devcontainer. Local primary-created worktree preparation is not a shipped container feature                                    |
 | Agent roles                    | Compose `.codex/agents/*.toml`; current official schema                                                                        | All six                                                                                           | Primary explicitly GPT-6.1 Sol/xhigh; worker/research/review Sol/high, verification Luna/high; at most eight spawned threads plus primary                                                                |
@@ -128,8 +128,40 @@ The host token's metadata says admin but Actions-permission GET and repository P
 (`Resource not accessible by personal access token`). No restriction was bypassed.
 [#16](https://github.com/Strukturpiloten/kubernetes-lens/issues/16) tracks actual administrator readback
 of Actions allowlist/default permissions/fork controls, release environments, squash/delete settings
-and the protected exact required check `PR gate`. Source validation cannot verify remote execution,
+and the protected exact required check `Required CI`. Source validation cannot verify remote execution,
 required checks or those inaccessible settings; exact-head CI/readback remains the primary's gate.
+
+## Required-check name correction
+
+The 2026-10-22 read-only effective-rule endpoint for `main` reports that inherited organization
+ruleset 17023551 requires the exact `Required CI` status context. The bootstrap emitted `PR gate`,
+so PR #57 remained blocked even after every candidate job passed. The earlier required-name
+statement above was incorrect; direct branch-protection access still returns HTTP 403. This
+correction changes the aggregate display name and protects its unique placement with executable
+wrong-name, missing-name, duplicate-name and wrong-job mutations. It preserves job ID `pr-gate`,
+the trusted-base verifier, all prerequisites, triggers, permissions, timeouts and failure/skip rules.
+The organization ruleset is unchanged; no status is synthesized and no protection is bypassed.
+
+The committed-reference comparison for [#58](https://github.com/Strukturpiloten/kubernetes-lens/issues/58)
+selected these immutable sources; no reference checkout, pin, installer or Renovate owner changed:
+
+| Repository     | Reviewed commit                            | Aggregate contract                                                                               |
+| -------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| BoxFerry       | `ebb1cf18548218c90fcfb5b8414f0b9fa80d73b9` | Canonical `.github/workflows/ci.yml`: job `pr-gate`, display `Required CI`                       |
+| ComposeLens    | `3ee9c28e567f58b9aacd2a2f3f1a2f0491fc943c` | Same job/display contract                                                                        |
+| PodmanLens     | `cd8d176b45d77b07fccbb4b9fa6b879940493571` | Same job/display contract                                                                        |
+| QuadletLens    | `5c54b69dbd46d42f48641dfd2226f0eb9c4b0183` | Same job/display contract                                                                        |
+| Website        | `de27d5d74b42787a4381ac304a54f7879417a9bd` | Same job/display contract                                                                        |
+| DockerLens     | `96d83f6d6959dba6079e3e9bdc35db3b27635609` | Split `check.yml`/`native-validation.yml`; no unified named aggregate in this committed baseline |
+| KubernetesLens | `24807149369c9cb2aebdbd8411794f59a01213a4` | `pr-gate` incorrectly emitted `PR gate`; corrected here                                          |
+
+DockerLens' effective `main` rules also require `Required CI`. Its split-workflow mismatch is an
+out-of-scope coordination follow-up linked to the ongoing
+[DockerLens #31](https://github.com/Strukturpiloten/docker-lens/issues/31) work; it is not repaired
+or represented as delivered by this change. KubernetesLens
+[#16](https://github.com/Strukturpiloten/kubernetes-lens/issues/16) retains the remaining administrator
+settings/readback obligations. PR, main, manual and release-validation calls all consume the same
+KubernetesLens aggregate definition; only exact-head execution can establish remote success.
 
 ## Explicit file-formatter configuration
 
