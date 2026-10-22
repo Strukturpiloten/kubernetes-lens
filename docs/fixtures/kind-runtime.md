@@ -7,7 +7,8 @@ It does not import the library, acquire product input, apply manifests, run gene
 or deploy any application. It complements the existing official fixture and renderer drivers;
 it does not repeat them. API acceptance, workload/controller behavior and all machine-ledger
 native evidence cells remain **pending** until separately executed and independently reviewed.
-A `readiness-passed` receipt establishes only this harness's selected readiness checks.
+Successful API checks produce `readiness-observed-pending-retirement`. No current public phase
+completion emits `readiness-passed` or exit 0: complete detached-helper containment is not established.
 
 The Linux Rust integration target `official_native_probe` invokes only `--self-test`, with
 an empty inherited environment and an explicit Python path. Ordinary tests and complete gates
@@ -124,7 +125,7 @@ also injects `--memory`, `--memory-swap`, `--cpus` and `--pids-limit` before cre
 `--cgroups=no-conmon` keeps conmon in its inherited bounded caller scope while leaving node
 cgroups and every node resource cap enabled; container cgroups are never disabled.
 After creation, actual node inspection and its live host PID cgroup must agree with those caps
-and placement before readiness can pass. Kind's rootless privileged node remains within the
+and placement before readiness can be observed. Kind's rootless privileged node remains within the
 unprivileged user runtime and this bounded task slice.
 
 A concrete external preparation route is a **new transient user slice**, followed by a delegated
@@ -185,21 +186,105 @@ store has at most 250000 scanned entries. Before/after allocated-byte counts and
 are recorded. **The disk budget is a measurement/preflight refusal, not a filesystem quota**:
 image unpacking and a node can consume space between measurements. Use an independently
 provisioned quota/tmpfs if a hard disk ceiling is required. The harness neither creates such
-mounts nor claims a hard physical-disk theorem. CPU/memory/PID limits are kernel-enforced.
+mounts nor claims a hard physical-disk theorem. CPU/memory/PID limits are kernel-enforced for the explicit outer envelope and its entire
+subtree, including the controller and target slice. The target slice also retains its own caps.
+This requires the pre-existing outer envelope described below; it is never inferred or created.
 
-## Explicit invocation
+## Explicit invocation and outside finalization
 
-Run pure controls without access to Podman or a cluster:
+Pure controls remain isolated from Podman and clusters:
 
 ```sh
 /usr/bin/python3 -B scripts/fixtures/kind_runtime.py --self-test
 ```
 
-Within the prepared task scope, choose reviewed immutable inputs and limits. Values below
-are placeholders; they are not discovered from PATH, global tools, current-context or a cache.
-The private store must be empty on the first phase. A separate `preflight` phase is available
-with the same arguments; it contacts no Kubernetes server and returns a non-pass receipt.
-Use a new empty store after a standalone preflight rather than attempting to adopt its state.
+Runtime phases now require two explicit invocations of this same script. External operator
+preparation must place both under one already bounded, uniquely owned outer task slice:
+
+- The full target slice is a strict descendant of that outer envelope. The worker and its
+  launching shell live inside the target slice, along with node and inherited conmon scopes.
+- The controller lives in a different descendant of the outer envelope, outside the entire
+  target slice. It never creates a process, service, unit or cgroup, or moves itself or the worker.
+- The outer envelope's finite CPU, memory, zero-swap and PID caps must be no greater than the
+  supplied invocation limits. They cover both stages and other processes in that subtree from
+  their first read. They provide no resource or accounting claim for helpers launched elsewhere
+  by the shared user manager or migrated out of the envelope.
+  A bounded target slice alone is insufficient. Missing topology or caps refuse before any
+  native command; the harness never changes a parent/global unit or weakens an aggregate claim.
+
+Prepare a separate fresh absolute mode-0700 handoff directory owned by the invoking uid,
+outside the private store and without symlink ancestors. Put an operator-reviewed mode-0600
+single-link contract there and authenticate its exact SHA-256. Do not reuse a handoff directory,
+even after failure. The contract has this shape; replace all identity placeholders with actual
+independently captured values, not guesses or invented manager identities:
+
+```json
+{
+  "schema": 1,
+  "owner": "32_LOWERCASE_HEX_NONCE",
+  "phase": "prepare-image",
+  "boot_id": "ACTUAL_KERNEL_BOOT_UUID",
+  "source_sha256": "ACTUAL_FINAL_SCRIPT_SHA256",
+  "cgroup": "/sys/fs/cgroup/EXACT_OUTER_SLICE.slice/EXACT_TARGET_SLICE.slice",
+  "cgroup_identity": [123, 456],
+  "unit": {
+    "name": "EXACT_TARGET_SLICE.slice",
+    "transient": true,
+    "invocation_id": "ACTUAL_32_HEX_MANAGER_INVOCATION_ID"
+  },
+  "launch_shell": { "pid": 1234, "group": 1234, "session": 1234, "start": 12345 },
+  "store": "/private/new-issue2-store",
+  "store_identity": [123, 789],
+  "envelope": {
+    "cgroup": "/sys/fs/cgroup/EXACT_OUTER_SLICE.slice",
+    "cgroup_identity": [123, 455],
+    "cpu": [200000, 100000],
+    "memory": 4294967296,
+    "swap": 0,
+    "pids": 4096
+  },
+  "controller_reservation": { "output_bytes": 4194304, "store_bytes": 1048576 },
+  "limits": {
+    "seconds": 900,
+    "cleanup_seconds": 180,
+    "cpus": 2,
+    "memory_bytes": 4294967296,
+    "pids": 4096,
+    "nodes": 1,
+    "store_bytes": 17179869184,
+    "output_bytes": 8388608,
+    "commands": 256
+  }
+}
+```
+
+Both actual slice basenames must start `kubernetes-lens-issue2-` and end `.slice`;
+the example paths are schematic. Device/inode pairs come from the exact live kernel paths.
+The unit record is the operator's attestation of the unique transient unit and its recorded
+InvocationID, bound to that boot/path/inode; the script does not query the manager to independently
+authenticate it. If the selected host cannot provide that identity, refuse this topology rather
+than invent one. This record grants no unit-stop or kill authority. Exact source, policy digest,
+selected tool/profile/helper/configuration identities, store inode, shell PID/start identity,
+controller and worker identities all join the same handoff. There is no helper-coverage boolean,
+provider selector or caller-ready override.
+
+First start the controller from the outer envelope's separate controller scope:
+
+```sh
+/usr/bin/python3 -B scripts/fixtures/kind_runtime.py \
+  --retirement-controller /private/fresh-handoff/contract.json VERIFIED_CONTRACT_SHA256 \
+  --controller-envelope /sys/fs/cgroup/EXACT_OUTER_SLICE.slice \
+  --seconds 900 --output-bytes 8388608 --store-bytes 17179869184 \
+  --controller-output-bytes 4194304 --controller-store-bytes 1048576
+```
+
+The controller starts the one original monotonic budget on entry, verifies its pre-existing
+outer kernel limits before reading policy/store/contract contents, and holds the outer directory
+identity. Before `armed.json`, it opens the exact target slice directory and `cgroup.events`
+with no-follow component traversal. It retains those descriptors throughout worker activity.
+No late finalize invocation can reopen a path and claim the same lifecycle evidence.
+
+After `armed.json` exists, invoke the worker from the recorded launching shell inside the target:
 
 ```sh
 issue2_args=(
@@ -211,35 +296,206 @@ issue2_args=(
   --helper-manifest /private/reviewed-host-helper-closure.json
   --helper-manifest-sha256 VERIFIED_HELPER_CLOSURE_SHA256
   --canonical-owner /private/authenticated-install-kubernetes-tools.sh
-  --cgroup /sys/fs/cgroup/EXACT_TASK_SLICE_PATH
+  --cgroup /sys/fs/cgroup/EXACT_OUTER_SLICE.slice/EXACT_TARGET_SLICE.slice
   --store /private/new-issue2-store
   --seconds 900 --cleanup-seconds 180
   --cpus 2 --memory-bytes 4294967296 --pids 4096 --nodes 1
   --store-bytes 17179869184 --output-bytes 8388608 --commands 256
+  --retirement-contract /private/fresh-handoff/contract.json
+  --retirement-contract-sha256 VERIFIED_CONTRACT_SHA256
+  --controller-output-bytes 4194304 --controller-store-bytes 1048576
+  --retirement-original-start EXACT_ARM_START --retirement-original-end EXACT_ARM_END
 )
 /usr/bin/python3 -B scripts/fixtures/kind_runtime.py "${issue2_args[@]}" \
   --phase prepare-image --allow-public-image-pull
+issue2_worker_status=$?
+exit "$issue2_worker_status"
 ```
 
-Retain and review the `image-prepared-only` receipt and its `policy_sha256`. Preparation
-returns status **2**, deliberately distinguishing it from completed readiness. It leaves the
-private prepared image, policy, snapshots and ownership record for the explicit next phase.
-No Kubernetes server or node has been started. Use its exact reviewed policy digest once:
+Do not `exec` the worker over the recorded shell: the protocol requires distinct producer
+identities and both must exit. No task may be launched into the target after the barrier.
+An interactive shell left alive prevents the full-slice zero witness. If the manager removes
+the slice before the held identity yields a zero witness, ENOENT quarantines; absence is not proof.
 
-```sh
-/usr/bin/python3 -B scripts/fixtures/kind_runtime.py "${issue2_args[@]}" \
-  --phase run --prepared-policy-sha256 VERIFIED_PREPARED_POLICY_SHA256 \
-  --execute-owned-cluster
-```
+The worker consumes the controller's exact original start/end, partition and contract owner
+before policy creation. **The currently selected installed helper profile is unsupported and
+refuses here, before policy/bootstrap creation, `execute`, Podman/provider commands or native
+cleanup.** It writes only a prepaid bounded `worker.json` refusal; the controller may publish a
+bounded failure receipt while original time and credit remain. The public proxy/front entries
+also refuse before policy reads or provider/process launch. No supplied boolean can admit this
+profile. Pure decision/accounting primitives and the scoped metadata controller remain testable;
+they do not establish current native conformance or permission for another real run.
 
-Run authenticates the original source, ledger, limits, task slice, store inode, tool snapshots,
-helper closure, owner and unused prepared state before creating anything. It cannot adopt an existing cluster
-or reuse a prior run. A generated private provider launcher forwards only the finite kind
-command catalogue; unsupported upstream command forms refuse and require reviewed adaptation.
-It injects a unique ownership label, exact node name/image, a named owned `/var` volume,
-resource caps, capped logs and offline image selection. `--image-volume=ignore` suppresses
-implicit image-declared anonymous volumes; the explicit recorded `/var` volume remains selected. The one-node kind configuration has
-no extra ports, mounts, workers, feature-gate patches or addon installation.
+For any future independently reviewed native profile, the policy handshake additionally requires
+`worker.json` with the exact policy hash and a matching `gate.json` before native work. The
+controller verifies actual ownership counters (`output=R_output`, `input=0`, `commands=0`) and
+the reduced private-store bound before releasing that gate. A missing or incompatible gate has
+no native fallback. The existing image-pull consent and prepared-state rules remain prerequisites,
+not an admission route for the current unsupported profile.
+
+Operations retain the existing cleanup reserve. The final `min(30, cleanup_seconds / 2)` whole
+seconds of that reserve belong to outside finalization. Worker cleanup and proxy retirement must
+finish before this interval; neither stage starts a new timeout. The controller's original end
+includes bootstrap reads, setup, worker waiting, cleanup, final construction, serialization,
+file write/fsync, stdout and return. Deadline/cancellation checks bracket each admitted stage;
+expiry or exhausted credit permits no fresh diagnostic receipt or success return. Poll waits are
+at most 50 ms and share that end.
+
+The CLI supplies the original duration/output/store limits **before contract acquisition**.
+The authenticated contract's `controller_reservation` contains numeric `output_bytes=R_output`
+and `store_bytes=R_store`, with `0 < R_output <= O` and `0 < R_store < S`. These exact values
+are bound again in `armed.json`, the worker CLI and its policy. Controller metadata consumes
+one cumulative `R_output` partition; reads, missing-record polls, conservative serialization
+bounds and stdout are charged without refunds. Worker `state.output` begins at `R_output`, so
+native output can use at most `O-R_output`; independent native input still begins at zero with
+its original `O` cap. The private worker store is measured against `S-R_store`; the separate
+handoff and controller metadata allocations consume `R_store`. This is a partition of the
+original invocation allowances, never another full allowance or a renewed clock.
+
+Before claim/arm, the controller precharges one closed worker subshare and binds its entire
+`worker_io` map in `armed.json` and policy. Content windows remain: contract/arm/gate reads
+16,386 each; source length plus two; boot and own-stat 4,097 each; two controller identity checks
+24,582; shell and own checks 12,291 each; policy/final-policy/ownership reads 65,538 each; worker
+record 16,384; controller gate check 12,291; private/provisional receipts 65,536 each; and 512
+for absent-gate content framing. This includes the existing two record-framing units per
+regular read, independently of the metadata-event debit. Store subshare remains 393,216 bytes.
+
+The same role additionally reserves **1,323 metadata operations**, or **338,688 surface
+accounting bytes**, inside that original output subshare:
+
+| Worker metadata category | Maximum operations | Derivation                                                                           |
+| ------------------------ | -----------------: | ------------------------------------------------------------------------------------ |
+| Source size              |                  1 | One stat, already debited before downward share narrowing                            |
+| Seven regular reads      |                469 | Seven times (64 ancestry lstat probes + outer stat/open/fstat)                       |
+| Contract extras          |                 70 | Path/parent stats plus at most 68 store/ancestor probes                              |
+| Seventeen kernel windows |                 34 | One open and one lseek per path window                                               |
+| Replay probes            |                  4 | Four exists/stat attempts                                                            |
+| Store lease              |                  2 | Open and nonblocking flock                                                           |
+| Three writes             |                231 | Each: two handoff measurements of at most35 operations, statvfs, six file operations |
+| Final worker store walk  |                256 | Explicit ceiling before operation257                                                 |
+| Missing-gate stats       |                256 | At most257 total gate attempts, including its one regular-read window                |
+
+The worker's source stat consumes the existing original partition before it narrows to this
+controller-prepaid share; usage is retained and cannot reset or increase its original allowance.
+Read-only identity bootstrap precedes the store lease so the original worker meter owns both
+lease effects. The lease still precedes any worker refusal publication or possible policy/native
+effect. The selected unsupported helper profile remains refused before those native effects.
+Only absence at the read's initial charged outer stat is a retryable missing-record poll.
+Once that stat succeeds, any later ancestor/open/read-stage disappearance is a fixed pathless
+`retirement-input-disappeared` refusal, with its original partial/full read debit retained and
+no sleep/retry. Suppressing the original exception chain keeps the input path out of the
+reported error. This preserves the finite derivation: the gate has one complete regular-read
+window plus at most256 single-stat absent polls, rather than257 nearly complete read windows.
+The same original deadline,257-attempt cap,1,323 metadata effects and all byte/store limits
+remain unchanged. Ordinary initial absence may still wait for a bounded publisher under that
+same cumulative credit.
+
+A final store walk or gate wait that exceeds its finite role window refuses even if another
+window has unused credit. The controller's own operations consume the remainder of the same
+`R_output/R_store`; no failed attempt refunds credit or grants a new diagnostic allowance.
+
+Every admitted filesystem metadata operation uses the same precharged primitive: stat/lstat
+(including exists/is-dir/is-symlink), open/create and each no-follow component open, scandir and
+each next/termination attempt, statvfs, lseek, replace, unlink, file/directory fsync and the
+existing nonblocking store flock. Each costs 256 **surface accounting bytes** from original
+output credit and checks the original deadline/cancellation before and after, including failure.
+Generic `stage` remains time-only for pure computations and content operations. Helpers own
+their internal metadata debits; their callers do not charge the same event again. Raw read/write
+and stdout content retain their separately prepaid byte/serialization windows. Descriptor
+wrapping/fileno and release/close add no metadata event or publication credit.
+
+Regular/kernel/nofollow/store helpers accept optional accounting callbacks, preserving their
+no-controller calling form. An absolute ancestry of at most64 components is checked before
+traversal, including recursive store descendants; the admitted source reader uses its literal
+absolute source path and authenticates no-follow ancestry, without a hidden `resolve` walk.
+The known helper profile cannot be admitted through a default helper call or supplied boolean.
+These fixed interface debits are not measurements or bounds on physical filesystem I/O, kernel
+metadata representation, CPU, Python heap or native source Work. Too-small reservations refuse;
+sufficient original budgets still support bounded scoped metadata results.
+
+| Record                                            | Maximum raw bytes |
+| ------------------------------------------------- | ----------------: |
+| Contract, arm, worker and gate                    |            16,384 |
+| Policy, ownership, provisional and final receipts |            65,536 |
+| Kernel/proc record                                |             4,096 |
+| Each outer-envelope cap                           |               128 |
+
+JSON is preflighted before decoding: depth at most 12, at most 4,096 structural tokens/nodes,
+512 list elements, 128 object members, 4,096 characters per string, finite numbers and bounded
+integers. Duplicate fields refuse. Receipt fields and nested diagnostic/store/server/barrier
+fields use closed schemas; arbitrary extra fields are not copied into final receipts. A
+conservative ASCII serialization upper bound charges 12 bytes per Unicode character plus
+punctuation before allocating the serialized body. Larger/deeper records fail before copying,
+serialization or handoff write. These format maxima never add budget credit.
+
+Store accounting remains **measured, not a filesystem quota**. The handoff has at most 16
+regular entries; allocated blocks are measured and atomic replacement precharges overlapping
+old/new rounded payload backing. These software admissions and the existing kernel envelope
+cannot preempt a synchronous kernel/filesystem call, stop scheduling delay, revoke a write
+that physically completes after expiry, or prove exact CPU/memory/physical-storage use.
+The external launcher must enforce the **same original hard stop**, including bootstrap and
+final publication; Python checks alone are not a hard real-time boundary. No new observer,
+helper service, deadline or post-expiry cleanup allowance is introduced. On detected expiry,
+no later publication or successful status is admitted; an already-started blocking write can
+leave a quarantined artifact. Native execution remains refused under the current profile.
+
+In the independently testable scoped protocol, after exact resource cleanup and all
+proxy/client-group prerequisites, the worker atomically
+writes a provisional `store/control/receipt.json` and `handoff/provisional.json`. This producer
+barrier binds the final policy hash and original end; no owned runtime command follows it. The
+controller requires the recorded worker and shell to disappear without PID/start identity drift,
+checks the full-slice identity again, then reads `populated=0` directly twice. Reappearance,
+surviving population, cancellation, deadline expiry, unreadable/over-budget/malformed events,
+unit/contract/boot/inode drift or missing producer gates quarantine. The strict parser currently
+accepts only the documented `populated` and optional `frozen` keys, each once and valued 0 or 1;
+unknown future keys refuse until reviewed.
+
+The controller's stdout and `handoff/final.json` are the final receipt. A valid witness records
+`scoped_retirement.state=subtree-empty-observed`, the exact boundary/identity and ordered barrier
+and observation timestamps. This proves no live process remained in that subtree at that instant,
+including detached sessions and grandchildren that stayed inside it. It is not a historical
+helper census, containment proof for migrated/shared-manager helpers, or whole-host retirement.
+`detached-helper-retirement` remains `not-established` on every current path. Successful API
+checks remain `readiness-observed-pending-retirement`, exit 1. Preflight and image-only stay
+non-readiness states, exit 2, when their own scoped finalization succeeds; finalization failure
+quarantines them, exit 1. SIGINT/SIGTERM retain the conventional signal status.
+
+The selected installed Podman 6.1.2/common 0.69.2 contract has concrete source counterexamples
+to complete containment, rather than only missing positive evidence. At immutable Podman commit
+`04f3aa430e6df81bea059978bc5bafbc846ba3e7`, pause setup reaches
+[MovePauseProcessToScope](https://github.com/podman-container-tools/podman/blob/04f3aa430e6df81bea059978bc5bafbc846ba3e7/vendor/go.podman.io/common/pkg/systemd/systemd_linux.go#L74),
+which requests a random pause scope in the shared manager's `user.slice`. Selected rootless
+bridge pasta setup also
+[moves the helper](https://github.com/podman-container-tools/podman/blob/04f3aa430e6df81bea059978bc5bafbc846ba3e7/vendor/go.podman.io/common/libnetwork/internal/rootlessnetns/netns_linux.go#L203)
+through the hardcoded
+[rootless-netns scope route](https://github.com/podman-container-tools/podman/blob/04f3aa430e6df81bea059978bc5bafbc846ba3e7/vendor/go.podman.io/common/pkg/systemd/systemd_linux.go#L61).
+These manager-mediated migrations can leave both the target and outer envelope; neither
+`--cgroup-parent` nor `--cgroups=no-conmon` constrains these paths. Changing only to cgroupfs
+does not close them. The documented no-pause option has fallback paths and does not close the
+bridge-pasta move. This source successor does not change runtime/profile/configuration choices,
+manage those outside scopes, or authorize another real run. Complete resource bounds and
+retirement of the selected helper cone remain unsupported. Its receipt reports
+`helper_containment.reason=unsupported-selected-helper-containment`.
+
+This is version-specific upstream implementation evidence: Podman 6.1.2 pins common 0.69.2 in
+[go.mod](https://github.com/podman-container-tools/podman/blob/04f3aa430e6df81bea059978bc5bafbc846ba3e7/go.mod#L68).
+The installed binary's recorded version/build information corresponds to that source, but no
+reproducible-build or distributor-patchset proof is claimed. Introduction/removal boundaries
+for these move paths and full placement of every other helper remain unestablished. The kernel
+population contract is documented behavior; these paths are observed upstream source behavior,
+not a portable theorem about every Podman version or a native execution result from this change.
+
+The examples specify the protocol; the current public native entries refuse the known
+unsupported installed helper cone before commands, even when every example argument is supplied. A later real run needs separate authorization and a genuine complete
+helper/resource contract beyond this change. Its prepared-state rules additionally require
+review of the completed image-preparation `final.json` and its
+`policy_sha256`. Reuse only its exact prepared store/source/tools/profile/owner and cgroup path,
+with a fresh per-phase handoff and controller, a current operator-recorded shell, and exact live
+boundary/envelope identities. The prior image phase must have a valid scoped zero witness and
+complete cleanup; an unfinished or quarantined prior phase cannot be replayed. This is a new
+explicit phase budget, not renewal of the earlier phase or finalizer. Then pass the reviewed
+prepared digest and `--execute-owned-cluster` to the worker with `--phase run`. An image-only
+receipt never supplies runtime conformance, API acceptance or complete helper-retirement evidence.
 
 ### Frozen kind provider protocol and byte transport
 
@@ -338,9 +594,9 @@ established** by the present harness. The receipt states
 catalogues. Any stronger whole-runtime cleanup claim needs a separately authenticated ownership
 and retirement mechanism, reviewed and actually executed on a suitable host.
 
-Status 0 means selected readiness checks **and** cleanup completed. Status 2 means unavailable,
-preflight-only or image-prepared-only; status 1 means failure, and cancellation retains the
-conventional signal status. No unavailable/skip/preparation result counts as pass. Cleanup failure
+No current public phase completion returns status 0: the complete helper-containment gate is unresolved.
+Status 2 means unavailable, preflight-only or image-prepared-only; status 1 means failed or
+readiness-observed-pending-retirement, and cancellation retains the conventional signal status. No unavailable/skip/preparation result counts as pass. Cleanup failure
 makes the result failed and retains the original error code/status. Private ownership/result
 records include command statuses, stdin byte counts and output sizes/hashes, not input bodies or raw child logs. Provider diagnostics retain only fixed codes/states; command arguments and exception bodies are not recorded. Public receipts
 contain fixed codes, counts and bounded server/profile identities, never kubeconfig credentials.
@@ -368,3 +624,15 @@ Podman/containers configuration manual text was also read to verify helper direc
 network selection and default-mount behavior; no upstream implementation was copied or executed.
 Upstream tools/images are acquired only externally under their existing profile provenance,
 license and redistribution records; no upstream executable, image or source is vendored here.
+
+The scoped-retirement successor additionally consulted the official
+[Linux cgroup v2 populated interface](https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#un-populated-notification)
+and systemd v255 [delegation](https://github.com/systemd/systemd/blob/v255/docs/CGROUP_DELEGATION.md),
+[transient settings](https://github.com/systemd/systemd/blob/v255/docs/TRANSIENT-SETTINGS.md) and
+[invocation identity discussion](https://github.com/systemd/systemd/blob/v255/docs/RANDOM_SEEDS.md)
+through Context7 on 2026-10-22. Kernel documentation defines recursive live-process population;
+it does not establish this host's held-descriptor lifecycle or helper placement. The selected
+systemd material documents transient slices and service invocation UUIDs but does not establish
+a version introduction boundary or exact installed slice InvocationID behavior. Those remain
+explicit native evidence gaps; v255 is documentation evidence, not a new operational pin or a
+claim that every v255 host supports this contract. No source or external implementation was copied.
