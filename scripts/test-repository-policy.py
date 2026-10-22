@@ -74,6 +74,12 @@ def validate(files: dict[str, str]) -> None:
     ci = files[".github/workflows/ci.yml"]
     jobs = set(re.findall(r"^  ([a-z][a-z-]*):$", ci.split("\njobs:\n", 1)[1], re.M))
     assert jobs == {"validation-plan", "pr-gate", *policy["jobs"]}
+    aggregate = ci.split("\n  pr-gate:\n", 1)[1]
+    next_job = re.search(r"^  [a-z][a-z-]*:\n", aggregate, re.M)
+    if next_job:
+        aggregate = aggregate[:next_job.start()]
+    assert re.findall(r"^    name: (.+)$", aggregate, re.M) == ["Required CI"], "protected aggregate check name must match the organization rule"
+    assert len(re.findall(r"^    name: Required CI$", ci, re.M)) == 1, "protected aggregate check name must be unique"
     assert "      [" in ci and "if: always()" in ci
     for name in (".github/workflows/ci.yml", ".github/workflows/release.yml"):
         workflow = files[name]
@@ -162,6 +168,21 @@ class RepositoryPolicyTests(unittest.TestCase):
         self.rejected(
             ".github/workflows/ci.yml", checkout_pin.group(0), "actions/checkout@floating"
         )
+
+    def test_protected_aggregate_name_cannot_drift_disappear_or_duplicate(self) -> None:
+        name = "    name: Required CI\n"
+        for replacement in ("    name: PR gate\n", "", name + name):
+            with self.subTest(replacement=replacement):
+                self.rejected(".github/workflows/ci.yml", name, replacement)
+        self.rejected(".github/workflows/ci.yml", "    name: Rust quality\n", name)
+
+    def test_protected_name_on_another_job_does_not_replace_the_aggregate(self) -> None:
+        changed = snapshot()
+        changed[".github/workflows/ci.yml"] = changed[".github/workflows/ci.yml"].replace(
+            "    name: Required CI\n", "    name: PR gate\n"
+        ).replace("    name: Rust quality\n", "    name: Required CI\n")
+        with self.assertRaises(AssertionError):
+            validate(changed)
 
     def test_fake_published_history_or_duplicate_inventory_fails(self) -> None:
         self.rejected("CHANGELOG.md", "## [Unreleased]", "## [Unreleased]\n\n## [0.1.0]")
