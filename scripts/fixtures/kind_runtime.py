@@ -11,6 +11,7 @@ import fcntl
 import errno
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -50,27 +51,33 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def regular(path, limit):
+def regular(path, limit, admit=None, account=None):
+    admit = (lambda: None) if admit is None else admit
+    admit()
     path = Path(path)
     require(path.is_absolute(), "absolute-path-required", "unavailable")
-    # Refuse symlink ancestors, not just the final component.
+    path = _metadata_path(path)
+    # Each lstat/open/fstat is one metadata event; content reads retain their byte window.
     for part in [path, *path.parents]:
-        require(not part.is_symlink(), "symlink-input", "unavailable")
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        require(not _metadata_access(part.is_symlink, admit=admit, account=account), "symlink-input", "unavailable")
+    fd = _metadata_access(os.open, path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                          admit=admit, account=account)
     try:
-        info = os.fstat(fd)
+        info = _metadata_access(os.fstat, fd, admit=admit, account=account)
         require(stat.S_ISREG(info.st_mode) and info.st_size <= limit, "file-budget", "unavailable")
         data = bytearray()
         while len(data) <= limit:
+            admit()
             block = os.read(fd, min(1024 * 1024, limit + 1 - len(data)))
+            admit()
             if not block:
                 break
             data.extend(block)
         require(len(data) == info.st_size, "file-changed", "unavailable")
+        admit()
         return bytes(data)
     finally:
         os.close(fd)
-
 
 def read_json(path):
     return json.loads(regular(path, MAX_METADATA))
@@ -234,24 +241,79 @@ def cgroup_limits(path, limits, current_text=None):
     return {"memory": memory, "pids": pids, "cpu": [quota, period], "swap": swap}
 
 
-def store_limit(path, maximum):
-    """Measured store budget, explicitly not a filesystem quota."""
-    root = Path(path)
-    require(not any(part.is_symlink() for part in [root, *root.parents]), "store-symlink", "unavailable")
-    require(root.is_absolute() and root.is_dir() and not root.is_symlink(), "private-store-required", "unavailable")
-    require(root.stat().st_uid == os.geteuid() and stat.S_IMODE(root.stat().st_mode) == 0o700, "private-store-mode-required", "unavailable")
+METADATA_PATH_PARTS = 64
+
+
+def _metadata_path(path):
+    path = Path(path)
+    require(path.is_absolute() and len(path.parts) <= METADATA_PATH_PARTS,
+            'retirement-metadata-path-depth', 'unavailable')
+    return path
+
+
+def _metadata_access(function, *args, admit=None, account=None, **kwargs):
+    """Debit 256 surface accounting bytes per admitted metadata operation.
+
+    This interface debit is not physical filesystem I/O, Python heap usage,
+    native source Work or a claim about kernel metadata representation size.
+    """
+    check = admit if admit is not None else (lambda: None)
+    charge = account if account is not None else (lambda _amount: None)
+    check()
+    charge(256)
+    check()
+    try:
+        return function(*args, **kwargs)
+    finally:
+        check()
+
+
+def store_limit(path, maximum, admit=None, account=None, maximum_accesses=None):
+    """Measured store budget, explicitly not a filesystem quota.
+
+    Controller callers supply original-time admission and cumulative credit.
+    Pure/native callers retain the same measurement without a controller meter.
+    """
+    check = admit if admit is not None else (lambda: None)
+    charge = account if account is not None else (lambda _amount: None)
+
+    accesses = 0
+    def access(function, *args, **kwargs):
+        nonlocal accesses
+        check()
+        require(maximum_accesses is None or accesses < maximum_accesses, 'retirement-store-metadata-window')
+        accesses += 1
+        return _metadata_access(function, *args, admit=check, account=charge, **kwargs)
+
+    check()
+    root = _metadata_path(path)
+    require(not any(access(part.is_symlink) for part in [root, *root.parents]), "store-symlink", "unavailable")
+    require(root.is_absolute() and access(root.is_dir) and not access(root.is_symlink), "private-store-required", "unavailable")
+    require(access(root.stat).st_uid == os.geteuid() and stat.S_IMODE(access(root.stat).st_mode) == 0o700, "private-store-mode-required", "unavailable")
     total, entries, pending = 0, 0, [root]
     while pending:
-        with os.scandir(pending.pop()) as iterator:
-            for entry in iterator:
-                info = entry.stat(follow_symlinks=False)
+        directory = _metadata_path(pending.pop())
+        iterator = access(os.scandir, directory)
+        try:
+            while True:
+                try:
+                    entry = access(next, iterator)
+                except StopIteration:
+                    break
+                _metadata_path(entry.path)
+                info = access(entry.stat, follow_symlinks=False)
                 entries += 1
                 total += info.st_blocks * 512
                 require(entries <= 250000 and total <= maximum, "measured-store-budget")
                 if stat.S_ISDIR(info.st_mode):
                     pending.append(Path(entry.path))
-    free = os.statvfs(root)
+        finally:
+            # Descriptor release consumes no new metadata or publication credit.
+            iterator.close()
+        check()
+    free = access(os.statvfs, root)
     require(free.f_bavail * free.f_frsize >= min(maximum, 1024**3), "store-free-space", "unavailable")
+    check()
     return {"allocated_bytes": total, "entries": entries, "disk_enforcement": "measured-not-quota"}
 
 
@@ -288,13 +350,17 @@ def child_limits():
     resource.setrlimit(resource.RLIMIT_NOFILE, (min(256, hard), hard))
 
 
+def cleanup_end(policy):
+    return policy["end"] - policy.get("retirement", {}).get("finalization_seconds", 0)
+
+
 class Budget:
     """A single original monotonic end, including setup and reserved cleanup."""
     def __init__(self, policy, cleanup=False, clock=time.monotonic):
         self.policy, self.cleanup, self.clock = policy, cleanup, clock
 
     def remaining(self):
-        end = self.policy["end"] if self.cleanup else self.policy["end"] - self.policy["limits"]["cleanup_seconds"]
+        end = cleanup_end(self.policy) if self.cleanup else self.policy["end"] - self.policy["limits"]["cleanup_seconds"]
         value = end - self.clock()
         require(value > 0, "cleanup-deadline" if self.cleanup else "operation-deadline")
         return value
@@ -516,7 +582,7 @@ def retire_proxies(policy, clock=time.monotonic, sleep=time.sleep):
             if not record.get("retired"):
                 record["cancel"] = True
         state_write(policy, state)
-    end = min(policy["end"], clock() + 5)
+    end = min(cleanup_end(policy), clock() + 5)
     while True:
         pending = [record for record in state_read(policy).get("proxies", {}).values() if not record.get("retired")]
         if not pending:
@@ -651,7 +717,7 @@ def tool(policy, name, arguments, cleanup=False, session=True, io_spec=None):
     budget.remaining()
     cgroup_limits(policy["cgroup"], policy["limits"])
     authenticate_helpers(policy)
-    store_limit(policy["store"], policy["limits"]["store_bytes"])
+    store_limit(policy["store"], _worker_store_limit(policy))
     info = Path(policy["store"]).stat()
     require([info.st_dev, info.st_ino] == policy["store_identity"], "store-identity-drift")
     with state_lock(policy):
@@ -1220,12 +1286,859 @@ def verify_node_limits(policy, row, process_cgroup=None):
     require(len(paths) == 1 and paths[0].startswith(parent + "/"), "node-outside-capped-slice")
 
 
-def make_policy(args, start):
+def kernel_text(path, maximum=4096, admit=None, account=None):
+    """Procfs/cgroup files report size zero; read one bounded content window."""
+    admit = (lambda: None) if admit is None else admit
+    admit()
+    path = _metadata_path(path)
+    fd = _metadata_access(os.open, path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                          admit=admit, account=account)
+    try:
+        result = bounded_kernel_read(fd, maximum, admit, account).decode("ascii")
+        admit()
+        return result
+    finally:
+        os.close(fd)
+
+def bounded_kernel_read(fd, maximum=4096, admit=None, account=None):
+    admit = (lambda: None) if admit is None else admit
+    admit()
+    _metadata_access(os.lseek, fd, 0, os.SEEK_SET, admit=admit, account=account)
+    data = bytearray()
+    while len(data) <= maximum:
+        admit()
+        block = os.read(fd, maximum + 1 - len(data))
+        admit()
+        if not block:
+            break
+        data.extend(block)
+    require(len(data) <= maximum, "retirement-kernel-read-budget")
+    return bytes(data)
+
+def boot_identity(io=None):
+    value = (io.kernel_text("/proc/sys/kernel/random/boot_id") if io else kernel_text("/proc/sys/kernel/random/boot_id")).strip()
+    require(re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", value), "retirement-boot-unavailable")
+    return value
+
+
+def member_of_slice(cgroup, text):
+    values = [line[3:] for line in text.splitlines() if line.startswith("0::")]
+    require(len(values) == 1, "retirement-cgroup-membership-unavailable")
+    relative = "/" + str(Path(cgroup).relative_to("/sys/fs/cgroup"))
+    return values[0] == relative or values[0].startswith(relative + "/")
+
+
+def retirement_process(pid, io=None):
+    path = "/proc/" + str(pid) + "/stat"
+    text = io.kernel_text(path) if io else kernel_text(path)
+    fields = text[text.rfind(")") + 2:].split()
+    require(len(fields) >= 20, "retirement-process-identity-unavailable")
+    return {"pid": pid, "group": int(fields[2]), "session": int(fields[3]), "start": int(fields[19])}
+
+
+def check_retirement_process(record, cgroup, inside, allow_absent=False, io=None):
+    require(set(record) == {"pid", "group", "session", "start"}
+            and all(type(value) is int and value > 0 for value in record.values()), "retirement-process-record")
+    try:
+        require((retirement_process(record["pid"], io=io) if io else retirement_process(record["pid"])) == record, "retirement-process-identity-drift")
+    except FileNotFoundError:
+        require(allow_absent, "retirement-process-missing")
+        return False
+    path = "/proc/" + str(record["pid"]) + "/cgroup"
+    text = io.kernel_text(path) if io else kernel_text(path)
+    require(member_of_slice(cgroup, text) == inside, "retirement-process-placement-drift")
+    require((retirement_process(record["pid"], io=io) if io else retirement_process(record["pid"])) == record, "retirement-process-identity-drift")
+    return True
+
+
+# Format bounds restrict metadata; none grants extra invocation resource credit.
+CONTROLLER_RECORD = 65536
+CONTROLLER_ARM = 16384
+CONTROLLER_POLICY = 65536
+CONTROLLER_RECORD_KEYS = {
+    'state', 'runtime', 'runtime_conformance', 'api_acceptance', 'policy_sha256',
+    'server', 'error', 'cleanup', 'cleanup_errors', 'original_state', 'evidence_scope',
+    'cleanup_scope', 'detached-helper-retirement', 'scoped_retirement', 'disk_enforcement',
+    'store_after', 'store_before', 'store_error', 'provider_diagnostics', 'profile',
+    'owner', 'ledger_sha256', 'producer_barrier', 'helper_containment',
+    'retirement_error', 'runtime_object_cleanup', 'resource_envelope',
+}
+
+
+def _record_bound(value, maximum, allowed=None):
+    """Validate finite shape and precharge a conservative ASCII JSON size."""
+    if allowed is not None:
+        require(type(value) is dict and len(value) <= 128 and set(value) <= allowed, 'retirement-record-fields')
+    if allowed is CONTROLLER_RECORD_KEYS:
+        nested = {'store_before', 'store_after', 'server', 'producer_barrier',
+                  'provider_diagnostics', 'cleanup_errors', 'helper_containment',
+                  'scoped_retirement', 'resource_envelope'}
+        require(all(type(item) is str and len(item) <= 4096 for key, item in value.items()
+                    if key not in nested), 'retirement-receipt-scalar-fields')
+        if 'cleanup_errors' in value:
+            require(type(value['cleanup_errors']) is list and len(value['cleanup_errors']) <= 512
+                    and all(type(item) is str and re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', item)
+                            for item in value['cleanup_errors']), 'retirement-cleanup-error-fields')
+        if 'resource_envelope' in value:
+            require(type(value['resource_envelope']) is dict and set(value['resource_envelope']) ==
+                    {'cgroup', 'cgroup_identity', 'memory', 'pids', 'swap', 'cpu'},
+                    'retirement-receipt-envelope-fields')
+        if 'scoped_retirement' in value:
+            require(type(value['scoped_retirement']) is dict and set(value['scoped_retirement']) <= {
+                'state', 'boundary', 'cgroup_identity', 'boot_id', 'unit', 'unit_identity_source',
+                'policy_sha256', 'owner', 'original_end', 'producer_barrier_at', 'observed_at',
+                'populated', 'coverage'}, 'retirement-receipt-scoped-fields')
+        for name in ('store_before', 'store_after'):
+            if name in value:
+                require(type(value[name]) is dict and len(value[name]) == 3 and set(value[name]) == {'allocated_bytes', 'entries', 'disk_enforcement'}
+                        and all(type(value[name][key]) is int and value[name][key] >= 0 for key in ('allocated_bytes', 'entries'))
+                        and value[name]['disk_enforcement'] == 'measured-not-quota',
+                        'retirement-receipt-store-fields')
+        if 'server' in value:
+            require(type(value['server']) is dict and len(value['server']) == 5 and set(value['server']) ==
+                    {'gitVersion', 'major', 'minor', 'gitCommit', 'platform'}
+                    and all(type(item) is str for item in value['server'].values()), 'retirement-receipt-server-fields')
+        if 'producer_barrier' in value:
+            barrier = value['producer_barrier']
+            require(type(barrier) is dict and len(barrier) == 4 and set(barrier) == {'policy_sha256', 'at', 'cancelled', 'gates'}
+                    and type(barrier['gates']) is dict and len(barrier['gates']) == 3 and set(barrier['gates']) ==
+                    {'objects', 'proxies', 'client_groups'}, 'retirement-receipt-barrier-fields')
+        diagnostics = value.get('provider_diagnostics', [])
+        require(type(diagnostics) is list and len(diagnostics) <= 512, 'retirement-diagnostic-count')
+        for diagnostic in diagnostics:
+            require(type(diagnostic) is dict and len(diagnostic) == 2 and set(diagnostic) == {'code', 'state'}
+                    and type(diagnostic['code']) is str
+                    and re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', diagnostic['code'])
+                    and diagnostic['state'] in {'failed', 'unavailable'}, 'retirement-diagnostic-fields')
+    nodes = 0
+    def visit(item, depth):
+        nonlocal nodes
+        nodes += 1
+        require(nodes <= 4096 and depth <= 12, 'retirement-record-shape')
+        if item is None or type(item) is bool:
+            return 5
+        if type(item) is int:
+            require(-(2**63) <= item < 2**64, 'retirement-record-integer')
+            return 21
+        if type(item) is float:
+            require(math.isfinite(item), 'retirement-record-number')
+            return 32
+        if type(item) is str:
+            require(len(item) <= 4096, 'retirement-record-string')
+            return 2 + 12 * len(item)
+        if type(item) is list:
+            require(len(item) <= 512, 'retirement-record-count')
+            return 2 + len(item) + sum(visit(child, depth + 1) for child in item)
+        require(type(item) is dict and len(item) <= 128
+                and all(type(key) is str for key in item), 'retirement-record-object')
+        return 2 + 2 * len(item) + sum(visit(key, depth + 1) + visit(child, depth + 1)
+                                    for key, child in item.items())
+    amount = visit(value, 0) + 1
+    require(amount <= maximum, 'retirement-record-bytes')
+    return amount
+
+
+def _json_shape(raw):
+    """Bound JSON structure before json.loads allocates its container tree."""
+    depth = tokens = 0
+    quoted = escaped = False
+    for byte in raw:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif byte == 92:
+                escaped = True
+            elif byte == 34:
+                quoted = False
+        elif byte == 34:
+            quoted = True
+            tokens += 1
+        elif byte in (91, 123):
+            depth += 1
+            tokens += 1
+            require(depth <= 12, 'retirement-record-shape')
+        elif byte in (93, 125):
+            depth -= 1
+            require(depth >= 0, 'retirement-record-shape')
+        elif byte in (44, 58):
+            tokens += 1
+        require(tokens <= 4096, 'retirement-record-shape')
+    require(depth == 0 and not quoted, 'retirement-record-shape')
+
+
+class ControllerIO:
+    """One original end and explicit partitions, never a second full budget."""
+    def __init__(self, start, seconds, output, store, reserved_output, reserved_store,
+                 clock=time.monotonic):
+        require(type(seconds) is int and 300 <= seconds <= 1800, 'retirement-startup-duration')
+        require(type(output) is int and 65536 <= output <= 16 * 1024**2
+                and type(store) is int and 8 * 1024**3 <= store <= 32 * 1024**3,
+                'retirement-startup-original-limits')
+        require(type(reserved_output) is int and 0 < reserved_output <= output
+                and type(reserved_store) is int and 0 < reserved_store < store,
+                'retirement-reservation-partition')
+        require(type(start) in {int, float} and math.isfinite(start), 'retirement-original-start-required')
+        self.start, self.end, self.clock = start, start + seconds, clock
+        self.original = {'seconds': seconds, 'output_bytes': output, 'store_bytes': store}
+        self.reservation = {'output_bytes': reserved_output, 'store_bytes': reserved_store}
+        self.used, self.stored = 0, 0
+        self.output_share, self.store_share = reserved_output, reserved_store
+        self.directory = None
+        self.contract_name = None
+        self.check()
+
+    def check(self):
+        return retirement_time(self.end, self.clock)
+
+    def stage(self, function, *args, **kwargs):
+        self.check()
+        result = function(*args, **kwargs)
+        self.check()
+        return result
+
+    def charge(self, amount):
+        self.check()
+        require(type(amount) is int and amount >= 0
+                and self.used + amount <= self.output_share,
+                'retirement-controller-output-budget')
+        self.used += amount
+
+    def read(self, path, maximum):
+        self.charge(1)
+        path = _metadata_path(path)
+        info = self.metadata(path.stat)
+        require(0 <= info.st_size <= maximum, 'retirement-controller-input-size')
+        self.charge(info.st_size + 1)
+        try:
+            return self.stage(regular, path, min(maximum, info.st_size), self.check, self.charge)
+        except FileNotFoundError:
+            # Only the earlier outer-stat absence is a retryable single-stat poll.
+            raise Refusal('retirement-input-disappeared') from None
+
+    def decode(self, raw, maximum, allowed=None):
+        self.check()
+        require(type(raw) is bytes and len(raw) <= maximum, 'retirement-controller-input-size')
+        self.stage(_json_shape, raw)
+        def unique_pairs(pairs):
+            result = {}
+            for key, item in pairs:
+                require(key not in result, 'retirement-duplicate-field')
+                result[key] = item
+            return result
+        value = self.stage(json.loads, raw, object_pairs_hook=unique_pairs)
+        self.stage(_record_bound, value, maximum * 12 + 1, allowed)
+        return value
+
+    def kernel_read(self, fd, maximum=4096):
+        self.charge(maximum + 1)
+        return self.stage(bounded_kernel_read, fd, maximum, self.check, self.charge)
+
+    def kernel_text(self, path, maximum=4096):
+        self.charge(maximum + 1)
+        return self.stage(kernel_text, path, maximum, self.check, self.charge)
+
+    def process(self, function, *args, **kwargs):
+        # Each underlying bounded read charges itself; no opaque per-call fee.
+        return self.stage(function, *args, io=self, **kwargs)
+
+    def metadata(self, function, *args, **kwargs):
+        return _metadata_access(function, *args, admit=self.check, account=self.charge, **kwargs)
+
+    def measure_store(self, path, maximum, maximum_accesses=None):
+        return self.stage(store_limit, path, maximum, self.check, self.charge, maximum_accesses)
+
+    def handoff_measure(self):
+        self.check()
+        require(self.directory is not None, 'retirement-handoff-unbound')
+        _metadata_path(self.directory)
+        total = self.metadata(self.directory.stat).st_blocks * 512
+        count = 0
+        iterator = self.metadata(os.scandir, self.directory)
+        try:
+            while True:
+                try:
+                    entry = self.metadata(next, iterator)
+                except StopIteration:
+                    break
+                count += 1
+                require(count <= 16, 'retirement-handoff-count')
+                require(entry.name in {self.contract_name, 'controller.claim', 'armed.json', 'worker.json',
+                        'gate.json', 'provisional.json', 'final.json'}, 'retirement-handoff-entry')
+                _metadata_path(self.directory / entry.name)
+                info = self.metadata(entry.stat, follow_symlinks=False)
+                require(stat.S_ISREG(info.st_mode), 'retirement-handoff-entry')
+                total += info.st_blocks * 512
+        finally:
+            # Releasing a held descriptor produces no metadata/publication credit.
+            iterator.close()
+        require(total <= self.reservation['store_bytes'], 'retirement-controller-store-budget')
+        self.check()
+        return total
+
+    def reserve_store(self, amount):
+        self.check()
+        _metadata_path(self.directory)
+        block = self.metadata(os.statvfs, self.directory).f_frsize
+        require(0 < block <= CONTROLLER_RECORD, 'retirement-store-block-size')
+        # Atomic replacement can overlap the complete old and new backing.
+        requested = 2 * ((amount + block - 1) // block) * block
+        require(self.stored + requested <= self.store_share,
+                'retirement-controller-store-budget')
+        self.stored += requested
+        self.handoff_measure()
+
+    def _serialize_precharged(self, value, bound):
+        text = self.stage(json.dumps, value, sort_keys=True, separators=(',', ':'), allow_nan=False)
+        raw = self.stage(text.encode)
+        self.check()
+        raw += b'\n'
+        self.check()
+        require(len(raw) <= bound, 'retirement-serialized-bound')
+        return raw
+
+    def encode(self, value, allowed=None, maximum=CONTROLLER_RECORD):
+        bound = self.stage(_record_bound, value, maximum, allowed)
+        self.charge(bound)
+        return self._serialize_precharged(value, bound)
+
+    def write(self, path, value, allowed=None, maximum=CONTROLLER_RECORD):
+        path = _metadata_path(path)
+        bound = self.stage(_record_bound, value, maximum, allowed)
+        # Both partitions are admitted before serialization or file allocation.
+        self.charge(bound)
+        self.reserve_store(bound)
+        raw = self._serialize_precharged(value, bound)
+        temporary = Path(str(path) + '.new.' + str(os.getpid()) + '.' + uuid.uuid4().hex)
+        fd = self.metadata(os.open, temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            with os.fdopen(fd, 'wb') as output:
+                self.stage(output.write, raw)
+                self.stage(output.flush)
+                self.metadata(os.fsync, output.fileno())
+            self.metadata(os.replace, temporary, path)
+            directory = self.metadata(os.open, Path(path).parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                self.metadata(os.fsync, directory)
+            finally:
+                os.close(directory)
+            self.handoff_measure()
+        finally:
+            # Expiry grants no extra mutation allowance, even for a temp file.
+            if self.end > self.clock() and not CANCELLED:
+                self.metadata(temporary.unlink, missing_ok=True)
+
+    def publish(self, receipt):
+        raw = self.encode(receipt, CONTROLLER_RECORD_KEYS)
+        text = self.stage(raw.decode, 'ascii')
+        self.stage(sys.stdout.write, text)
+        self.check()
+        return exit_status(receipt, CANCELLED)
+
+
+def _worker_io_reservation(source_bytes):
+    require(type(source_bytes) is int and 0 <= source_bytes <= MAX_METADATA, "retirement-source-window")
+    # This entire finite role share is reserved by the controller before claim/arm.
+    # Seven regular reads: contract/source/arm/policy/gate/final-policy/ownership.
+    # Each read has <=64 ancestor probes plus stat/open/fstat = 67 effects.
+    # Kernel rows have 17 content windows; each path opens once and seeks once.
+    # Contract extras: path+parent stat and <=68 private-store probes.
+    # Three writes each have <=2*35 handoff effects, statvfs and six file effects.
+    # Gate polling: <=257 attempts = one read window plus <=256 failed stats.
+    # Final store walk stops before metadata effect 257; no role window can grow.
+    effects = {'source_stat': 1, 'reads': 7 * (METADATA_PATH_PARTS + 3),
+               'contract': 2 + METADATA_PATH_PARTS + 4, 'kernel': 17 * 2,
+               'replay': 4, 'lease': 2, 'writes': 3 * (2 * 35 + 1 + 6),
+               'store': 256, 'polls': 256}
+    rows = {'contract': 16386, 'arm': 16386, 'source': source_bytes + 2,
+            'boot': 4097, 'controller_two_checks': 6 * 4097, 'shell_check': 3 * 4097,
+            'own_stat': 4097, 'own_check': 3 * 4097, 'policy_digest': 65538,
+            'final_policy_digest': 65538, 'ownership_receipt': 65538,
+            'worker_record': 16384, 'gate_record': 16386,
+            'controller_gate_check': 3 * 4097, 'private_receipt': 65536,
+            'provisional_record': 65536, 'missing_gate_polls': 512,
+            'metadata': 256 * sum(effects.values())}
+    return {'output_bytes': sum(rows.values()), 'store_bytes': 6 * CONTROLLER_RECORD,
+            'windows': rows, 'metadata_operations': effects}
+
+
+def _worker_budget_counters(state, retirement):
+    state['commands'], state['cleanup_output'], state['input'] = 0, 0, 0
+    state['output'] = retirement['controller_reservation']['output_bytes'] if retirement else 0
+
+
+def _worker_store_limit(policy):
+    reservation = policy.get('retirement', {}).get('controller_reservation', {})
+    maximum = policy['limits']['store_bytes'] - reservation.get('store_bytes', 0)
+    require(maximum > 0, 'retirement-worker-store-partition')
+    return maximum
+
+
+def _selected_helper_profile_admission():
+    # No caller field or receipt can authorize the known escaping helper cone.
+    raise Refusal('unsupported-selected-helper-containment', 'unavailable')
+
+
+def retirement_time(end, clock=time.monotonic):
+    check_cancel()
+    now = clock()
+    require(type(end) in {int, float} and math.isfinite(end)
+            and type(now) in {int, float} and math.isfinite(now), "retirement-clock")
+    value = end - now
+    require(value > 0, "retirement-deadline")
+    return value
+
+
+def retirement_contract(path, expected, io=None):
+    require(HEX.fullmatch(expected or ""), "retirement-contract-digest")
+    path = Path(path)
+    raw = io.read(path, 16384) if io else regular(path, 16384)
+    require(sha(raw) == expected, "retirement-contract-integrity")
+    access = io.metadata if io else (lambda function, *args, **kwargs: function(*args, **kwargs))
+    info, parent = access(path.stat), access(path.parent.stat)
+    require(info.st_uid == parent.st_uid == os.geteuid() and stat.S_IMODE(info.st_mode) == 0o600
+            and info.st_nlink == 1 and stat.S_IMODE(parent.st_mode) == 0o700, "retirement-private-handoff-required")
+    value = io.decode(raw, 16384) if io else json.loads(raw)
+    require(set(value) == {"schema", "owner", "cgroup", "cgroup_identity", "unit", "boot_id",
+        "source_sha256", "phase", "limits", "store", "store_identity", "launch_shell", "envelope",
+        "controller_reservation"}, "retirement-contract-schema")
+    if io:
+        require(value["controller_reservation"] == io.reservation
+                and all(value["limits"][key] == amount for key, amount in io.original.items()),
+                "retirement-original-partition-drift")
+        io.check()
+    require(value["schema"] == 1 and re.fullmatch(r"[0-9a-f]{32}", value["owner"]), "retirement-contract-schema")
+    cgroup = Path(value["cgroup"])
+    require(value["cgroup"] == str(cgroup) and cgroup.is_absolute() and str(cgroup).startswith("/sys/fs/cgroup/")
+            and str(cgroup) == os.path.normpath(str(cgroup)) and ".." not in cgroup.parts
+            and cgroup.name.startswith(PREFIX) and cgroup.name.endswith(".slice"), "retirement-full-task-slice-required")
+    require(value["unit"]["name"] == cgroup.name and value["unit"]["transient"] is True
+            and re.fullmatch(r"[0-9a-f]{32}", value["unit"]["invocation_id"]), "retirement-unit-attestation-required")
+    require(value["boot_id"] == (io.process(boot_identity) if io else boot_identity()), "retirement-boot-drift")
+    require(value["source_sha256"] == sha(io.read(_metadata_path(__file__), MAX_METADATA) if io else regular(Path(__file__).resolve(), MAX_METADATA)), "retirement-source-drift")
+    require(value["phase"] in {"preflight", "prepare-image", "run"}, "retirement-phase")
+    require(type(value['limits']) is dict and set(value['limits']) == {
+        'seconds', 'cleanup_seconds', 'cpus', 'memory_bytes', 'pids', 'nodes',
+        'store_bytes', 'output_bytes', 'commands'}, 'retirement-contract-limit-fields')
+    require(type(value['controller_reservation']) is dict and set(value['controller_reservation']) ==
+            {'output_bytes', 'store_bytes'}, 'retirement-reservation-fields')
+    require(type(value['unit']) is dict and set(value['unit']) ==
+            {'name', 'transient', 'invocation_id'}, 'retirement-unit-fields')
+    require(type(value['envelope']) is dict and set(value['envelope']) ==
+            {'cgroup', 'cgroup_identity', 'memory', 'pids', 'swap', 'cpu'}, 'retirement-envelope-fields')
+    require(type(value['launch_shell']) is dict and set(value['launch_shell']) ==
+            {'pid', 'group', 'session', 'start'}, 'retirement-process-record')
+    limits_valid(value["limits"])
+    store = Path(value["store"])
+    require(len(store.parts) <= 64 and len(cgroup.parts) <= 64, 'retirement-path-depth')
+    require(store.is_absolute() and str(store) == os.path.normpath(str(store))
+            and not access(store.is_symlink) and stat.S_IMODE(access(store.stat).st_mode) == 0o700
+            and access(store.stat).st_uid == os.geteuid(), "retirement-store-required")
+    for part in store.parents:
+        require(not access(part.is_symlink), "retirement-store-symlink")
+    require(value["store_identity"] == [access(store.stat).st_dev, access(store.stat).st_ino], "retirement-store-drift")
+    require(path.parent != store and store not in path.parent.parents and path.parent not in store.parents,
+            "retirement-separate-handoff-required")
+    if io:
+        io.check()
+    return value, path.parent
+
+
+def nofollow_directory(path, admit=None, account=None):
+    """Bound ancestry before opening root, then meter each no-follow component."""
+    check = admit or (lambda: None)
+    check()
+    path = _metadata_path(path)
+    fd = _metadata_access(os.open, "/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                          admit=check, account=account)
+    try:
+        for part in path.parts[1:]:
+            child = _metadata_access(os.open, part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                     dir_fd=fd, admit=check, account=account)
+            os.close(fd)
+            fd = child
+        check()
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+class ControllerEnvelope:
+    """Existing kernel bounds cover controller and target from their first read."""
+    def __init__(self, path, io=None):
+        self.path, self.fd, self.io = path, None, io
+
+    def snapshot(self):
+        def value(name):
+            fd = self.metadata(os.open, name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=self.fd)
+            try:
+                return (self.io.kernel_read(fd, 128) if self.io else bounded_kernel_read(fd, 128)).decode("ascii").strip()
+            finally:
+                os.close(fd)
+        info = self.metadata(os.fstat, self.fd)
+        memory, pids, swap = int(value("memory.max")), int(value("pids.max")), int(value("memory.swap.max"))
+        quota, period = map(int, value("cpu.max").split())
+        require(0 < memory <= 16 * 1024**3 and 0 < pids <= 65536 and swap == 0
+                and period > 0 and 0 < quota <= 8 * period, "retirement-envelope-finite-caps-required")
+        return {"cgroup": self.path, "cgroup_identity": [info.st_dev, info.st_ino], "memory": memory,
+                "pids": pids, "swap": swap, "cpu": [quota, period]}
+
+    def stage(self, function, *args, **kwargs):
+        return self.io.stage(function, *args, **kwargs) if self.io else function(*args, **kwargs)
+
+    def metadata(self, function, *args, **kwargs):
+        return self.io.metadata(function, *args, **kwargs) if self.io else function(*args, **kwargs)
+
+    def __enter__(self):
+        path = Path(self.path)
+        require(path.is_absolute() and self.path == str(path) and ".." not in path.parts
+                and self.path.startswith("/sys/fs/cgroup/") and path.name.startswith(PREFIX)
+                and path.name.endswith(".slice"), "retirement-explicit-task-envelope-required")
+        try:
+            self.fd = self.stage(nofollow_directory, self.path, self.io.check if self.io else None, self.io.charge if self.io else None)
+            self.record = self.snapshot()
+            self.validate()
+            return self
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+
+    def __exit__(self, *_args):
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+
+    def validate(self):
+        text = self.io.kernel_text("/proc/self/cgroup") if self.io else kernel_text("/proc/self/cgroup")
+        relative = "/" + str(Path(self.path).relative_to("/sys/fs/cgroup"))
+        require(member_of_slice(self.path, text) and "0::" + relative not in text.splitlines(),
+                "retirement-controller-outside-envelope")
+        current = self.stage(nofollow_directory, self.path, self.io.check if self.io else None, self.io.charge if self.io else None)
+        try:
+            require([self.metadata(os.fstat, current).st_dev, self.metadata(os.fstat, current).st_ino] == self.record["cgroup_identity"]
+                    and self.snapshot() == self.record, "retirement-envelope-drift")
+        finally:
+            os.close(current)
+
+
+class RetirementBoundary:
+    """Invocation-local outside controller; no runtime commands or unit operations."""
+    def __init__(self, contract, envelope=None, io=None):
+        self.contract, self.envelope, self.io = contract, envelope, io
+        self.directory = self.events = None
+
+    def stage(self, function, *args, **kwargs):
+        return self.io.stage(function, *args, **kwargs) if self.io else function(*args, **kwargs)
+
+    def metadata(self, function, *args, **kwargs):
+        return self.io.metadata(function, *args, **kwargs) if self.io else function(*args, **kwargs)
+
+    def __enter__(self):
+        try:
+            self.directory = self.stage(nofollow_directory, self.contract["cgroup"], self.io.check if self.io else None, self.io.charge if self.io else None)
+            info = self.metadata(os.fstat, self.directory)
+            require(self.contract["cgroup_identity"] == [info.st_dev, info.st_ino], "retirement-slice-identity-drift")
+            self.events = self.metadata(os.open, "cgroup.events", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=self.directory)
+            self.events_identity = [self.metadata(os.fstat, self.events).st_dev, self.metadata(os.fstat, self.events).st_ino]
+            self.validate()
+            return self
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+
+    def __exit__(self, *_args):
+        for fd in [self.events, self.directory]:
+            if fd is not None:
+                os.close(fd)
+        self.events = self.directory = None
+
+    def validate(self):
+        if self.envelope is not None:
+            self.envelope.validate()
+        boot = self.io.process(boot_identity) if self.io else boot_identity()
+        text = self.io.kernel_text("/proc/self/cgroup") if self.io else kernel_text("/proc/self/cgroup")
+        require(boot == self.contract["boot_id"], "retirement-boot-drift")
+        require(not member_of_slice(self.contract["cgroup"], text), "retirement-controller-inside-slice")
+        current = self.stage(nofollow_directory, self.contract["cgroup"], self.io.check if self.io else None, self.io.charge if self.io else None)
+        try:
+            identity = self.contract["cgroup_identity"]
+            require(identity == [self.metadata(os.fstat, current).st_dev, self.metadata(os.fstat, current).st_ino]
+                    == [self.metadata(os.fstat, self.directory).st_dev, self.metadata(os.fstat, self.directory).st_ino], "retirement-slice-identity-drift")
+            event = self.metadata(os.stat, "cgroup.events", dir_fd=current, follow_symlinks=False)
+            require(stat.S_ISREG(event.st_mode) and [event.st_dev, event.st_ino] == self.events_identity,
+                    "retirement-events-identity-drift")
+        finally:
+            os.close(current)
+
+    def populated(self):
+        self.validate()
+        data = self.io.kernel_read(self.events) if self.io else bounded_kernel_read(self.events)
+        lines = data.decode("ascii").splitlines()
+        values = {}
+        for line in lines:
+            fields = line.split()
+            require(len(fields) == 2 and fields[0] in {"populated", "frozen"}
+                    and fields[0] not in values and fields[1] in {"0", "1"}, "retirement-malformed-events")
+            values[fields[0]] = fields[1]
+        require("populated" in values and data.endswith(b"\n"), "retirement-malformed-events")
+        self.validate()
+        return int(values["populated"])
+
+
+def wait_retirement_record(path, end, clock=time.monotonic, sleep=time.sleep,
+                           io=None, maximum=CONTROLLER_RECORD, allowed=None, maximum_attempts=None):
+    attempts = 0
+    while True:
+        require(maximum_attempts is None or attempts < maximum_attempts, "retirement-record-attempt-window")
+        attempts += 1
+        retirement_time(end, clock)
+        try:
+            if io is None:
+                raw = regular(path, maximum)
+                retirement_time(end, clock)
+                _json_shape(raw)
+                result = json.loads(raw)
+                _record_bound(result, maximum * 12 + 1, allowed)
+                retirement_time(end, clock)
+                return result
+            raw = io.read(path, maximum)
+            return io.decode(raw, maximum, allowed)
+        except FileNotFoundError:
+            if io is not None:
+                # Missing-record polls still spend finite original metadata credit.
+                io.charge(1)
+            sleep(min(0.05, retirement_time(end, clock)))
+
+
+def worker_retirement(args):
+    # Explicit original start/end prevent a worker bootstrap clock renewal.
+    start = args.retirement_original_start
+    require(type(start) in {int, float} and math.isfinite(start), 'retirement-original-start-required')
+    io = ControllerIO(start, args.seconds, args.output_bytes, args.store_bytes,
+                      args.controller_output_bytes, args.controller_store_bytes)
+    require(args.retirement_original_end == io.end, 'retirement-original-end-drift')
+    prepaid = _worker_io_reservation(io.metadata(_metadata_path(__file__).stat).st_size)
+    require(prepaid['output_bytes'] <= io.reservation['output_bytes']
+            and prepaid['store_bytes'] <= io.reservation['store_bytes'], 'retirement-worker-share')
+    io.output_share, io.store_share = prepaid['output_bytes'], prepaid['store_bytes']
+    contract, directory = retirement_contract(args.retirement_contract, args.retirement_contract_sha256, io=io)
+    require(contract['phase'] == args.phase and contract['cgroup'] == args.cgroup and contract['store'] == args.store
+            and contract['limits'] == {key: getattr(args, key) for key in contract['limits']},
+            'retirement-worker-context-drift')
+    io.directory, io.contract_name = directory, Path(args.retirement_contract).name
+    arm_raw = io.read(directory / 'armed.json', CONTROLLER_ARM)
+    arm = io.decode(arm_raw, CONTROLLER_ARM, {'contract_sha256', 'boot_id', 'owner', 'controller',
+        'start', 'end', 'envelope', 'controller_reservation', 'worker_io'})
+    require(arm['contract_sha256'] == args.retirement_contract_sha256 and arm['boot_id'] == contract['boot_id']
+            and arm['envelope'] == contract['envelope'] and contract['cgroup'].startswith(contract['envelope']['cgroup'] + '/')
+            and arm['owner'] == contract['owner'] and arm['start'] == start and arm['end'] == io.end
+            and arm['controller_reservation'] == io.reservation and arm['worker_io'] == prepaid,
+            'retirement-arm-drift')
+    retirement_time(io.end - contract['limits']['cleanup_seconds'])
+    io.process(check_retirement_process, arm['controller'], contract['cgroup'], False)
+    io.process(check_retirement_process, arm['controller'], contract['envelope']['cgroup'], True)
+    io.process(check_retirement_process, contract['launch_shell'], contract['cgroup'], True)
+    worker = io.process(retirement_process, os.getpid())
+    require(worker['pid'] not in {arm['controller']['pid'], contract['launch_shell']['pid']},
+            'retirement-distinct-producers-required')
+    io.process(check_retirement_process, worker, contract['cgroup'], True)
+    require(not any(io.metadata((directory / name).exists) for name in ['worker.json', 'gate.json', 'provisional.json', 'final.json']),
+            'retirement-handoff-replay')
+    record = {'contract': contract, 'contract_path': args.retirement_contract,
+        'contract_sha256': args.retirement_contract_sha256, 'handoff': str(directory),
+        'arm_sha256': sha(arm_raw), 'controller': arm['controller'], 'worker': worker,
+        'end': arm['end'], 'controller_reservation': io.reservation, 'worker_io': prepaid,
+        'finalization_seconds': min(30, contract['limits']['cleanup_seconds'] // 2)}
+    return record, io
+
+
+def retirement_binding(policy):
+    raw = regular(Path(policy["directory"]) / "policy.json", MAX_METADATA)
+    require(json.loads(raw) == policy, "retirement-policy-drift")
+    return sha(raw)
+
+
+def worker_native_gate(policy, io=None):
+    require(type(io) is ControllerIO, 'retirement-worker-io-required')
+    record = policy['retirement']
+    binding = sha(io.read(Path(policy['directory']) / 'policy.json', CONTROLLER_POLICY))
+    directory = Path(record['handoff'])
+    worker = {'policy_sha256': binding, 'worker': record['worker'], 'arm_sha256': record['arm_sha256']}
+    io.write(directory / 'worker.json', worker, set(worker), CONTROLLER_ARM)
+    gate = wait_retirement_record(directory / 'gate.json', policy['end'] - policy['limits']['cleanup_seconds'],
+                                  io=io, maximum=CONTROLLER_ARM,
+                                  allowed={'policy_sha256', 'arm_sha256', 'controller'}, maximum_attempts=257)
+    require(gate == {'policy_sha256': binding, 'arm_sha256': record['arm_sha256'],
+                     'controller': record['controller']}, 'retirement-native-gate-drift')
+    io.process(check_retirement_process, record['controller'], policy['cgroup'], False)
+    retirement_time(policy['end'] - policy['limits']['cleanup_seconds'])
+
+
+def scoped_final_receipt(provisional, evidence, failure=None):
+    _record_bound(provisional, CONTROLLER_RECORD, CONTROLLER_RECORD_KEYS)
+    _record_bound(evidence, CONTROLLER_RECORD)
+    receipt = {key: item for key, item in provisional.items()
+               if key not in {'scoped_retirement', 'helper_containment', 'detached-helper-retirement', 'resource_envelope'}}
+    receipt["scoped_retirement"] = evidence
+    receipt["helper_containment"] = {"state": "not-established", "reason": "unsupported-selected-helper-containment",
+                                     "coverage": "no-reviewed-complete-helper-containment-provider"}
+    receipt["detached-helper-retirement"] = "not-established"
+    if receipt.get("state") == "readiness-passed":
+        receipt["state"] = "readiness-observed-pending-retirement"
+    if failure:
+        receipt["original_state"] = receipt.get("state")
+        receipt["state"] = "failed"
+        receipt["retirement_error"] = failure
+        receipt["runtime_object_cleanup"] = receipt.get("cleanup", "not-established")
+        receipt["cleanup"] = "incomplete-quarantined"
+    return receipt
+
+
+def observe_scoped_retirement(boundary, policy, provisional, clock=time.monotonic, sleep=time.sleep, io=None):
+    record = policy["retirement"]
+    barrier = provisional["producer_barrier"]
+    binding = sha(io.read(Path(policy["directory"]) / "policy.json", CONTROLLER_POLICY)) if io else retirement_binding(policy)
+    require(barrier["policy_sha256"] == binding
+            and barrier["gates"] == {"objects": True, "proxies": True, "client_groups": True}
+            and provisional["cleanup"] == "complete" and barrier["cancelled"] == 0,
+            "retirement-producer-barrier-incomplete")
+    require(type(barrier["at"]) in {int, float} and math.isfinite(barrier["at"])
+            and barrier["at"] <= cleanup_end(policy), "retirement-producer-barrier-late")
+    while True:
+        retirement_time(policy["end"], clock)
+        boundary.validate()
+        worker_live = (io.process(check_retirement_process, record["worker"], policy["cgroup"], True, allow_absent=True) if io else check_retirement_process(record["worker"], policy["cgroup"], True, allow_absent=True))
+        shell_live = (io.process(check_retirement_process, record["contract"]["launch_shell"], policy["cgroup"], True, allow_absent=True) if io else check_retirement_process(record["contract"]["launch_shell"], policy["cgroup"], True, allow_absent=True))
+        if not worker_live and not shell_live and boundary.populated() == 0:
+            observed = clock()
+            require(observed >= barrier["at"], "retirement-observation-order")
+            # A second direct read catches repopulation during the witness window.
+            require(boundary.populated() == 0, "retirement-repopulation")
+            retirement_time(policy["end"], clock)
+            return {"state": "subtree-empty-observed", "boundary": record["contract"]["cgroup"],
+                    "cgroup_identity": record["contract"]["cgroup_identity"], "boot_id": record["contract"]["boot_id"],
+                    "unit": record["contract"]["unit"], "unit_identity_source": "operator-attestation-bound-to-kernel-identity",
+                    "policy_sha256": barrier["policy_sha256"], "owner": policy["owner"], "original_end": policy["end"],
+                    "producer_barrier_at": barrier["at"], "observed_at": observed, "populated": 0,
+                    "coverage": "exact-full-slice-subtree-at-observation-only"}
+        sleep(min(0.05, retirement_time(policy["end"], clock)))
+
+
+def retirement_controller(path, expected, envelope_path, clock=time.monotonic,
+                          startup=None):
+    start = clock()
+    require(type(startup) is dict and set(startup) == {
+        'seconds', 'output_bytes', 'store_bytes', 'controller_output_bytes', 'controller_store_bytes'},
+        'retirement-startup-partition-required')
+    io = ControllerIO(start, startup['seconds'], startup['output_bytes'], startup['store_bytes'],
+                      startup['controller_output_bytes'], startup['controller_store_bytes'], clock)
+    require(sys.platform == 'linux' and os.geteuid() != 0, 'retirement-rootless-linux-required')
+    with ControllerEnvelope(envelope_path, io) as envelope:
+        io.check()
+        return controlled_retirement(path, expected, envelope, start, clock, io)
+
+
+def controlled_retirement(path, expected, envelope, start, clock=time.monotonic, io=None):
+    require(type(io) is ControllerIO and io.start == start, 'retirement-startup-partition-required')
+    io.check()
+    contract, directory = retirement_contract(path, expected, io=io)
+    io.check()
+    require(contract['controller_reservation'] == io.reservation
+            and all(contract['limits'][key] == value for key, value in io.original.items()),
+            'retirement-original-partition-drift')
+    end = io.end
+    require(contract['envelope'] == envelope.record
+            and contract['cgroup'].startswith(envelope.path + '/')
+            and envelope.record['memory'] <= contract['limits']['memory_bytes']
+            and envelope.record['pids'] <= contract['limits']['pids']
+            and envelope.record['cpu'][0] <= contract['limits']['cpus'] * envelope.record['cpu'][1],
+            'retirement-aggregate-envelope-drift')
+    io.directory, io.contract_name = directory, Path(path).name
+    io.stored = io.handoff_measure()
+    retirement_time(end - contract['limits']['cleanup_seconds'], clock)
+    # Reserve worker handoff/readonly metadata share before the one-shot claim.
+    worker_io = _worker_io_reservation(io.metadata(_metadata_path(__file__).stat).st_size)
+    io.charge(worker_io['output_bytes'])
+    require(io.stored + worker_io['store_bytes'] <= io.reservation['store_bytes'],
+            'retirement-controller-store-budget')
+    io.stored += worker_io['store_bytes']
+    io.reserve_store(1)
+    claim = io.metadata(os.open, directory / 'controller.claim',
+                     os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    os.close(claim)
+    require(not any(io.metadata((directory / name).exists) for name in
+                    ['armed.json', 'worker.json', 'gate.json', 'provisional.json', 'final.json']),
+            'retirement-handoff-replay')
+    provisional = {'state': 'failed', 'cleanup': 'not-established'}
+    evidence = {'state': 'not-established', 'boundary': contract['cgroup'], 'original_end': end}
+    failure = None
+    try:
+        with RetirementBoundary(contract, envelope, io) as boundary:
+            controller = io.process(retirement_process, os.getpid())
+            io.process(check_retirement_process, contract['launch_shell'], contract['cgroup'], True)
+            arm = {'contract_sha256': expected, 'boot_id': contract['boot_id'], 'owner': contract['owner'],
+                   'controller': controller, 'start': start, 'end': end, 'envelope': envelope.record,
+                   'controller_reservation': io.reservation, 'worker_io': worker_io}
+            io.write(directory / 'armed.json', arm, set(arm), CONTROLLER_ARM)
+            worker = wait_retirement_record(directory / 'worker.json',
+                end - contract['limits']['cleanup_seconds'], clock=clock, io=io,
+                maximum=CONTROLLER_ARM, allowed={'policy_sha256', 'worker', 'arm_sha256',
+                                                'state', 'error', 'contract_sha256'})
+            if worker.get('state') == 'refused':
+                require(set(worker) == {'state', 'error', 'contract_sha256', 'arm_sha256'}
+                        and worker['error'] == 'unsupported-selected-helper-containment'
+                        and worker.get('contract_sha256') == expected
+                        and worker.get('arm_sha256') == sha(io.read(directory / 'armed.json', CONTROLLER_ARM)),
+                        'retirement-worker-refusal-drift')
+                raise Refusal(worker['error'], 'unavailable')
+            policy_raw = io.read(Path(contract['store']) / 'control/policy.json', CONTROLLER_POLICY)
+            policy = io.decode(policy_raw, CONTROLLER_POLICY, {'schema', 'phase', 'store_before', 'owner', 'cluster', 'node', 'volume', 'directory', 'store', 'store_identity', 'cgroup', 'limits', 'end', 'profile', 'tools', 'helper_closure', 'configuration_sha256', 'environment', 'ledger_sha256', 'source_sha256', 'retirement'})
+            record = policy['retirement']
+            ownership = io.decode(io.read(Path(contract['store']) / 'control/ownership.json', CONTROLLER_POLICY),
+                                  CONTROLLER_POLICY)
+            require(ownership['owner'] == policy['owner'] and ownership['cluster'] == policy['cluster']
+                    and ownership['commands'] == 0 and ownership['output'] == io.reservation['output_bytes']
+                    and ownership['input'] == 0, 'retirement-worker-output-precharge')
+            require(io.measure_store(contract['store'], contract['limits']['store_bytes'] -
+                             io.reservation['store_bytes'])['allocated_bytes'] <= contract['limits']['store_bytes'] -
+                    io.reservation['store_bytes'], 'retirement-worker-store-partition')
+            require(worker['policy_sha256'] == sha(policy_raw) and record['contract'] == contract
+                    and record['contract_sha256'] == expected and record['handoff'] == str(directory)
+                    and record['arm_sha256'] == sha(io.read(directory / 'armed.json', CONTROLLER_ARM))
+                    and worker['arm_sha256'] == record['arm_sha256'] and worker['worker'] == record['worker']
+                    and record['controller'] == controller and record['end'] == policy['end'] == end
+                    and policy['owner'] == contract['owner'] and policy['phase'] == contract['phase']
+                    and policy['store_identity'] == contract['store_identity'] and policy['cgroup'] == contract['cgroup']
+                    and policy['limits'] == contract['limits'] and policy['source_sha256'] == contract['source_sha256']
+                    and record['controller_reservation'] == io.reservation and record['worker_io'] == worker_io
+                    and record['finalization_seconds'] == min(30, contract['limits']['cleanup_seconds'] // 2),
+                    'retirement-worker-binding-drift')
+            io.process(check_retirement_process, record['worker'], contract['cgroup'], True)
+            io.stage(boundary.validate)
+            retirement_time(end - contract['limits']['cleanup_seconds'], clock)
+            gate = {'policy_sha256': sha(policy_raw), 'arm_sha256': record['arm_sha256'], 'controller': controller}
+            io.write(directory / 'gate.json', gate, set(gate), CONTROLLER_ARM)
+            provisional = wait_retirement_record(directory / 'provisional.json', end, clock=clock,
+                io=io, allowed=CONTROLLER_RECORD_KEYS)
+            require(retirement_contract(path, expected, io=io)[0] == contract, 'retirement-contract-drift')
+            evidence = io.stage(observe_scoped_retirement, boundary, policy, provisional, clock=clock, io=io)
+    except (Refusal, OSError, ValueError, KeyError, TypeError, AttributeError) as caught:
+        failure = caught.code if isinstance(caught, Refusal) else 'retirement-evidence-unavailable'
+    # Expiry/cancellation/credit exhaustion authorize no extra diagnostic publication.
+    io.check()
+    receipt = io.stage(scoped_final_receipt, provisional, evidence, failure)
+    receipt['resource_envelope'] = envelope.record
+    io.write(directory / 'final.json', receipt, CONTROLLER_RECORD_KEYS)
+    io.check()
+    return io.publish(receipt)
+
+
+def make_policy(args, start, retirement=None):
     require(sys.platform == "linux" and os.uname().machine == "x86_64" and os.geteuid() != 0, "rootless-linux-amd64-required", "unavailable")
     limits = {key: getattr(args, key) for key in ["seconds", "cleanup_seconds", "cpus", "memory_bytes", "pids", "nodes", "store_bytes", "output_bytes", "commands"]}
     limits_valid(limits)
     cgroup_limits(args.cgroup, limits)
-    before = store_limit(args.store, limits["store_bytes"])
+    before = store_limit(args.store, limits["store_bytes"] - (retirement["controller_reservation"]["store_bytes"] if retirement else 0))
     store = Path(args.store)
     require(stat.S_IMODE(store.stat().st_mode) == 0o700, "private-store-mode-required", "unavailable")
     ledger_bytes = regular(LEDGER, MAX_METADATA)
@@ -1241,11 +2154,11 @@ def make_policy(args, start):
         binaries[name] = (data, expected)
     helper_closure = load_helper_closure(Path(args.helper_manifest), args.helper_manifest_sha256)
     if args.phase == "run":
-        return resume_policy(args, start, limits, profile, binaries, ledger_bytes, helper_closure)
+        return resume_policy(args, start, limits, profile, binaries, ledger_bytes, helper_closure, retirement)
     require(not list(store.iterdir()), "empty-owned-store-required", "unavailable")
     bus = Path("/run/user") / str(os.geteuid()) / "bus"
     require(bus.exists() and stat.S_ISSOCK(bus.stat().st_mode) and bus.stat().st_uid == os.geteuid(), "explicit-user-systemd-bus-required", "unavailable")
-    owner = uuid.uuid4().hex
+    owner = retirement["contract"]["owner"] if retirement else uuid.uuid4().hex
     cluster = PREFIX + owner
     directory = store / "control"
     directory.mkdir(mode=0o700)
@@ -1281,8 +2194,11 @@ def make_policy(args, start):
               "directory": str(directory), "store": str(store), "store_identity": [store.stat().st_dev, store.stat().st_ino], "cgroup": str(args.cgroup), "limits": limits, "end": start + limits["seconds"],
               "profile": profile, "tools": tools, "helper_closure": helper_closure,
               "configuration_sha256": {name: sha(regular(directory / name, 64 * 1024)) for name in ["auth.json", "containers.conf", "registries.conf", "storage.conf"]}, "environment": environment, "ledger_sha256": sha(ledger_bytes), "source_sha256": sha(regular(Path(__file__).resolve(), MAX_METADATA))}
+    if retirement:
+        policy["retirement"], policy["end"] = retirement, retirement["end"]
     state = {"owner": owner, "cluster": cluster, "commands": 0, "output": 0, "cleanup_output": 0, "run_attempted": False, "network_attempted": False, "volume_attempted": False, "pull_attempted": False, "prepared": False,
              "container": [], "network": [], "volume": [], "image": [], "input": 0, "proxies": {}, "creation": None, "volume_result": None, "network_result": None, "volume_fingerprint": None}
+    _worker_budget_counters(state, retirement)
     state_write(policy, state)
     install_launcher(policy)
     return policy
@@ -1301,7 +2217,7 @@ def install_launcher(policy):
     launcher.chmod(0o500)
 
 
-def resume_policy(args, start, limits, profile, binaries, ledger_bytes, helper_closure):
+def resume_policy(args, start, limits, profile, binaries, ledger_bytes, helper_closure, retirement=None):
     policy_path = Path(args.store) / "control/policy.json"
     raw = regular(policy_path, MAX_METADATA)
     require(HEX.fullmatch(args.prepared_policy_sha256) and sha(raw) == args.prepared_policy_sha256, "prepared-policy-integrity", "unavailable")
@@ -1321,10 +2237,19 @@ def resume_policy(args, start, limits, profile, binaries, ledger_bytes, helper_c
     state = state_read(policy)
     require(state["prepared"] and not any(state[k] for k in ["container", "network", "volume"])
             and not state["run_attempted"] and not state["network_attempted"] and not state["volume_attempted"], "used-or-unprepared-store-refused", "unavailable")
-    policy["end"] = start + limits["seconds"]
+    if retirement:
+        require(policy["owner"] == retirement["contract"]["owner"]
+                and policy.get("retirement", {}).get("contract_sha256") != retirement["contract_sha256"], "retirement-prepared-replay")
+        prior = read_json(Path(policy["retirement"]["handoff"]) / "final.json")
+        require(prior["state"] == "image-prepared-only" and prior["cleanup"] == "complete"
+                and prior["scoped_retirement"]["state"] == "subtree-empty-observed"
+                and prior["scoped_retirement"]["policy_sha256"] == args.prepared_policy_sha256
+                and prior["owner"] == policy["owner"], "retirement-prepared-finalization-required")
+        policy["retirement"] = retirement
+    policy["end"] = retirement["end"] if retirement else start + limits["seconds"]
     policy["phase"] = "run"
-    policy["store_before"] = store_limit(args.store, limits["store_bytes"])
-    state["commands"], state["output"], state["cleanup_output"], state["input"] = 0, 0, 0, 0
+    policy["store_before"] = store_limit(args.store, limits["store_bytes"] - retirement["controller_reservation"]["store_bytes"])
+    _worker_budget_counters(state, retirement)
     state_write(policy, state)
     install_launcher(policy)
     return policy
@@ -1393,7 +2318,7 @@ def execute(policy, args):
     require(len(state["container"]) == 1, "owned-node-required")
     row = inspect_owned(policy, "container", state["container"][0])
     verify_node_limits(policy, row)
-    return {"state": "readiness-passed", "server": readiness(policy, row), "runtime_conformance": "pending", "api_acceptance": "pending"}
+    return {"state": "readiness-observed-pending-retirement", "server": readiness(policy, row), "runtime_conformance": "pending", "api_acceptance": "pending"}
 
 
 def join_receipt(receipt, error, cleanup):
@@ -1408,16 +2333,22 @@ def join_receipt(receipt, error, cleanup):
 
 
 def exit_status(receipt, cancelled=0):
-    return (128 + cancelled) if cancelled else (0 if receipt["state"] == "readiness-passed" else 2 if receipt["state"] in ["unavailable", "preflight-only", "image-prepared-only"] else 1)
+    # There is no independently reviewed complete helper-containment provider yet.
+    # Receipt fields supplied by callers cannot manufacture that authority.
+    return (128 + cancelled) if cancelled else (2 if receipt["state"] in ["unavailable", "preflight-only", "image-prepared-only"] else 1)
 
 
 def arguments():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--controller-output-bytes", type=int)
+    parser.add_argument("--controller-store-bytes", type=int)
+    parser.add_argument("--retirement-original-start", type=float)
+    parser.add_argument("--retirement-original-end", type=float)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--phase", choices=["preflight", "prepare-image", "run"])
     parser.add_argument("--execute-owned-cluster", action="store_true")
     parser.add_argument("--allow-public-image-pull", action="store_true")
-    for name in ["profile", "kind", "kubectl", "podman", "podman-sha256", "canonical-owner", "helper-manifest", "helper-manifest-sha256", "cgroup", "store", "prepared-policy-sha256"]:
+    for name in ["profile", "kind", "kubectl", "podman", "podman-sha256", "canonical-owner", "helper-manifest", "helper-manifest-sha256", "cgroup", "store", "prepared-policy-sha256", "retirement-contract", "retirement-contract-sha256"]:
         parser.add_argument("--" + name)
     for name in ["seconds", "cleanup-seconds", "cpus", "memory-bytes", "pids", "nodes", "store-bytes", "output-bytes", "commands"]:
         parser.add_argument("--" + name, type=int)
@@ -1426,12 +2357,47 @@ def arguments():
 
 def main():
     global CANCELLED, PROXY_CONTROL, PROXY_POLICY, PROXY_LEASE
+    if len(sys.argv) > 1 and sys.argv[1] == '--retirement-controller':
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--retirement-controller', required=True)
+        parser.add_argument('contract_sha256')
+        parser.add_argument('--controller-envelope', required=True)
+        for name in ('seconds', 'output-bytes', 'store-bytes', 'controller-output-bytes', 'controller-store-bytes'):
+            parser.add_argument('--' + name, type=int, required=True)
+        args = parser.parse_args()
+        previous = {}
+        def controller_cancelled(signum, _frame):
+            global CANCELLED
+            if not CANCELLED:
+                CANCELLED = signum
+        os.umask(0o077)
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            previous[signum] = signal.signal(signum, controller_cancelled)
+        try:
+            startup = {name: getattr(args, name) for name in ('seconds', 'output_bytes', 'store_bytes',
+                       'controller_output_bytes', 'controller_store_bytes')}
+            return retirement_controller(args.retirement_controller, args.contract_sha256,
+                                         args.controller_envelope, startup=startup)
+        except (Refusal, OSError, ValueError, KeyError, TypeError, AttributeError):
+            # No uncharged bootstrap/expired failure receipt or fresh timeout.
+            return 128 + CANCELLED if CANCELLED else 1
+        finally:
+            for signum, handler in previous.items():
+                signal.signal(signum, handler)
     if len(sys.argv) >= 4 and sys.argv[1] == "--podman-front":
+        try:
+            _selected_helper_profile_admission()
+        except Refusal:
+            return 1
         try:
             return provider_front(sys.argv[2], sys.argv[3], sys.argv[4:])
         except (Refusal, OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.SubprocessError):
             return 1
     if len(sys.argv) >= 6 and sys.argv[1] == "--podman-proxy":
+        try:
+            _selected_helper_profile_admission()
+        except Refusal:
+            return 1
         policy = None
         try:
             raw = regular(Path(sys.argv[2]), MAX_METADATA)
@@ -1466,12 +2432,14 @@ def main():
         require(len(sys.argv) == 2, "self-test-isolation")
         import test_kind_runtime
         return 0 if unittest.TextTestRunner(verbosity=1).run(unittest.defaultTestLoader.loadTestsFromModule(test_kind_runtime)).wasSuccessful() else 1
-    required = ["phase", "profile", "kind", "kubectl", "podman", "podman_sha256", "helper_manifest", "helper_manifest_sha256", "cgroup", "store", "seconds", "cleanup_seconds", "cpus", "memory_bytes", "pids", "nodes", "store_bytes", "output_bytes", "commands"]
+    required = ["phase", "profile", "kind", "kubectl", "podman", "podman_sha256", "helper_manifest", "helper_manifest_sha256", "cgroup", "store", "seconds", "cleanup_seconds", "cpus", "memory_bytes", "pids", "nodes", "store_bytes", "output_bytes", "commands", "retirement_contract", "retirement_contract_sha256", "controller_output_bytes", "controller_store_bytes", "retirement_original_start", "retirement_original_end"]
     if any(getattr(args, name) is None for name in required) or (args.phase == "run" and (not args.prepared_policy_sha256 or not args.execute_owned_cluster)):
         parser.error("explicit phase, tool paths/digests, resource limits and run consent/prepared-policy are required")
     os.umask(0o077)
     start = time.monotonic()
     policy, error, receipt = None, None, {}
+    native_started = False
+    retirement = worker_io = None
     lease = None
     previous = {}
     def cancelled(signum, _frame):
@@ -1481,41 +2449,74 @@ def main():
     for signum in [signal.SIGINT, signal.SIGTERM]:
         previous[signum] = signal.signal(signum, cancelled)
     try:
-        lease = os.open(args.store, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        retirement, worker_io = worker_retirement(args)
+        lease = worker_io.metadata(os.open, _metadata_path(args.store), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
-            fcntl.flock(lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            worker_io.metadata(fcntl.flock, lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as caught:
             raise Refusal("store-already-in-use", "unavailable") from caught
-        policy = make_policy(args, start)
+        try:
+            _selected_helper_profile_admission()
+        except Refusal as refusal:
+            value = {'state': 'refused', 'error': refusal.code,
+                     'contract_sha256': retirement['contract_sha256'], 'arm_sha256': retirement['arm_sha256']}
+            worker_io.write(Path(retirement['handoff']) / 'worker.json', value, set(value), CONTROLLER_ARM)
+            return 1
+        policy = make_policy(args, start, retirement)
+        worker_native_gate(policy, worker_io)
+        native_started = True
         receipt = execute(policy, args)
     except (Refusal, OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.SubprocessError) as caught:
         error = caught if isinstance(caught, Refusal) else Refusal("invalid-or-unavailable-prerequisite", "unavailable" if policy is None else "failed")
     finally:
         try:
-            cleanup = cleanup_resources(policy, keep_image=error is None and args.phase == "prepare-image") if policy else []
+            cleanup = cleanup_resources(policy, keep_image=error is None and args.phase == "prepare-image") if policy and native_started else []
         except (Refusal, OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.SubprocessError) as caught:
             cleanup = [caught.code if isinstance(caught, Refusal) else "cleanup-unavailable"]
         if lease is not None:
             os.close(lease)
         for signum, handler in previous.items():
             signal.signal(signum, handler)
-    receipt = join_receipt(receipt, error, cleanup)
-    receipt["evidence_scope"] = "external-readiness-only"
-    receipt["cleanup_scope"] = "recorded-runtime-objects-and-leased-client-groups"
-    receipt["detached-helper-retirement"] = "not-established"
-    receipt["disk_enforcement"] = "measured-not-quota"
-    if policy:
-        try:
-            receipt["store_after"] = store_limit(policy["store"], policy["limits"]["store_bytes"])
-        except (Refusal, OSError) as caught:
-            receipt["state"] = "failed"
-            receipt["store_error"] = caught.code if isinstance(caught, Refusal) else "store-measurement-unavailable"
-        receipt["store_before"] = policy["store_before"]
-        receipt["provider_diagnostics"] = state_read(policy).get("provider_diagnostics", [])
-        receipt.update({"profile": policy["profile"]["id"], "owner": policy["owner"], "ledger_sha256": policy["ledger_sha256"]})
-        write_json(Path(policy["directory"]) / "receipt.json", receipt)
-    print(json.dumps(receipt, sort_keys=True))
-    return exit_status(receipt, CANCELLED)
+    if policy is None:
+        return 128 + CANCELLED if CANCELLED else 1
+    try:
+        worker_io.check()
+    except Refusal:
+        return 128 + CANCELLED if CANCELLED else 1
+    try:
+        receipt = join_receipt(receipt, error, cleanup)
+        receipt["evidence_scope"] = "external-readiness-only"
+        receipt["cleanup_scope"] = "recorded-runtime-objects-and-leased-client-groups"
+        receipt["detached-helper-retirement"] = "not-established"
+        receipt["scoped_retirement"] = {"state": "pending-outside-finalization" if policy else "not-established"}
+        receipt["disk_enforcement"] = "measured-not-quota"
+        if policy:
+            try:
+                receipt["store_after"] = worker_io.measure_store(policy["store"], _worker_store_limit(policy), maximum_accesses=256)
+            except (Refusal, OSError) as caught:
+                receipt["state"] = "failed"
+                receipt["store_error"] = caught.code if isinstance(caught, Refusal) else "store-measurement-unavailable"
+            receipt["store_before"] = policy["store_before"]
+            current = worker_io.decode(worker_io.read(Path(policy['directory']) / 'ownership.json', CONTROLLER_POLICY), CONTROLLER_POLICY)
+            require(current['owner'] == policy['owner'] and current['cluster'] == policy['cluster'], 'ownership-manifest-drift')
+            receipt["provider_diagnostics"] = current.get("provider_diagnostics", [])
+            receipt.update({"profile": policy["profile"]["id"], "owner": policy["owner"], "ledger_sha256": policy["ledger_sha256"]})
+            receipt["producer_barrier"] = {"policy_sha256": sha(worker_io.read(Path(policy["directory"]) / "policy.json", CONTROLLER_POLICY)), "at": time.monotonic(), "cancelled": CANCELLED,
+                "gates": {"objects": native_started and receipt["cleanup"] == "complete" and not any(current[key] for key in ["container", "network", "volume"])
+                          and (args.phase == "prepare-image" or not current["image"]),
+                          "proxies": all(record.get("retired") is True for record in current.get("proxies", {}).values()),
+                          "client_groups": not current.get("retirement_unproved", False)}}
+            worker_io.write(Path(policy["directory"]) / "receipt.json", receipt, CONTROLLER_RECORD_KEYS)
+            require(type(worker_io) is ControllerIO, 'retirement-worker-io-required')
+            try:
+                worker_io.write(Path(policy['retirement']['handoff']) / 'provisional.json', receipt,
+                                CONTROLLER_RECORD_KEYS)
+            except (Refusal, OSError, ValueError, TypeError):
+                return 128 + CANCELLED if CANCELLED else 1
+    except (Refusal, OSError, ValueError, KeyError, TypeError, AttributeError):
+        return 128 + CANCELLED if CANCELLED else 1
+    # Only the accounted outside controller may publish an external final receipt.
+    return 128 + CANCELLED if CANCELLED else 1
 
 
 if __name__ == "__main__":
