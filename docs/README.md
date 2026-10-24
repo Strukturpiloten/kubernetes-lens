@@ -23,3 +23,7 @@ preparation/admission tests run through the repository policy suite; official co
 renderer, API and runtime acceptance remains pending.
 
 [Helm/Kustomize renderer interfaces and provisioning](formats.md) describe the explicit offline formats API.
+
+[Owned-QEMU prerequisite](fixtures/owned-qemu.md) documents the explicit external VM lifecycle for
+the rootful-conformance work. Its pure tests and prerequisite receipts remain separate from kind,
+Kubernetes API and resource/controller acceptance.

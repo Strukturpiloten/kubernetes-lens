@@ -16,6 +16,19 @@ from unittest.mock import Mock, patch
 import kind_runtime as runtime
 
 
+class OwnedVMDispatchControls(unittest.TestCase):
+    def test_owned_vm_is_an_explicit_separate_mode(self):
+        import owned_qemu
+        with patch.object(runtime.sys, "argv", ["kind_runtime.py", "--owned-vm", "--phase", "qualify-vm"]), \
+             patch.object(owned_qemu, "main", return_value=17) as main:
+            self.assertEqual(runtime.main(), 17)
+        main.assert_called_once_with(["--phase", "qualify-vm"])
+
+    def test_owned_vm_does_not_relax_existing_rootless_refusal(self):
+        with self.assertRaisesRegex(runtime.Refusal, "helper"):
+            runtime._selected_helper_profile_admission()
+
+
 def limits():
     return {"seconds": 600, "cleanup_seconds": 120, "cpus": 2, "memory_bytes": 4 * 1024**3,
             "pids": 4096, "nodes": 1, "store_bytes": 16 * 1024**3, "output_bytes": 8 * 1024**2, "commands": 256}

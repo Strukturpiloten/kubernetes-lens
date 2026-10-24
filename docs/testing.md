@@ -4,6 +4,12 @@ The complete gate is `./scripts/check-all.sh --check`; `--fix` performs the same
 first. `format-lint.sh` runs no tests. Lightweight contracts cover trusted-base PR planning, aggregate
 failure/skip propagation, repository/release boundaries, and real Renovate extraction and policy.
 Renovate tests import the locked tool itself and require its RE2 engine to be available.
+
+The explicit [owned-QEMU prerequisite](fixtures/owned-qemu.md) has pure lifecycle controls in
+`scripts/fixtures/test_owned_qemu.py`, discovered by the existing policy runner and included in
+`python3 -B scripts/fixtures/kind_runtime.py --self-test`. Ordinary gates run these controls without
+starting systemd units, VMs, SSH or Podman. A separate opt-in runtime receipt must establish the
+actual VM prerequisite and retirement; it cannot satisfy the pending kind/API/resource scenarios.
 The documentation phase also runs actual Prettier against the production file-check script
 with conflicting workspace configurations and fail-closed owning-config controls.
 

@@ -23,6 +23,10 @@
 
 Add a new numbered ADR when an accepted decision changes; preserve and supersede historical decisions.
 
+[ADR 0062](0062-owned-qemu-prerequisite.md) adds the explicitly selected external owned-VM
+prerequisite for rootful conformance. Its source contract and pure controls do not establish VM,
+kind, API or controller qualification; the existing rootless refusals remain intact.
+
 [ADR 0018](0018-finite-native-target-contract.md) refines ADRs 0002–0004, 0006, 0010, 0013 and
 0017 with reviewed finite native predicates, complete target finding facets and the explicit
 external host-authority boundary; it does not close native conformance or #43.

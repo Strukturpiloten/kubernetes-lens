@@ -191,3 +191,17 @@ behavior across those repositories; KubernetesLens validation establishes only
 this consumer's behavior. [#50](https://github.com/Strukturpiloten/kubernetes-lens/issues/50) records
 the supplemental committed consumer inventory and follow-up; it grants no
 authority to change the other consumers.
+
+## Owned VM prerequisite pin (issue #62)
+
+The reviewed KubernetesLens baseline for this addition is
+`9653165bfce1ab76ea71444ecdf709bc28d3630d`. Its existing shared BoxFerry checkout, installer,
+Renovate OCI image, Actions, Rust and node-image compatibility pins remain unchanged. The local owned
+rootful-kind VM prerequisite adds one canonical `scripts/kind-vm-image.json` tuple and one exact-path
+Renovate custom-regex owner/custom datasource; no other repository or workflow receives a competing
+installer or pin. The native harness is its consumer. This deliberate local-only prerequisite differs
+from GitHub's existing explicit runner/runtime choice; no hosted workflow or application suite is
+changed here. Actual selected-engine regressions validate this repository's ownership, replacement,
+manual grouping and timestamp-required update holding; they make no cross-repository rollout or
+VM-execution claim. Shared tools remain under BoxFerry's immutable inventory. Publication controls,
+workflow triggers/gates/permissions and historical fixture exclusions are unchanged.

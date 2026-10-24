@@ -109,6 +109,7 @@ const files = new Map(
     [
       ...workflowFiles,
       "scripts/renovate-tool.json",
+      "scripts/kind-vm-image.json",
       "rust-toolchain.toml",
       "Cargo.toml",
     ].map(async (f) => [f, await fs.readFile(path.join(root, f), "utf8")]),
@@ -232,6 +233,20 @@ function expected(input = files) {
           depName: "rust",
           currentValue: text.match(/channel = "([^"]+)"/)[1],
           datasource: "rust-version",
+        }),
+      );
+    } else if (file === "scripts/kind-vm-image.json") {
+      const image = JSON.parse(text);
+      assert.deepEqual(Object.keys(image), ["schema", "release", "archive_sha256"]);
+      assert.equal(image.schema, "kubernetes-lens-owned-vm-image-v1");
+      assert.match(image.release, /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/);
+      assert.match(image.archive_sha256, /^[a-f0-9]{64}$/);
+      out.push(
+        key(file, {
+          depName: "fedora-coreos-qemu-x86_64-stable",
+          currentValue: image.release,
+          currentDigest: image.archive_sha256,
+          datasource: "custom.fcos-qemu-x86_64-stable",
         }),
       );
     } else if (file === "scripts/renovate-tool.json") {
@@ -897,6 +912,281 @@ assert.throws(
   () => assert.equal(unsafeImage.automerge, false),
   "negative generic-rule reorder must expose image digest automerge regression",
 );
+// Owned VM image: actual selected-engine projection, tuple update and age refusal.
+const vmFile = "scripts/kind-vm-image.json";
+const vmText = files.get(vmFile);
+const vmPin = JSON.parse(vmText);
+const vmManager = config.customManagers.find((m) =>
+  m.managerFilePatterns.includes("/^scripts/kind-vm-image\\.json$/"),
+);
+assert(vmManager, "VM image must have exactly one exact-path owner");
+const vmRows = actual.filter((r) => r.file === vmFile);
+assert.equal(vmRows.length, 1);
+const vmRow = vmRows[0];
+assert.equal(vmRow.manager, "custom.regex");
+for (const manager of config.enabledManagers.filter((name) => name !== "custom.regex")) {
+  assert(["cargo", "github-actions", "rust-toolchain"].includes(manager),
+    "new enabled manager requires actual VM ownership review");
+  const native = await load(`modules/manager/${manager}/index.js`);
+  const patterns = [...native.defaultConfig.managerFilePatterns,
+    ...(effectiveConfig[manager]?.managerFilePatterns ?? [])];
+  assert(!patterns.some((pattern) => matchRegexOrGlob(vmFile, pattern)),
+    `${manager} actual default/configured patterns must not overlap VM owner`);
+}
+
+const vmDatasource = vmRow.dep.datasource;
+const vmName = vmRow.dep.depName;
+const vmConfigName = vmDatasource.replace("custom.", "");
+assert.equal(
+  config.customDatasources[vmConfigName].defaultRegistryUrlTemplate,
+  "https://builds.coreos.fedoraproject.org/streams/stable.json",
+);
+assert.equal(config.minimumReleaseAge, "3 days");
+for (const mutation of [
+  vmText.replace('"schema":', '"other":'),
+  vmText.replace(vmPin.release, "44.20260928.3"),
+  vmText.replace(vmPin.release, "44.20260928.3.2-extra"),
+  vmText.replace(vmPin.archive_sha256, "a".repeat(63)),
+  vmText.replace(vmPin.archive_sha256, "A".repeat(64)),
+  vmText.replace('"archive_sha256":', '"other":'),
+  vmText.replace(/\n?}\s*$/, ', "extra": true }'),
+]) {
+  const input = new Map(files);
+  input.set(vmFile, mutation);
+  assert.equal((await inventory(input)).filter((r) => r.file === vmFile).length, 0);
+}
+const missingVm = new Map(files);
+missingVm.delete(vmFile);
+const missingVmInventory = await inventory(missingVm);
+assert.throws(() => ownership(missingVmInventory));
+for (const wrongFile of [
+  "scripts/moved-kind-vm-image.json",
+  "fixtures/kind-vm-image.json",
+  "docs/evidence/kind-vm-image.json",
+  "docs/compatibility/kind-vm-image.json",
+  "schemas/capabilities/kind-vm-image.json",
+]) {
+  assert.deepEqual(await inventory(new Map([[wrongFile, vmText]])), []);
+}
+const doubledVm = structuredClone(config);
+doubledVm.customManagers.push(structuredClone(vmManager));
+const doubledVmInventory = await inventory(files, doubledVm);
+assert.throws(() => ownership(doubledVmInventory));
+const missingVmManager = structuredClone(config);
+missingVmManager.customManagers = missingVmManager.customManagers.filter(
+  (m) => !m.managerFilePatterns.includes("/^scripts/kind-vm-image\\.json$/"),
+);
+const missingVmOwnerInventory = await inventory(files, missingVmManager);
+assert.throws(() => ownership(missingVmOwnerInventory));
+const vmNoDatasource = structuredClone(vmManager);
+delete vmNoDatasource.datasourceTemplate;
+assert.equal(custom.extractPackageFile(vmText, vmFile, vmNoDatasource), null);
+const { CustomDatasource } = await load("modules/datasource/custom/index.js");
+const { get: versioning } = await load("modules/versioning/index.js");
+const { checkMinimumReleaseAge } = await load("util/minimum-release-age.js");
+const { getConfig: renovateDefaults } = await load("config/defaults.js");
+assert.equal(renovateDefaults().internalChecksFilter, "strict");
+const { filterInternalChecks } = await load("workers/repository/process/lookup/filter-checks.js");
+const { resolveUpdateDigests, applyMinimumReleaseAgeToDigestUpdate } = await load("workers/repository/process/lookup/digest.js");
+const vmVersioning = versioning(vmManager.versioningTemplate);
+for (const [older, newer] of [
+  ["44.20260928.3.2", "44.20260928.3.10"],
+  ["44.20260928.3.10", "44.20260928.4.0"],
+  ["44.20260928.9.9", "44.20261001.1.0"],
+  ["44.20261001.9.9", "45.20260101.1.0"],
+]) {
+  assert(vmVersioning.isGreaterThan(newer, older));
+  assert(!vmVersioning.isGreaterThan(older, newer));
+}
+for (const invalid of ["44.20260928.3", "44.20260928.3.2.1", "latest", "v44.20260928.3.2"])
+  assert.equal(vmVersioning.isValid(invalid), false);
+function stream(version = "44.20260928.3.10", digest = "b".repeat(64)) {
+  return {
+    stream: "stable",
+    metadata: { "last-modified": "2000-01-01T00:00:00Z" },
+    architectures: {
+      x86_64: {
+        artifacts: {
+          qemu: {
+            release: version,
+            formats: {
+              "qcow2.xz": { disk: { sha256: digest, "uncompressed-sha256": "c".repeat(64) } },
+            },
+          },
+        },
+      },
+      aarch64: {
+        artifacts: {
+          qemu: {
+            release: "999.1.1.1",
+            formats: {
+              "qcow2.xz": { disk: { sha256: "d".repeat(64) } },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+async function projectVm(input, overrides = {}) {
+  const datasource = new CustomDatasource();
+  let calls = 0;
+  // Only transport is substituted: actual custom datasource JSONata + schema run.
+  datasource.http.getJsonUnchecked = async (url) => {
+    assert.equal(url, config.customDatasources[vmConfigName].defaultRegistryUrlTemplate);
+    calls++;
+    return { body: structuredClone(input) };
+  };
+  const result = await datasource.getReleases({
+    datasource: vmDatasource,
+    packageName: vmName,
+    currentValue: vmPin.release,
+    customDatasources: config.customDatasources,
+    ...overrides,
+  });
+  assert.equal(calls, 1);
+  return { result, datasource };
+}
+const absentVmDatasource = new CustomDatasource();
+assert.equal(await absentVmDatasource.getReleases({ datasource: vmDatasource,
+  packageName: vmName, currentValue: vmPin.release, customDatasources: {} }), null,
+  "missing configured datasource must not offer releases");
+const projected = await projectVm(stream());
+assert.equal(projected.result.releases.length, 1);
+assert.equal(projected.result.releases[0].version, "44.20260928.3.10");
+assert.equal(projected.result.releases[0].newDigest, "b".repeat(64));
+assert.equal(
+  projected.result.releases[0].releaseTimestamp,
+  null,
+  "stream modification/build time must never become publication time",
+);
+assert.equal(
+  await projected.datasource.getDigest({}, "44.20260928.3.10"),
+  null,
+  "custom fallback does not resolve digests; release.newDigest is required",
+);
+for (const mutate of [
+  (s) => {
+    delete s.architectures.x86_64;
+  },
+  (s) => {
+    delete s.architectures.x86_64.artifacts.qemu.formats["qcow2.xz"].disk.sha256;
+  },
+  (s) => {
+    s.architectures.x86_64.artifacts.qemu.formats["qcow2.xz"].disk.sha256 = "a".repeat(63);
+  },
+  (s) => {
+    s.architectures.x86_64.artifacts.qemu.release = "44.1.2";
+  },
+  (s) => {
+    s.stream = "testing";
+  },
+]) {
+  const input = stream();
+  mutate(input);
+  const { result } = await projectVm(input);
+  assert.deepEqual(
+    result?.releases ?? [],
+    [],
+    "malformed/other-stream metadata must not offer an image",
+  );
+}
+for (const updateType of ["major", "minor", "patch", "pin", "digest", "pinDigest"]) {
+  const effective = await policy({
+    ...vmRow.dep,
+    manager: vmRow.manager,
+    packageFile: vmFile,
+    currentVersion: vmPin.release,
+    updateType,
+  });
+  assert.equal(effective.groupName, "Owned kind VM image");
+  assert.equal(effective.dependencyDashboardApproval, true);
+  assert.equal(effective.automerge, false);
+  assert.equal(effective.minimumReleaseAge, "3 days");
+  assert.equal(effective.minimumReleaseAgeBehaviour, "timestamp-required");
+  const age = checkMinimumReleaseAge(effective, undefined);
+  assert.equal(age.hasTimestamp, false);
+  assert.equal(age.isPending, true);
+  assert.equal(age.minimumReleaseAgeMs, 3 * 24 * 60 * 60 * 1000);
+  const held = await filterInternalChecks(
+    { ...effective, internalChecksFilter: "strict" },
+    vmVersioning,
+    "latest",
+    structuredClone(projected.result.releases),
+  );
+  assert.equal(held.pendingChecks, true, "actual lookup holds timestamp-less releases");
+}
+const vmEffective = await policy({
+  ...vmRow.dep,
+  manager: vmRow.manager,
+  packageFile: vmFile,
+  currentVersion: vmPin.release,
+  updateType: "patch",
+});
+const digestAgeUpdate = { updateType: "digest" };
+await applyMinimumReleaseAgeToDigestUpdate(digestAgeUpdate,
+  { ...vmEffective, internalChecksFilter: renovateDefaults().internalChecksFilter },
+  {}, true, undefined);
+assert.equal(digestAgeUpdate.pendingChecks, true,
+  "actual digest-only lookup also holds missing publication timestamps");
+const resolved = { warnings: [], updates: [{ newValue: "44.20260928.3.10", updateType: "patch" }] };
+await resolveUpdateDigests(vmEffective, resolved, projected.result);
+assert.equal(
+  resolved.updates[0].newDigest,
+  "b".repeat(64),
+  "actual update lookup consumes projected release digest without custom fallback",
+);
+assert.deepEqual(resolved.warnings, []);
+const vmScratch = await fs.mkdtemp(path.join(os.tmpdir(), "kubernetes-lens-vm-renovate-"));
+try {
+  GlobalConfig.set({ localDir: vmScratch });
+  await fs.mkdir(path.join(vmScratch, "scripts"));
+  for (const newValue of ["44.20260928.3.10", vmPin.release]) {
+    await fs.writeFile(path.join(vmScratch, vmFile), vmText);
+    const updated = await doAutoReplace(
+      {
+        ...vmRow.extraction,
+        ...vmRow.dep,
+        manager: "regex",
+        packageFile: vmFile,
+        depIndex: 0,
+        newValue,
+        newDigest: resolved.updates[0].newDigest,
+      },
+      vmText,
+      false,
+    );
+    assert(updated && updated !== vmText);
+    assert.deepEqual(JSON.parse(updated), {
+      schema: vmPin.schema,
+      release: newValue,
+      archive_sha256: "b".repeat(64),
+    });
+    const after = custom.extractPackageFile(updated, vmFile, vmManager);
+    assert.equal(after.deps.length, 1);
+    assert.equal(after.deps[0].currentValue, newValue);
+    assert.equal(after.deps[0].currentDigest, "b".repeat(64));
+  }
+} finally {
+  GlobalConfig.set({ localDir: root });
+  await fs.rm(vmScratch, { recursive: true, force: true });
+}
+const reorderedVm = structuredClone(effectiveConfig);
+const vmRuleIndex = reorderedVm.packageRules.findIndex(
+  (r) => r.groupName === "Owned kind VM image",
+);
+const vmRule = reorderedVm.packageRules.splice(vmRuleIndex, 1)[0];
+reorderedVm.packageRules.unshift(vmRule);
+const unsafeVm = await policy(
+  { ...vmRow.dep, manager: vmRow.manager, updateType: "patch" },
+  reorderedVm,
+);
+assert.equal(
+  unsafeVm.automerge,
+  true,
+  "moving manual rule before generic rule must expose regression",
+);
+
 console.log(
   `Renovate ${toolVersion}: RE2 available; ${actual.length} actual pins with exclusive owners; extraction, replacement, rule-order and mutation regressions passed.`,
 );

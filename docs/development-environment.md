@@ -11,6 +11,12 @@ is required on hosted runners. It uses the same validation phases as the local e
 not run BoxFerry application suites, provision clusters or install an independent Kubernetes inventory.
 A container is a disposable validation environment; no generated configuration is applied.
 
+For explicit native runtime work, the [owned-QEMU prerequisite](fixtures/owned-qemu.md) selects
+an independently reviewed host QEMU/KVM and user-manager profile with an official Fedora CoreOS
+image. This route runs outside the devcontainer and has no implicit fallback. It does not require
+a new workflow container image or install host/guest packages. Hosted kind qualification remains
+separate pending work in #62; ordinary CI, manual and release validation do not boot this guest.
+
 Prerequisites: the shared Rust/file-quality tools, Git, Python 3.11 or newer (standard-library tomllib),
 Node from the shared environment, and Docker or Podman to retrieve the operational test artifact.
 Run `./scripts/install-renovate-tool.sh` once (or set `KUBERNETES_LENS_CONTAINER_ENGINE=podman`).
