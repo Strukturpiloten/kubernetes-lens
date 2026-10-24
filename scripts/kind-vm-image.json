@@ -1,0 +1,5 @@
+{
+  "schema": "kubernetes-lens-owned-vm-image-v1",
+  "release": "44.20260928.3.2",
+  "archive_sha256": "62806adfa651daf69e7e42b80050c55de0aac6fa2ba34d86ff5bf51aebb0dea9"
+}

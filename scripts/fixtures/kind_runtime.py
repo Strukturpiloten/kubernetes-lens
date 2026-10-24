@@ -2357,6 +2357,9 @@ def arguments():
 
 def main():
     global CANCELLED, PROXY_CONTROL, PROXY_POLICY, PROXY_LEASE
+    if len(sys.argv) > 1 and sys.argv[1] == "--owned-vm":
+        import owned_qemu
+        return owned_qemu.main(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == '--retirement-controller':
         parser = argparse.ArgumentParser()
         parser.add_argument('--retirement-controller', required=True)
@@ -2431,7 +2434,13 @@ def main():
     if args.self_test:
         require(len(sys.argv) == 2, "self-test-isolation")
         import test_kind_runtime
-        return 0 if unittest.TextTestRunner(verbosity=1).run(unittest.defaultTestLoader.loadTestsFromModule(test_kind_runtime)).wasSuccessful() else 1
+        import test_owned_qemu
+        import test_owned_host_view
+        import test_owned_guest_stage
+        import test_owned_guest_receiver
+        suite = unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromModule(module)
+                                   for module in (test_kind_runtime, test_owned_qemu, test_owned_host_view, test_owned_guest_stage, test_owned_guest_receiver))
+        return 0 if unittest.TextTestRunner(verbosity=1).run(suite).wasSuccessful() else 1
     required = ["phase", "profile", "kind", "kubectl", "podman", "podman_sha256", "helper_manifest", "helper_manifest_sha256", "cgroup", "store", "seconds", "cleanup_seconds", "cpus", "memory_bytes", "pids", "nodes", "store_bytes", "output_bytes", "commands", "retirement_contract", "retirement_contract_sha256", "controller_output_bytes", "controller_store_bytes", "retirement_original_start", "retirement_original_end"]
     if any(getattr(args, name) is None for name in required) or (args.phase == "run" and (not args.prepared_policy_sha256 or not args.execute_owned_cluster)):
         parser.error("explicit phase, tool paths/digests, resource limits and run consent/prepared-policy are required")

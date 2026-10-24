@@ -127,3 +127,25 @@ Optional Linux supervised renderer dependencies (`nix`, `rustix`, `command-fds`,
 rule requires dashboard approval and disables automerge; extraction, replacement and rule-order
 regressions own these pins once. Shared official renderer/tool integrity inventories remain owned
 by BoxFerry; this library adds no duplicate inventory.
+
+## Explicit owned kind VM image
+
+Issue #62 adds one operational prerequisite outside the shared tool inventory:
+`scripts/kind-vm-image.json` owns the Fedora CoreOS stable x86_64 QEMU archive release and compressed
+SHA-256 together. Its sole updater is an exact-path `custom.regex` manager using the official stable
+stream custom datasource. Runtime derives the fixed official archive URL; it does not introduce a
+second checksum/version inventory. Shared kind/kubectl pins, historical node profiles and compatibility
+anchors retain their existing owners and exclusions.
+
+The selected Renovate 44.139.0 engine supports the four-component regex versioning `build` group and
+transforms the custom datasource's release `digest` into `newDigest`. Real-engine regressions cover
+projection, malformed/missing metadata, exclusive ownership, exact paired replacement, ordering and
+effective policy. The dedicated `Owned kind VM image` group follows generic automerge rules, requires
+Dependency Dashboard approval and disables automerge. The global three-day minimum age is unchanged.
+The stream has no authoritative image-publication timestamp: neither stream modification nor build
+time is substituted. `timestamp-required` therefore holds discovered updates pending; this is
+truthfully a discovery/review aid, not automatic image promotion. A maintainer must separately verify
+release age/provenance/integrity before an explicit manual pin promotion. No age exception is supplied.
+
+The operational pin authenticates compressed archive bytes when acquired. It does not establish
+image download, signature verification, redistribution permission or VM/runtime qualification.

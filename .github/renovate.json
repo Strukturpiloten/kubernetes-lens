@@ -47,6 +47,20 @@
       "datasourceTemplate": "docker",
       "versioningTemplate": "docker",
       "autoReplaceStringTemplate": "\"image\": \"{{{depName}}}:{{{newValue}}}@{{{newDigest}}}\""
+    },
+    {
+      "customType": "regex",
+      "description": [
+        "One owned rootful-kind Fedora CoreOS QEMU base image; exact operational path only"
+      ],
+      "managerFilePatterns": ["/^scripts/kind-vm-image\\.json$/"],
+      "matchStrings": [
+        "^\\s*\\{\\s*\"schema\":\\s*\"kubernetes-lens-owned-vm-image-v1\",\\s*\"release\":\\s*\"(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+)\",\\s*\"archive_sha256\":\\s*\"(?<currentDigest>[a-f0-9]{64})\"\\s*\\}\\s*$"
+      ],
+      "depNameTemplate": "fedora-coreos-qemu-x86_64-stable",
+      "datasourceTemplate": "custom.fcos-qemu-x86_64-stable",
+      "versioningTemplate": "regex:^(?<major>[0-9]+)\\.(?<minor>[0-9]+)\\.(?<patch>[0-9]+)\\.(?<build>[0-9]+)$",
+      "autoReplaceStringTemplate": "{\n  \"schema\": \"kubernetes-lens-owned-vm-image-v1\",\n  \"release\": \"{{{newValue}}}\",\n  \"archive_sha256\": \"{{{newDigest}}}\"\n}"
     }
   ],
   "packageRules": [
@@ -150,6 +164,27 @@
       "groupName": "Supervised renderer dependencies",
       "dependencyDashboardApproval": true,
       "automerge": false
+    },
+    {
+      "description": [
+        "Review owned VM image version/digest together after generic automerge; stream provides no publication timestamp so promotion remains manual"
+      ],
+      "matchManagers": ["custom.regex"],
+      "matchDatasources": ["custom.fcos-qemu-x86_64-stable"],
+      "matchPackageNames": ["fedora-coreos-qemu-x86_64-stable"],
+      "groupName": "Owned kind VM image",
+      "dependencyDashboardApproval": true,
+      "automerge": false,
+      "minimumReleaseAgeBehaviour": "timestamp-required"
     }
-  ]
+  ],
+  "customDatasources": {
+    "fcos-qemu-x86_64-stable": {
+      "defaultRegistryUrlTemplate": "https://builds.coreos.fedoraproject.org/streams/stable.json",
+      "format": "json",
+      "transformTemplates": [
+        "($a := architectures.x86_64.artifacts.qemu; $d := $a.formats.\"qcow2.xz\".disk; {\"releases\": stream = \"stable\" and $type($a.release) = \"string\" and $type($d.sha256) = \"string\" and $exists($match($a.release, /^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$/)) and $exists($match($d.sha256, /^[a-f0-9]{64}$/)) ? [{\"version\": $a.release, \"digest\": $d.sha256}] : []})"
+      ]
+    }
+  }
 }
