@@ -38,6 +38,18 @@ This standing workflow authorizes no release or publication. All release workflo
 
 ## Agent roles
 
+Use [`presentation_worker`](.codex/agents/presentation-worker.toml) with `gpt-6.1-terra` and
+`medium` reasoning for bounded documentation, website presentation, visual inspection, and small
+presentation fixes with explicit expected behavior. Escalate architecture, native-format semantics,
+security, migrations, and ambiguous changes to a Sol agent. A Sol reviewer independently checks the
+result; Terra does not replace required review or complete gates. Task-specific Terra effort may be
+`medium`, `high`, or `xhigh`. This role grants no additional permissions or browser/API mutation,
+publication, or deployment authority. The allocation follows [OpenAI model guidance](https://learn.chatgpt.com/docs/model-selection)
+and [Terra capabilities](https://developers.openai.com/api/docs/models/gpt-6.1-terra); compare
+representative results rather than assuming superiority.
+Start a new trusted project session to load changed role definitions; editing TOML does not switch
+already running agents.
+
 The maintainer explicitly selects the primary `gpt-6.1-sol` with `xhigh` reasoning for this repository.
 Implementation/specification/review use `gpt-6.1-sol` with `high`; bounded read-only exploration and
 check-only verification use `gpt-6-luna` with `high`. Define task, repository, checkout and file

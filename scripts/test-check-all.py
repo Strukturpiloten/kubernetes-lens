@@ -138,8 +138,8 @@ class GateTests(unittest.TestCase):
                  ".codex/config.toml", "scripts/validation-policy.json", ".github/workflows/ci.yml",
                  ".github/workflows/release.yml", "scripts/renovate-tool.json", "LICENSE",
                  "scripts/test-repository-policy.py"]
-        paths.extend(f".codex/agents/{role}.toml" for role in
-                     ("implementation-worker", "specification-researcher", "reviewer", "verifier"))
+        paths.extend(str(path.relative_to(ROOT)) for path in
+                     sorted((ROOT / ".codex/agents").glob("*.toml")))
         for name in paths:
             destination = self.root / name
             destination.parent.mkdir(parents=True, exist_ok=True)
