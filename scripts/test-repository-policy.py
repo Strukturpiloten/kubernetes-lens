@@ -106,15 +106,27 @@ class RepositoryPolicyTests(unittest.TestCase):
         self.assertFalse((ROOT / "scripts/install-file-tools.sh").exists())
 
     def test_agent_role_files_match_supported_standalone_schema(self) -> None:
-        for role, model, sandbox in (("implementation-worker", "gpt-6.1-sol", "workspace-write"),
-                                     ("specification-researcher", "gpt-6.1-sol", "read-only"),
-                                     ("reviewer", "gpt-6.1-sol", "read-only"),
-                                     ("verifier", "gpt-6-luna", "workspace-write")):
+        for role, model, effort, sandbox in (
+            ("implementation-worker", "gpt-6.1-sol", "high", "workspace-write"),
+            ("specification-researcher", "gpt-6.1-sol", "high", "read-only"),
+            ("reviewer", "gpt-6.1-sol", "high", "read-only"),
+            ("presentation-worker", "gpt-6.1-terra", "medium", "workspace-write"),
+            ("verifier", "gpt-6-luna", "high", "workspace-write"),
+        ):
             agent = tomllib.loads((ROOT / f".codex/agents/{role}.toml").read_text())
             self.assertTrue(all(agent.get(field) for field in ("name", "description", "developer_instructions")))
             self.assertEqual(agent["model"], model)
-            self.assertEqual(agent["model_reasoning_effort"], "high")
+            self.assertEqual(agent["model_reasoning_effort"], effort)
             self.assertEqual(agent["sandbox_mode"], sandbox)
+            if role == "presentation-worker":
+                for required in (
+                    "explicit file ownership",
+                    "Escalate architecture, native-format semantics, security, migrations",
+                    "Browser and application inspection is read-only",
+                    "Git or GitHub writes",
+                    "A Sol reviewer independently checks the original requirements",
+                ):
+                    self.assertIn(required, agent["developer_instructions"])
 
     def rejected(self, name: str, old: str, new: str) -> None:
         changed = copy.deepcopy(snapshot())
