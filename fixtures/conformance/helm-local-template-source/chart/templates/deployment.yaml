@@ -1,0 +1,33 @@
+---
+# SPDX-License-Identifier: MPL-2.0
+{{ if not (and (.Capabilities.APIVersions.Has "example.org/v1") (.Capabilities.APIVersions.Has "example.org/v1/Widget")) }}
+{{ fail "fixture requires both explicit API capability strings" }}
+{{ end }}
+{{ $settings := lookup "v1" "ConfigMap" .Release.Namespace "unprovided-settings" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-app
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    fixture.example.org/phase: {{ if .Release.IsInstall }}"install"{{ else if .Release.IsUpgrade }}"upgrade"{{ else }}{{ fail "fixture requires install or upgrade" }}{{ end }}
+    fixture.example.org/kube-band: {{ if semverCompare ">=1.30.0" .Capabilities.KubeVersion.Version }}"recent"{{ else }}"legacy"{{ end }}
+    fixture.example.org/lookup: {{ if $settings }}"present"{{ else }}"empty"{{ end }}
+spec:
+  replicas: {{ if .Release.IsInstall }}{{ .Values.installReplicas }}{{ else }}{{ .Values.upgradeReplicas }}{{ end }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-app
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-app
+    spec:
+      containers:
+        - name: application
+          image: {{ .Values.image | quote }}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PUBLIC_MARKER
+              value: {{ .Values.publicMarker | quote }}

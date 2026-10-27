@@ -1,0 +1,7 @@
+---
+# SPDX-License-Identifier: MPL-2.0
+installReplicas: 2
+upgradeReplicas: 3
+image: example.invalid/fixture/app:input
+hookImage: example.invalid/fixture/hook:input
+publicMarker: helm-public-fixture-value

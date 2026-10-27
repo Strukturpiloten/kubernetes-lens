@@ -8,9 +8,12 @@ from pathlib import Path
 import unittest
 
 # Reuse the reviewed original private authentication/process machinery, not an oracle.
-_SPEC = importlib.util.spec_from_file_location("original_native_acceptance", Path(__file__).with_name("native_acceptance.py"))
+_NATIVE_SOURCE = Path(__file__).with_name("native_acceptance.py")
+_SPEC = importlib.util.spec_from_file_location("original_native_acceptance", _NATIVE_SOURCE)
 native = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(native)
+# Execute only the existing fixed sibling source without importlib's bytecode write.
+# Keep spec/module metadata and interpreter optimization; never change caller flags.
+exec(compile(_NATIVE_SOURCE.read_bytes(), _SPEC.origin, "exec", dont_inherit=True, optimize=-1), native.__dict__)
 
 STATES = frozenset("TargetProfileRequired MissingCrd AmbiguousCrd InvalidBinding VersionNotListed VersionNotServed ScopeMismatch MissingSchema InvalidSchema UnsupportedSchema SchemaViolations Bound Incomplete LimitExceeded missing-custom-result".split())
 CATEGORIES = frozenset("Combinator Dependencies Definitions PatternProperties Pattern Format MultipleOf Cardinality TupleItems UnknownType IntOrString EmbeddedResource ListTopology MapTopology PreserveUnknownTransform SchemaReference Defaulting CelValidation UnknownSchemaField".split())
