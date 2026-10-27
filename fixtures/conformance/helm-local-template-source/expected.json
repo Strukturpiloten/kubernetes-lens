@@ -1,0 +1,714 @@
+{
+  "all_native_tool_api_runtime_states": "pending",
+  "authorship": "literal resource fields/findings authored before chart templates and before any renderer or product output",
+  "cases": [
+    {
+      "cell_id": "command.helm-local-template.helm-3.22.0.source.install.positive",
+      "expected_exit": 0,
+      "fixture_id": "helm-local-template.source.install",
+      "mode": "install",
+      "native_findings": "pending independent native execution; no empty-findings assertion",
+      "required_plan_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "offline-lookup-incomplete",
+        "nondeterministic-rendering",
+        "crd-lifecycle"
+      ],
+      "required_rendered_input_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "crd-lifecycle"
+      ],
+      "resources": {
+        "crd": {
+          "apiVersion": "apiextensions.k8s.io/v1",
+          "fields": {
+            "/spec/group": "example.org",
+            "/spec/names/kind": "Widget",
+            "/spec/names/plural": "widgets",
+            "/spec/scope": "Namespaced",
+            "/spec/versions/0/name": "v1",
+            "/spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/message/type": "string",
+            "/spec/versions/0/served": true,
+            "/spec/versions/0/storage": true
+          },
+          "kind": "CustomResourceDefinition",
+          "name": "widgets.example.org",
+          "namespace": null
+        },
+        "deployment": {
+          "apiVersion": "apps/v1",
+          "fields": {
+            "/metadata/annotations/fixture.example.org~1kube-band": "legacy",
+            "/metadata/annotations/fixture.example.org~1lookup": "empty",
+            "/metadata/annotations/fixture.example.org~1phase": "install",
+            "/spec/replicas": 2,
+            "/spec/selector/matchLabels/app": "fixture-app",
+            "/spec/template/metadata/labels/app": "fixture-app",
+            "/spec/template/spec/containers/0/env/0/name": "PUBLIC_MARKER",
+            "/spec/template/spec/containers/0/env/0/value": "helm-public-fixture-value",
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/app:input",
+            "/spec/template/spec/containers/0/name": "application",
+            "/spec/template/spec/containers/0/ports/0/containerPort": 8080
+          },
+          "kind": "Deployment",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        },
+        "hook": {
+          "apiVersion": "batch/v1",
+          "fields": {
+            "/metadata/annotations/helm.sh~1hook": "pre-install",
+            "/metadata/annotations/helm.sh~1hook-delete-policy": "before-hook-creation,hook-succeeded",
+            "/spec/template/spec/containers/0/command": [
+              "/bin/true"
+            ],
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/hook:input",
+            "/spec/template/spec/containers/0/name": "lifecycle",
+            "/spec/template/spec/restartPolicy": "Never"
+          },
+          "kind": "Job",
+          "name": "fixture-lifecycle",
+          "namespace": "fixture-space"
+        },
+        "service": {
+          "apiVersion": "v1",
+          "fields": {
+            "/spec/ports/0/name": "http",
+            "/spec/ports/0/port": 80,
+            "/spec/ports/0/targetPort": 8080,
+            "/spec/selector/app": "fixture-app",
+            "/spec/type": "ClusterIP"
+          },
+          "kind": "Service",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        }
+      },
+      "state": "authored-unexecuted",
+      "target_patch": "1.20.15",
+      "tool_profile_id": "helm-3.22.0"
+    },
+    {
+      "cell_id": "command.helm-local-template.helm-3.22.0.source.install.positive",
+      "expected_exit": 0,
+      "fixture_id": "helm-local-template.source.install",
+      "mode": "install",
+      "native_findings": "pending independent native execution; no empty-findings assertion",
+      "required_plan_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "offline-lookup-incomplete",
+        "nondeterministic-rendering",
+        "crd-lifecycle"
+      ],
+      "required_rendered_input_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "crd-lifecycle"
+      ],
+      "resources": {
+        "crd": {
+          "apiVersion": "apiextensions.k8s.io/v1",
+          "fields": {
+            "/spec/group": "example.org",
+            "/spec/names/kind": "Widget",
+            "/spec/names/plural": "widgets",
+            "/spec/scope": "Namespaced",
+            "/spec/versions/0/name": "v1",
+            "/spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/message/type": "string",
+            "/spec/versions/0/served": true,
+            "/spec/versions/0/storage": true
+          },
+          "kind": "CustomResourceDefinition",
+          "name": "widgets.example.org",
+          "namespace": null
+        },
+        "deployment": {
+          "apiVersion": "apps/v1",
+          "fields": {
+            "/metadata/annotations/fixture.example.org~1kube-band": "recent",
+            "/metadata/annotations/fixture.example.org~1lookup": "empty",
+            "/metadata/annotations/fixture.example.org~1phase": "install",
+            "/spec/replicas": 2,
+            "/spec/selector/matchLabels/app": "fixture-app",
+            "/spec/template/metadata/labels/app": "fixture-app",
+            "/spec/template/spec/containers/0/env/0/name": "PUBLIC_MARKER",
+            "/spec/template/spec/containers/0/env/0/value": "helm-public-fixture-value",
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/app:input",
+            "/spec/template/spec/containers/0/name": "application",
+            "/spec/template/spec/containers/0/ports/0/containerPort": 8080
+          },
+          "kind": "Deployment",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        },
+        "hook": {
+          "apiVersion": "batch/v1",
+          "fields": {
+            "/metadata/annotations/helm.sh~1hook": "pre-install",
+            "/metadata/annotations/helm.sh~1hook-delete-policy": "before-hook-creation,hook-succeeded",
+            "/spec/template/spec/containers/0/command": [
+              "/bin/true"
+            ],
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/hook:input",
+            "/spec/template/spec/containers/0/name": "lifecycle",
+            "/spec/template/spec/restartPolicy": "Never"
+          },
+          "kind": "Job",
+          "name": "fixture-lifecycle",
+          "namespace": "fixture-space"
+        },
+        "service": {
+          "apiVersion": "v1",
+          "fields": {
+            "/spec/ports/0/name": "http",
+            "/spec/ports/0/port": 80,
+            "/spec/ports/0/targetPort": 8080,
+            "/spec/selector/app": "fixture-app",
+            "/spec/type": "ClusterIP"
+          },
+          "kind": "Service",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        }
+      },
+      "state": "authored-unexecuted",
+      "target_patch": "1.37.0",
+      "tool_profile_id": "helm-3.22.0"
+    },
+    {
+      "cell_id": "command.helm-local-template.helm-3.22.0.source.upgrade.positive",
+      "expected_exit": 0,
+      "fixture_id": "helm-local-template.source.upgrade",
+      "mode": "upgrade",
+      "native_findings": "pending independent native execution; no empty-findings assertion",
+      "required_plan_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "offline-lookup-incomplete",
+        "nondeterministic-rendering",
+        "crd-lifecycle"
+      ],
+      "required_rendered_input_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "crd-lifecycle"
+      ],
+      "resources": {
+        "crd": {
+          "apiVersion": "apiextensions.k8s.io/v1",
+          "fields": {
+            "/spec/group": "example.org",
+            "/spec/names/kind": "Widget",
+            "/spec/names/plural": "widgets",
+            "/spec/scope": "Namespaced",
+            "/spec/versions/0/name": "v1",
+            "/spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/message/type": "string",
+            "/spec/versions/0/served": true,
+            "/spec/versions/0/storage": true
+          },
+          "kind": "CustomResourceDefinition",
+          "name": "widgets.example.org",
+          "namespace": null
+        },
+        "deployment": {
+          "apiVersion": "apps/v1",
+          "fields": {
+            "/metadata/annotations/fixture.example.org~1kube-band": "legacy",
+            "/metadata/annotations/fixture.example.org~1lookup": "empty",
+            "/metadata/annotations/fixture.example.org~1phase": "upgrade",
+            "/spec/replicas": 3,
+            "/spec/selector/matchLabels/app": "fixture-app",
+            "/spec/template/metadata/labels/app": "fixture-app",
+            "/spec/template/spec/containers/0/env/0/name": "PUBLIC_MARKER",
+            "/spec/template/spec/containers/0/env/0/value": "helm-public-fixture-value",
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/app:input",
+            "/spec/template/spec/containers/0/name": "application",
+            "/spec/template/spec/containers/0/ports/0/containerPort": 8080
+          },
+          "kind": "Deployment",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        },
+        "hook": {
+          "apiVersion": "batch/v1",
+          "fields": {
+            "/metadata/annotations/helm.sh~1hook": "pre-upgrade",
+            "/metadata/annotations/helm.sh~1hook-delete-policy": "before-hook-creation,hook-succeeded",
+            "/spec/template/spec/containers/0/command": [
+              "/bin/true"
+            ],
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/hook:input",
+            "/spec/template/spec/containers/0/name": "lifecycle",
+            "/spec/template/spec/restartPolicy": "Never"
+          },
+          "kind": "Job",
+          "name": "fixture-lifecycle",
+          "namespace": "fixture-space"
+        },
+        "service": {
+          "apiVersion": "v1",
+          "fields": {
+            "/spec/ports/0/name": "http",
+            "/spec/ports/0/port": 80,
+            "/spec/ports/0/targetPort": 8080,
+            "/spec/selector/app": "fixture-app",
+            "/spec/type": "ClusterIP"
+          },
+          "kind": "Service",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        }
+      },
+      "state": "authored-unexecuted",
+      "target_patch": "1.20.15",
+      "tool_profile_id": "helm-3.22.0"
+    },
+    {
+      "cell_id": "command.helm-local-template.helm-3.22.0.source.upgrade.positive",
+      "expected_exit": 0,
+      "fixture_id": "helm-local-template.source.upgrade",
+      "mode": "upgrade",
+      "native_findings": "pending independent native execution; no empty-findings assertion",
+      "required_plan_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "offline-lookup-incomplete",
+        "nondeterministic-rendering",
+        "crd-lifecycle"
+      ],
+      "required_rendered_input_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "crd-lifecycle"
+      ],
+      "resources": {
+        "crd": {
+          "apiVersion": "apiextensions.k8s.io/v1",
+          "fields": {
+            "/spec/group": "example.org",
+            "/spec/names/kind": "Widget",
+            "/spec/names/plural": "widgets",
+            "/spec/scope": "Namespaced",
+            "/spec/versions/0/name": "v1",
+            "/spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/message/type": "string",
+            "/spec/versions/0/served": true,
+            "/spec/versions/0/storage": true
+          },
+          "kind": "CustomResourceDefinition",
+          "name": "widgets.example.org",
+          "namespace": null
+        },
+        "deployment": {
+          "apiVersion": "apps/v1",
+          "fields": {
+            "/metadata/annotations/fixture.example.org~1kube-band": "recent",
+            "/metadata/annotations/fixture.example.org~1lookup": "empty",
+            "/metadata/annotations/fixture.example.org~1phase": "upgrade",
+            "/spec/replicas": 3,
+            "/spec/selector/matchLabels/app": "fixture-app",
+            "/spec/template/metadata/labels/app": "fixture-app",
+            "/spec/template/spec/containers/0/env/0/name": "PUBLIC_MARKER",
+            "/spec/template/spec/containers/0/env/0/value": "helm-public-fixture-value",
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/app:input",
+            "/spec/template/spec/containers/0/name": "application",
+            "/spec/template/spec/containers/0/ports/0/containerPort": 8080
+          },
+          "kind": "Deployment",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        },
+        "hook": {
+          "apiVersion": "batch/v1",
+          "fields": {
+            "/metadata/annotations/helm.sh~1hook": "pre-upgrade",
+            "/metadata/annotations/helm.sh~1hook-delete-policy": "before-hook-creation,hook-succeeded",
+            "/spec/template/spec/containers/0/command": [
+              "/bin/true"
+            ],
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/hook:input",
+            "/spec/template/spec/containers/0/name": "lifecycle",
+            "/spec/template/spec/restartPolicy": "Never"
+          },
+          "kind": "Job",
+          "name": "fixture-lifecycle",
+          "namespace": "fixture-space"
+        },
+        "service": {
+          "apiVersion": "v1",
+          "fields": {
+            "/spec/ports/0/name": "http",
+            "/spec/ports/0/port": 80,
+            "/spec/ports/0/targetPort": 8080,
+            "/spec/selector/app": "fixture-app",
+            "/spec/type": "ClusterIP"
+          },
+          "kind": "Service",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        }
+      },
+      "state": "authored-unexecuted",
+      "target_patch": "1.37.0",
+      "tool_profile_id": "helm-3.22.0"
+    },
+    {
+      "cell_id": "command.helm-local-template.helm-4.3.0.source.install.positive",
+      "expected_exit": 0,
+      "fixture_id": "helm-local-template.source.install",
+      "mode": "install",
+      "native_findings": "pending independent native execution; no empty-findings assertion",
+      "required_plan_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "offline-lookup-incomplete",
+        "nondeterministic-rendering",
+        "crd-lifecycle"
+      ],
+      "required_rendered_input_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "crd-lifecycle"
+      ],
+      "resources": {
+        "crd": {
+          "apiVersion": "apiextensions.k8s.io/v1",
+          "fields": {
+            "/spec/group": "example.org",
+            "/spec/names/kind": "Widget",
+            "/spec/names/plural": "widgets",
+            "/spec/scope": "Namespaced",
+            "/spec/versions/0/name": "v1",
+            "/spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/message/type": "string",
+            "/spec/versions/0/served": true,
+            "/spec/versions/0/storage": true
+          },
+          "kind": "CustomResourceDefinition",
+          "name": "widgets.example.org",
+          "namespace": null
+        },
+        "deployment": {
+          "apiVersion": "apps/v1",
+          "fields": {
+            "/metadata/annotations/fixture.example.org~1kube-band": "legacy",
+            "/metadata/annotations/fixture.example.org~1lookup": "empty",
+            "/metadata/annotations/fixture.example.org~1phase": "install",
+            "/spec/replicas": 2,
+            "/spec/selector/matchLabels/app": "fixture-app",
+            "/spec/template/metadata/labels/app": "fixture-app",
+            "/spec/template/spec/containers/0/env/0/name": "PUBLIC_MARKER",
+            "/spec/template/spec/containers/0/env/0/value": "helm-public-fixture-value",
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/app:input",
+            "/spec/template/spec/containers/0/name": "application",
+            "/spec/template/spec/containers/0/ports/0/containerPort": 8080
+          },
+          "kind": "Deployment",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        },
+        "hook": {
+          "apiVersion": "batch/v1",
+          "fields": {
+            "/metadata/annotations/helm.sh~1hook": "pre-install",
+            "/metadata/annotations/helm.sh~1hook-delete-policy": "before-hook-creation,hook-succeeded",
+            "/spec/template/spec/containers/0/command": [
+              "/bin/true"
+            ],
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/hook:input",
+            "/spec/template/spec/containers/0/name": "lifecycle",
+            "/spec/template/spec/restartPolicy": "Never"
+          },
+          "kind": "Job",
+          "name": "fixture-lifecycle",
+          "namespace": "fixture-space"
+        },
+        "service": {
+          "apiVersion": "v1",
+          "fields": {
+            "/spec/ports/0/name": "http",
+            "/spec/ports/0/port": 80,
+            "/spec/ports/0/targetPort": 8080,
+            "/spec/selector/app": "fixture-app",
+            "/spec/type": "ClusterIP"
+          },
+          "kind": "Service",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        }
+      },
+      "state": "authored-unexecuted",
+      "target_patch": "1.20.15",
+      "tool_profile_id": "helm-4.3.0"
+    },
+    {
+      "cell_id": "command.helm-local-template.helm-4.3.0.source.install.positive",
+      "expected_exit": 0,
+      "fixture_id": "helm-local-template.source.install",
+      "mode": "install",
+      "native_findings": "pending independent native execution; no empty-findings assertion",
+      "required_plan_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "offline-lookup-incomplete",
+        "nondeterministic-rendering",
+        "crd-lifecycle"
+      ],
+      "required_rendered_input_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "crd-lifecycle"
+      ],
+      "resources": {
+        "crd": {
+          "apiVersion": "apiextensions.k8s.io/v1",
+          "fields": {
+            "/spec/group": "example.org",
+            "/spec/names/kind": "Widget",
+            "/spec/names/plural": "widgets",
+            "/spec/scope": "Namespaced",
+            "/spec/versions/0/name": "v1",
+            "/spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/message/type": "string",
+            "/spec/versions/0/served": true,
+            "/spec/versions/0/storage": true
+          },
+          "kind": "CustomResourceDefinition",
+          "name": "widgets.example.org",
+          "namespace": null
+        },
+        "deployment": {
+          "apiVersion": "apps/v1",
+          "fields": {
+            "/metadata/annotations/fixture.example.org~1kube-band": "recent",
+            "/metadata/annotations/fixture.example.org~1lookup": "empty",
+            "/metadata/annotations/fixture.example.org~1phase": "install",
+            "/spec/replicas": 2,
+            "/spec/selector/matchLabels/app": "fixture-app",
+            "/spec/template/metadata/labels/app": "fixture-app",
+            "/spec/template/spec/containers/0/env/0/name": "PUBLIC_MARKER",
+            "/spec/template/spec/containers/0/env/0/value": "helm-public-fixture-value",
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/app:input",
+            "/spec/template/spec/containers/0/name": "application",
+            "/spec/template/spec/containers/0/ports/0/containerPort": 8080
+          },
+          "kind": "Deployment",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        },
+        "hook": {
+          "apiVersion": "batch/v1",
+          "fields": {
+            "/metadata/annotations/helm.sh~1hook": "pre-install",
+            "/metadata/annotations/helm.sh~1hook-delete-policy": "before-hook-creation,hook-succeeded",
+            "/spec/template/spec/containers/0/command": [
+              "/bin/true"
+            ],
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/hook:input",
+            "/spec/template/spec/containers/0/name": "lifecycle",
+            "/spec/template/spec/restartPolicy": "Never"
+          },
+          "kind": "Job",
+          "name": "fixture-lifecycle",
+          "namespace": "fixture-space"
+        },
+        "service": {
+          "apiVersion": "v1",
+          "fields": {
+            "/spec/ports/0/name": "http",
+            "/spec/ports/0/port": 80,
+            "/spec/ports/0/targetPort": 8080,
+            "/spec/selector/app": "fixture-app",
+            "/spec/type": "ClusterIP"
+          },
+          "kind": "Service",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        }
+      },
+      "state": "authored-unexecuted",
+      "target_patch": "1.37.0",
+      "tool_profile_id": "helm-4.3.0"
+    },
+    {
+      "cell_id": "command.helm-local-template.helm-4.3.0.source.upgrade.positive",
+      "expected_exit": 0,
+      "fixture_id": "helm-local-template.source.upgrade",
+      "mode": "upgrade",
+      "native_findings": "pending independent native execution; no empty-findings assertion",
+      "required_plan_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "offline-lookup-incomplete",
+        "nondeterministic-rendering",
+        "crd-lifecycle"
+      ],
+      "required_rendered_input_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "crd-lifecycle"
+      ],
+      "resources": {
+        "crd": {
+          "apiVersion": "apiextensions.k8s.io/v1",
+          "fields": {
+            "/spec/group": "example.org",
+            "/spec/names/kind": "Widget",
+            "/spec/names/plural": "widgets",
+            "/spec/scope": "Namespaced",
+            "/spec/versions/0/name": "v1",
+            "/spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/message/type": "string",
+            "/spec/versions/0/served": true,
+            "/spec/versions/0/storage": true
+          },
+          "kind": "CustomResourceDefinition",
+          "name": "widgets.example.org",
+          "namespace": null
+        },
+        "deployment": {
+          "apiVersion": "apps/v1",
+          "fields": {
+            "/metadata/annotations/fixture.example.org~1kube-band": "legacy",
+            "/metadata/annotations/fixture.example.org~1lookup": "empty",
+            "/metadata/annotations/fixture.example.org~1phase": "upgrade",
+            "/spec/replicas": 3,
+            "/spec/selector/matchLabels/app": "fixture-app",
+            "/spec/template/metadata/labels/app": "fixture-app",
+            "/spec/template/spec/containers/0/env/0/name": "PUBLIC_MARKER",
+            "/spec/template/spec/containers/0/env/0/value": "helm-public-fixture-value",
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/app:input",
+            "/spec/template/spec/containers/0/name": "application",
+            "/spec/template/spec/containers/0/ports/0/containerPort": 8080
+          },
+          "kind": "Deployment",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        },
+        "hook": {
+          "apiVersion": "batch/v1",
+          "fields": {
+            "/metadata/annotations/helm.sh~1hook": "pre-upgrade",
+            "/metadata/annotations/helm.sh~1hook-delete-policy": "before-hook-creation,hook-succeeded",
+            "/spec/template/spec/containers/0/command": [
+              "/bin/true"
+            ],
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/hook:input",
+            "/spec/template/spec/containers/0/name": "lifecycle",
+            "/spec/template/spec/restartPolicy": "Never"
+          },
+          "kind": "Job",
+          "name": "fixture-lifecycle",
+          "namespace": "fixture-space"
+        },
+        "service": {
+          "apiVersion": "v1",
+          "fields": {
+            "/spec/ports/0/name": "http",
+            "/spec/ports/0/port": 80,
+            "/spec/ports/0/targetPort": 8080,
+            "/spec/selector/app": "fixture-app",
+            "/spec/type": "ClusterIP"
+          },
+          "kind": "Service",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        }
+      },
+      "state": "authored-unexecuted",
+      "target_patch": "1.20.15",
+      "tool_profile_id": "helm-4.3.0"
+    },
+    {
+      "cell_id": "command.helm-local-template.helm-4.3.0.source.upgrade.positive",
+      "expected_exit": 0,
+      "fixture_id": "helm-local-template.source.upgrade",
+      "mode": "upgrade",
+      "native_findings": "pending independent native execution; no empty-findings assertion",
+      "required_plan_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "offline-lookup-incomplete",
+        "nondeterministic-rendering",
+        "crd-lifecycle"
+      ],
+      "required_rendered_input_findings": [
+        "render-provenance-limited",
+        "helm-hook-lifecycle",
+        "crd-lifecycle"
+      ],
+      "resources": {
+        "crd": {
+          "apiVersion": "apiextensions.k8s.io/v1",
+          "fields": {
+            "/spec/group": "example.org",
+            "/spec/names/kind": "Widget",
+            "/spec/names/plural": "widgets",
+            "/spec/scope": "Namespaced",
+            "/spec/versions/0/name": "v1",
+            "/spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/message/type": "string",
+            "/spec/versions/0/served": true,
+            "/spec/versions/0/storage": true
+          },
+          "kind": "CustomResourceDefinition",
+          "name": "widgets.example.org",
+          "namespace": null
+        },
+        "deployment": {
+          "apiVersion": "apps/v1",
+          "fields": {
+            "/metadata/annotations/fixture.example.org~1kube-band": "recent",
+            "/metadata/annotations/fixture.example.org~1lookup": "empty",
+            "/metadata/annotations/fixture.example.org~1phase": "upgrade",
+            "/spec/replicas": 3,
+            "/spec/selector/matchLabels/app": "fixture-app",
+            "/spec/template/metadata/labels/app": "fixture-app",
+            "/spec/template/spec/containers/0/env/0/name": "PUBLIC_MARKER",
+            "/spec/template/spec/containers/0/env/0/value": "helm-public-fixture-value",
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/app:input",
+            "/spec/template/spec/containers/0/name": "application",
+            "/spec/template/spec/containers/0/ports/0/containerPort": 8080
+          },
+          "kind": "Deployment",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        },
+        "hook": {
+          "apiVersion": "batch/v1",
+          "fields": {
+            "/metadata/annotations/helm.sh~1hook": "pre-upgrade",
+            "/metadata/annotations/helm.sh~1hook-delete-policy": "before-hook-creation,hook-succeeded",
+            "/spec/template/spec/containers/0/command": [
+              "/bin/true"
+            ],
+            "/spec/template/spec/containers/0/image": "example.invalid/fixture/hook:input",
+            "/spec/template/spec/containers/0/name": "lifecycle",
+            "/spec/template/spec/restartPolicy": "Never"
+          },
+          "kind": "Job",
+          "name": "fixture-lifecycle",
+          "namespace": "fixture-space"
+        },
+        "service": {
+          "apiVersion": "v1",
+          "fields": {
+            "/spec/ports/0/name": "http",
+            "/spec/ports/0/port": 80,
+            "/spec/ports/0/targetPort": 8080,
+            "/spec/selector/app": "fixture-app",
+            "/spec/type": "ClusterIP"
+          },
+          "kind": "Service",
+          "name": "fixture-app",
+          "namespace": "fixture-space"
+        }
+      },
+      "state": "authored-unexecuted",
+      "target_patch": "1.37.0",
+      "tool_profile_id": "helm-4.3.0"
+    }
+  ],
+  "comparison": "compare exactly four GVK/name/namespace identities and these typed JSON-pointer fields; no stream-order or incidental YAML formatting oracle",
+  "license": "MPL-2.0",
+  "origin": "repository-authored command-contract fixture; not official vendor/project corpus",
+  "schema": "helm-local-template-independent-expectations-v1"
+}

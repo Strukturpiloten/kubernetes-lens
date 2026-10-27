@@ -1,0 +1,7 @@
+{
+  "hookImage": "example.invalid/fixture/hook:input",
+  "image": "example.invalid/fixture/app:input",
+  "installReplicas": 2,
+  "publicMarker": "helm-public-fixture-value",
+  "upgradeReplicas": 3
+}

@@ -1,0 +1,7 @@
+---
+# SPDX-License-Identifier: MPL-2.0
+apiVersion: v2
+name: helm-local-template-source
+version: 0.1.0
+type: application
+description: Authored offline command fixture; never deployed.

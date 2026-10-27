@@ -1,0 +1,35 @@
+{
+  "$comment": "SPDX-License-Identifier: MPL-2.0; authored fixture values only",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "hookImage": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "image": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "installReplicas": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "publicMarker": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "upgradeReplicas": {
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "installReplicas",
+    "upgradeReplicas",
+    "image",
+    "hookImage",
+    "publicMarker"
+  ],
+  "type": "object"
+}

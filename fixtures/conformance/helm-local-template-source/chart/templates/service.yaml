@@ -1,0 +1,18 @@
+---
+# SPDX-License-Identifier: MPL-2.0
+{{ if not (and (.Capabilities.APIVersions.Has "example.org/v1") (.Capabilities.APIVersions.Has "example.org/v1/Widget")) }}
+{{ fail "fixture requires both explicit API capability strings" }}
+{{ end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-app
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ .Release.Name }}-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

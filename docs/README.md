@@ -23,6 +23,8 @@ preparation/admission tests run through the repository policy suite; official co
 renderer, API and runtime acceptance remains pending.
 
 [Helm/Kustomize renderer interfaces and provisioning](formats.md) describe the explicit offline formats API.
+The [authored Helm command source fixture](fixtures/helm-command-source.md) supplies integrity-checked
+input and independent expectations; actual tool/native acceptance remains pending.
 
 [Owned-QEMU prerequisite](fixtures/owned-qemu.md) documents the explicit external VM lifecycle for
 the rootful-conformance work. Its pure tests and prerequisite receipts remain separate from kind,
