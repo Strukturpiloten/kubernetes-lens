@@ -205,3 +205,24 @@ changed here. Actual selected-engine regressions validate this repository's owne
 manual grouping and timestamp-required update holding; they make no cross-repository rollout or
 VM-execution claim. Shared tools remain under BoxFerry's immutable inventory. Publication controls,
 workflow triggers/gates/permissions and historical fixture exclusions are unchanged.
+
+## Manual hosted prerequisite observation (issue #69)
+
+This deliberately separate lane starts from KubernetesLens reviewed baseline
+`6a373be977eecc1aa8d2b512a9f754a95682ed45`. Existing local, PR, main, manual CI and release
+validation consumers keep the same complete gate and discover the new pure fixture controls.
+Only `.github/workflows/hosted-native-prerequisites.yml` obtains external read-only runner facts,
+by explicit exact-reviewed-main dispatch. It is not an automatic native job or required check;
+no other repository, release workflow, native harness, VM image or shared tool inventory changes.
+[Issue #69](https://github.com/Strukturpiloten/kubernetes-lens/issues/69) owns actual retained
+run/attempt evidence and decision; code delivery alone leaves it open. #62 and #2 remain separate.
+
+The workflow reuses the existing explicit hosted label and checkout SHA/tag. Native
+`github-actions` extracts both new consumer declarations exactly once; the existing later
+`github-runners` rule retains manual Dashboard approval and disables automerge after generic
+rules. The actual Renovate regression exercises this consumer's extraction, SHA/tag replacement
+and effective policy. No new software, custom manager, installer, cache or duplicate version
+owner is introduced. Observed host versions/digests are per-run facts, not operational pins.
+A provider image version is not an immutable disk attestation, and compatible local indicators
+leave native host/tool admission and ancestor-effective limits unknown. See the
+[closed observation/evidence contract](fixtures/hosted-native-prerequisites.md).

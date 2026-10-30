@@ -289,6 +289,27 @@ function ownership(actual, expectedPins = expected()) {
 }
 const actual = await inventory();
 ownership(actual);
+// New manual observation is a consumer of existing native owners, never a custom inventory.
+const hostedFile = ".github/workflows/hosted-native-prerequisites.yml";
+const hostedRows = actual.filter((row) => row.file === hostedFile);
+assert.equal(hostedRows.length, 2, "one checkout SHA/tag and one hosted label must extract");
+assert(hostedRows.every((row) => row.manager === "github-actions"));
+const hostedAction = hostedRows.find((row) => row.dep.depType === "action");
+const hostedRunner = hostedRows.find((row) => row.dep.datasource === "github-runners");
+assert(hostedAction && hostedRunner, "actual native extraction must include both consumers");
+assert.equal(hostedAction.dep.depName, "actions/checkout");
+const canonicalCheckout = actual.find((row) =>
+  row.file === ".github/workflows/ci.yml" && row.dep.depName === "actions/checkout",
+);
+const canonicalRunner = actual.find((row) =>
+  row.file === ".github/workflows/ci.yml" && row.dep.datasource === "github-runners",
+);
+assert(canonicalCheckout && canonicalRunner);
+assert.equal(hostedAction.dep.currentDigest, canonicalCheckout.dep.currentDigest);
+assert.equal(hostedAction.dep.currentValue, canonicalCheckout.dep.currentValue);
+assert.equal(hostedRunner.dep.depName, canonicalRunner.dep.depName);
+assert.equal(hostedRunner.dep.currentValue, canonicalRunner.dep.currentValue);
+
 assert(
   actual.filter((row) => row.manager === "cargo").length >= 3,
   "foundation parser Cargo dependencies must be owned",
@@ -527,6 +548,7 @@ try {
   for (const row of [
     sharedRows[0],
     actual.find((r) => r.dep.depType === "action"),
+    hostedAction,
   ]) {
     const original = files.get(row.file);
     await fs.mkdir(path.join(scratch, path.dirname(row.file)), {
@@ -815,6 +837,23 @@ const actionPolicy = await policy({
 });
 assert.equal(actionPolicy.pinDigests, true);
 assert.equal(actionPolicy.groupName, "GitHub Actions");
+for (const row of hostedRows) {
+  const effective = await policy({
+    ...row.dep,
+    manager: row.manager,
+    packageFile: row.file,
+    updateType: "patch",
+  });
+  if (row === hostedRunner) {
+    assert.equal(effective.groupName, "GitHub-hosted runners");
+    assert.equal(effective.dependencyDashboardApproval, true);
+    assert.equal(effective.automerge, false);
+  } else {
+    assert.equal(effective.groupName, "GitHub Actions");
+    assert.equal(effective.pinDigests, true);
+    assert.equal(effective.automerge, true);
+  }
+}
 const lockPolicy = await policy({
   manager: "cargo",
   depName: "serde",

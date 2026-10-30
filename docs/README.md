@@ -29,3 +29,8 @@ input and independent expectations; actual tool/native acceptance remains pendin
 [Owned-QEMU prerequisite](fixtures/owned-qemu.md) documents the explicit external VM lifecycle for
 the rootful-conformance work. Its pure tests and prerequisite receipts remain separate from kind,
 Kubernetes API and resource/controller acceptance.
+
+[Hosted prerequisite observation](fixtures/hosted-native-prerequisites.md) describes the bounded
+manual-only read-only runner inventory, exact source/workflow/run custody and permanent native
+admission refusal. Its pure controls run in ordinary gates; actual hosted and native qualification
+remain separate evidence obligations.
