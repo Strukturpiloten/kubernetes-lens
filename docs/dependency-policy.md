@@ -149,3 +149,11 @@ release age/provenance/integrity before an explicit manual pin promotion. No age
 
 The operational pin authenticates compressed archive bytes when acquired. It does not establish
 image download, signature verification, redistribution permission or VM/runtime qualification.
+
+The manual-only [hosted prerequisite workflow](fixtures/hosted-native-prerequisites.md) reuses
+existing checkout SHA/tag and hosted-label declarations under the native `github-actions` owner.
+Its Action grouping/pinning and runner Dashboard-approval/no-automerge policy use the existing
+rules unchanged. `scripts/test-renovate.mjs` verifies actual extraction of both declarations,
+checkout SHA/tag replacement and effective consumer policy. The standard-library collector adds
+no dependency, distribution, installer or managed version; observed host hashes/version prefixes
+are historical per-run facts and do not become another inventory or admitted native tool manifest.

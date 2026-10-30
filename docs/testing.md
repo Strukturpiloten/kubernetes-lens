@@ -157,3 +157,15 @@ root replacement, symlink substitution and same-inode content mutation refuse. T
 helper, broker, renderer, systemd service or cluster. Native input-view equality, every independent
 closure, per-run actor/config sealing and original aggregate resource fit remain pending under
 B1–B6 in ADR 0016. The primary owns complete validation and independently authorized native work.
+
+## Hosted prerequisite observation controls
+
+The manual-only [hosted prerequisite lane](fixtures/hosted-native-prerequisites.md) has pure
+controls in `scripts/fixtures/test_hosted_native_prerequisites.py`, discovered by the existing
+policy runner in local, PR, main, manual and release gates. Focused feedback is
+`python3 -B -m unittest discover -s scripts/fixtures -p test_hosted_native_prerequisites.py`.
+They cover exact source/workflow/run binding, pre-checkout shell refusal, missing/denied/unknown
+indicators, no-autostart D-Bus grammar, KVM API-only ioctl, tool authority/version privacy,
+streaming/hash/output/time bounds and FD/child/private-scratch cleanup failures. No host
+observation or native qualification occurs in normal gates. The existing actual Renovate suite
+also checks the new workflow consumer's extraction, SHA/tag replacement and effective pin policy.
