@@ -397,11 +397,10 @@ def cgroup(session, raw):
 
 def property_value(session, bus, address, object_path, interface, name, kind):
     code, out, err = session.run([bus, '--address=' + address, '--auto-start=no', '--no-pager',
-                                  '--timeout=2s', '--json=short', 'get-property',
-                                  'org.freedesktop.systemd1', object_path, interface, name])
+                                  '--timeout=2s', '--json=short', 'call',
+                                  'org.freedesktop.systemd1', object_path,
+                                  'org.freedesktop.DBus.Properties', 'Get', 'ss', interface, name])
     if code:
-        if b'org.freedesktop.DBus.Error.ServiceUnknown' in err or b'org.freedesktop.DBus.Error.NameHasNoOwner' in err:
-            raise FileNotFoundError('manager not present')
         raise Refusal('manager-query-unknown')
     def pairs(items):
         result = {}
@@ -413,9 +412,12 @@ def property_value(session, bus, address, object_path, interface, name, kind):
         data = json.loads(out, object_pairs_hook=pairs)
     except (ValueError, UnicodeError) as error:
         raise Refusal('manager-query-invalid') from error
-    require(type(data) is dict and set(data) == {'type', 'data'} and data['type'] == kind,
-            'manager-query-invalid')
-    value = data['data']
+    require(type(data) is dict and set(data) == {'type', 'data'} and data['type'] == 'v'
+            and type(data['data']) is list and len(data['data']) == 1, 'manager-query-invalid')
+    child = data['data'][0]
+    require(type(child) is dict and set(child) == {'type', 'data'}
+            and kind in ('s', 'b') and child['type'] == kind, 'manager-query-invalid')
+    value = child['data']
     require(type(value) is (str if kind == 's' else bool), 'manager-query-invalid')
     return value
 
@@ -456,15 +458,12 @@ def manager(session, tool, uid):
                 and stat.S_ISSOCK(info.st_mode) and info.st_uid == uid, 'manager-endpoint')
         address = 'unix:path=' + str(path)
         stage = 'version-query'
-        version = property_value(session, tool, address, '/org/freedesktop/systemd1',
-                                 'org.freedesktop.systemd1.Manager', 'Version', 's')
-        stage = 'version-parse'
-        matched = re.match(r'([0-9]{1,6})(?:\.[0-9]{1,6})?(?: |$)', version)
-        require(matched is not None, 'manager-version')
-        result['version_major'] = matched.group(1)
+        property_value(session, tool, address, '/org/freedesktop/systemd1',
+                       'org.freedesktop.systemd1.Manager', 'Version', 's')
+        result['version_property'] = 'informational-string-observed-raw-omitted'
         unit = '/org/freedesktop/systemd1/unit/init_2escope'
         stage = 'cgroup-query'
-        raw = property_value(session, tool, address, unit, 'org.freedesktop.systemd1.Unit', 'ControlGroup', 's')
+        raw = property_value(session, tool, address, unit, 'org.freedesktop.systemd1.Scope', 'ControlGroup', 's')
         stage = 'cgroup-scope'
         require(raw.startswith(f'/user.slice/user-{uid}.slice/user@{uid}.service/'), 'manager-cgroup-scope')
         stage = 'cgroup-read'
@@ -479,7 +478,7 @@ def manager(session, tool, uid):
         result['status'] = 'observed'
     except (OSError, Refusal) as error:
         if isinstance(error, FileNotFoundError):
-            result['status'] = 'missing' if 'version_major' not in result else 'unknown'
+            result['status'] = 'missing' if 'version_property' not in result else 'unknown'
         result['diagnostics'].append({'stage': stage, 'reason': reason(error)})
     return result
 

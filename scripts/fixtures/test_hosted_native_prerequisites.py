@@ -17,6 +17,7 @@ import hosted_native_prerequisites as h
 
 SHA = '1' * 40
 SECRET = 'PRIVATE-CREDENTIAL-HOST-USER-ADDRESS'
+VERSION_MARKER = 'informational-string-observed-raw-omitted'
 
 
 def environment():
@@ -119,19 +120,21 @@ class HostedObservationControls(unittest.TestCase):
             self.assertEqual(h.manager(session, '/usr/bin/busctl', 1001)['status'], 'missing')
         session.run.assert_not_called()
 
-    def test_dbus_fixed_no_autostart_scalar_schema_and_private_error_rejection(self):
+    def test_dbus_fixed_call_no_autostart_variant_schema_and_private_error_rejection(self):
         session = Mock()
-        session.run.return_value = (0, b'{"type":"s","data":"255"}', b'')
+        session.run.return_value = (0, b'{"type":"v","data":[{"type":"s","data":"opaque"}]}', b'')
         self.assertEqual(h.property_value(session, '/usr/bin/busctl', 'unix:path=/run/user/1001/bus',
                                          '/org/freedesktop/systemd1', 'org.freedesktop.systemd1.Manager',
-                                         'Version', 's'), '255')
-        argv = session.run.call_args.args[0]
-        self.assertIn('--auto-start=no', argv)
-        self.assertIn('--address=unix:path=/run/user/1001/bus', argv)
-        self.assertEqual(argv[7:], ['org.freedesktop.systemd1', '/org/freedesktop/systemd1',
-                                   'org.freedesktop.systemd1.Manager', 'Version'])
-        for raw in (b'{"type":"s","data":true}', b'{"type":"s","data":["255"]}',
-                    b'{"type":"s","data":"255","data":"256"}', SECRET.encode()):
+                                         'Version', 's'), 'opaque')
+        self.assertEqual(session.run.call_args.args[0], [
+            '/usr/bin/busctl', '--address=unix:path=/run/user/1001/bus', '--auto-start=no',
+            '--no-pager', '--timeout=2s', '--json=short', 'call', 'org.freedesktop.systemd1',
+            '/org/freedesktop/systemd1', 'org.freedesktop.DBus.Properties', 'Get', 'ss',
+            'org.freedesktop.systemd1.Manager', 'Version'])
+        for raw in (b'{"type":"s","data":"opaque"}',
+                    b'{"type":"v","data":[{"type":"s","data":true}]}',
+                    b'{"type":"v","data":[{"type":"s","data":["opaque"]}]}',
+                    b'{"type":"v","data":[{"type":"s","data":"a","data":"b"}]}', SECRET.encode()):
             session.run.return_value = (0, raw, b'')
             with self.assertRaises(h.Refusal):
                 h.property_value(session, '/usr/bin/busctl', 'unix:path=/run/user/1001/bus',
@@ -147,7 +150,7 @@ class HostedObservationControls(unittest.TestCase):
                  patch.object(h, 'cgroup', return_value={'status': 'observed'}) as cg:
                 result = h.manager(session, '/usr/bin/busctl', 1001)
             self.assertEqual(result['status'], 'unknown')
-            self.assertEqual(result['version_major'], '255')
+            self.assertEqual(result['version_property'], VERSION_MARKER)
             self.assertNotIn(SECRET, json.dumps(result))
             self.assertEqual(cg.call_count, 0 if raw.startswith('/system.') else 1)
 
@@ -239,6 +242,106 @@ class HostedObservationControls(unittest.TestCase):
         self.assertNotIn(SECRET, json.dumps(result))
 
 
+class HostedPropertyVariantControls(unittest.TestCase):
+    """Official protocol examples and mutations, with no bus/tool/host execution."""
+    def value(self, session, kind):
+        unit = '/org/freedesktop/systemd1/unit/init_2escope'
+        return h.property_value(session, '/usr/bin/busctl', 'unix:path=/run/user/1001/bus',
+                                '/org/freedesktop/systemd1' if kind == 's' else unit,
+                                'org.freedesktop.systemd1.Manager' if kind == 's' else 'org.freedesktop.systemd1.Scope',
+                                'Version' if kind == 's' else 'Delegate', kind)
+
+    def refuse(self, raw, kind='s', *, code=0, stderr=b'', reason='manager-query-invalid'):
+        session = Mock()
+        session.run.return_value = (code, raw, stderr)
+        with self.assertRaises(h.Refusal) as raised:
+            self.value(session, kind)
+        self.assertEqual(raised.exception.args, (reason,))
+        self.assertNotIn(SECRET, str(raised.exception))
+        self.assertEqual(session.run.call_count, 1)
+
+    def test_official_single_variant_string_and_boolean_examples_preserve_actual_types(self):
+        for raw, kind, expected in (
+                (b'{"type":"v","data":[{"type":"s","data":"informational"}]}', 's', 'informational'),
+                (b'{"type":"v","data":[{"type":"s","data":""}]}', 's', ''),
+                (b'{"type":"v","data":[{"type":"b","data":true}]}', 'b', True),
+                (b'{"type":"v","data":[{"type":"b","data":false}]}', 'b', False)):
+            session = Mock()
+            session.run.return_value = (0, raw, SECRET.encode())
+            actual = self.value(session, kind)
+            self.assertEqual(actual, expected)
+            self.assertIs(type(actual), type(expected))
+            self.assertEqual(session.run.call_count, 1)
+            argv = session.run.call_args.args[0]
+            self.assertEqual(argv[6], 'call')
+            self.assertEqual(argv[9:12], ['org.freedesktop.DBus.Properties', 'Get', 'ss'])
+            self.assertIn('--auto-start=no', argv)
+
+    def test_old_scalar_and_non_single_variant_envelopes_refuse_without_fallback(self):
+        for raw in (b'null', b'[]', b'{}', b'{"type":"s","data":"informational"}',
+                    b'{"type":"b","data":false}', b'{"type":"v","data":null}',
+                    b'{"type":"v","data":{"type":"s","data":"x"}}',
+                    b'{"type":"v","data":[]}', b'{"type":"v","data":["x"]}',
+                    b'{"type":"v","data":[["x"]]}',
+                    b'{"type":"v","data":[{"type":"s","data":"x"},{"type":"s","data":"y"}]}',
+                    b'{"type":"s","data":[{"type":"s","data":"x"}]}',
+                    b'{"type":"v","data":[{"type":"s","data":"x"}],"extra":true}',
+                    b'{"data":[{"type":"s","data":"x"}]}',
+                    b'{"type":"v","data":[{"type":"s","data":"x"}]} {}', b'\xff'):
+            with self.subTest(raw=raw):
+                self.refuse(raw)
+
+    def test_child_exact_keys_signature_and_string_scalar_are_required(self):
+        for child in ({}, {'type': 's'}, {'data': 'x'},
+                      {'type': 's', 'data': 'x', 'extra': True},
+                      {'type': 'b', 'data': True}, {'type': 'i', 'data': 1},
+                      {'type': 'v', 'data': [{'type': 's', 'data': 'x'}]}):
+            self.refuse(h.encode({'type': 'v', 'data': [child]}))
+        for value in (None, True, False, 0, 1, 1.25, [], ['x'], {}):
+            self.refuse(h.encode({'type': 'v', 'data': [{'type': 's', 'data': value}]}))
+        self.refuse(b'{"type":"v","data":[{"type":"u","data":false}]}', kind='u')
+
+    def test_boolean_child_never_coerces_integer_null_string_or_array(self):
+        for value in (0, 1, 0.0, 1.0, None, 'true', 'false', [], [True], {}):
+            with self.subTest(value=value):
+                self.refuse(h.encode({'type': 'v', 'data': [{'type': 'b', 'data': value}]}), kind='b')
+        for signature in ('s', 'i', 'v'):
+            self.refuse(h.encode({'type': 'v', 'data': [{'type': signature, 'data': False}]}), kind='b')
+
+    def test_duplicate_keys_at_outer_and_child_levels_are_always_refused(self):
+        for raw in (
+                b'{"type":"v","type":"v","data":[{"type":"s","data":"x"}]}',
+                b'{"type":"v","data":[{"type":"s","data":"x"}],"data":[{"type":"s","data":"y"}]}',
+                b'{"type":"v","data":[{"type":"s","type":"s","data":"x"}]}',
+                b'{"type":"v","data":[{"type":"s","data":"x","data":"y"}]}'):
+            self.refuse(raw)
+        self.refuse(b'{"type":"v","data":[{"type":"b","data":false,"data":true}]}', kind='b')
+
+    def test_nonzero_or_invalid_stdout_never_parses_stderr_as_success_or_retries(self):
+        valid = b'{"type":"v","data":[{"type":"s","data":"informational"}]}'
+        self.refuse(valid, code=1, stderr=valid, reason='manager-query-unknown')
+        self.refuse(valid, code=1, stderr=SECRET.encode(), reason='manager-query-unknown')
+        self.refuse(b'', stderr=valid)
+        self.refuse(SECRET.encode(), stderr=valid)
+
+
+    def test_nonzero_call_error_names_and_forged_text_are_only_private_unknowns(self):
+        valid = b'{"type":"v","data":[{"type":"s","data":"informational"}]}'
+        texts = [b'org.freedesktop.DBus.Error.ServiceUnknown',
+                 b'org.freedesktop.DBus.Error.NameHasNoOwner',
+                 b'prefix org.freedesktop.DBus.Error.ServiceUnknown suffix ' + SECRET.encode(),
+                 b'{"error":"org.freedesktop.DBus.Error.NameHasNoOwner","private":"' + SECRET.encode() + b'"}',
+                 b'\xff org.freedesktop.DBus.Error.ServiceUnknown ' + SECRET.encode(), valid]
+        for code in (1, 7, 255):
+            for text in texts:
+                self.refuse(valid, code=code, stderr=text, reason='manager-query-unknown')
+        for text in texts:
+            session = Mock()
+            session.run.return_value = (0, valid, text)
+            self.assertEqual(self.value(session, 's'), 'informational')
+            self.assertEqual(session.run.call_count, 1)
+
+
 class HostedManagerDiagnosticControls(unittest.TestCase):
     """All endpoint, bus and cgroup facts are injected; no host query is made."""
     UID = 1001
@@ -247,9 +350,9 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
     STAGES = ('version-query', 'cgroup-query', 'delegate-query')
 
     def replies(self):
-        return [(0, b'{"type":"s","data":"255 (255.4-1ubuntu8)"}', b''),
-                (0, h.encode({'type': 's', 'data': self.CGROUP}), b''),
-                (0, b'{"type":"b","data":true}', b'')]
+        return [(0, b'{"type":"v","data":[{"type":"s","data":"opaque"}]}', b''),
+                (0, h.encode({'type': 'v', 'data': [{'type': 's', 'data': self.CGROUP}]}), b''),
+                (0, b'{"type":"v","data":[{"type":"b","data":true}]}', b'')]
 
     def run_manager(self, replies=None, *, endpoint_error=None, check_error=None,
                     parent=None, endpoint=None, cgroup_value=None, cgroup_error=None):
@@ -273,17 +376,20 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
 
     def test_success_has_no_diagnostic_and_exact_original_three_query_catalogue(self):
         result, session, cg = self.run_manager()
-        self.assertEqual((result['status'], result['version_major'], result['delegate_property']),
-                         ('observed', '255', True))
+        self.assertEqual((result['status'], result['version_property'], result['delegate_property']),
+                         ('observed', VERSION_MARKER, True))
         self.assertEqual(result['diagnostics'], [])
         cg.assert_called_once_with(session, self.CGROUP)
         prefix = [self.BUS, '--address=unix:path=/run/user/1001/bus', '--auto-start=no',
-                  '--no-pager', '--timeout=2s', '--json=short', 'get-property',
+                  '--no-pager', '--timeout=2s', '--json=short', 'call',
                   'org.freedesktop.systemd1']
         unit = '/org/freedesktop/systemd1/unit/init_2escope'
-        suffixes = [['/org/freedesktop/systemd1', 'org.freedesktop.systemd1.Manager', 'Version'],
-                    [unit, 'org.freedesktop.systemd1.Unit', 'ControlGroup'],
-                    [unit, 'org.freedesktop.systemd1.Scope', 'Delegate']]
+        suffixes = [['/org/freedesktop/systemd1', 'org.freedesktop.DBus.Properties', 'Get', 'ss',
+                     'org.freedesktop.systemd1.Manager', 'Version'],
+                    [unit, 'org.freedesktop.DBus.Properties', 'Get', 'ss',
+                     'org.freedesktop.systemd1.Scope', 'ControlGroup'],
+                    [unit, 'org.freedesktop.DBus.Properties', 'Get', 'ss',
+                     'org.freedesktop.systemd1.Scope', 'Delegate']]
         self.assertEqual([call.args[0] for call in session.run.call_args_list],
                          [prefix + suffix for suffix in suffixes])
         session.check.assert_called_once_with()
@@ -330,8 +436,8 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
             session.run.assert_not_called()
 
     def test_property_missing_failed_and_invalid_are_stage_specific_without_extra_queries(self):
-        failures = [((1, b'', b'org.freedesktop.DBus.Error.ServiceUnknown ' + SECRET.encode()), 'missing'),
-                    ((1, b'', b'org.freedesktop.DBus.Error.NameHasNoOwner ' + SECRET.encode()), 'missing'),
+        failures = [((1, b'', b'org.freedesktop.DBus.Error.ServiceUnknown ' + SECRET.encode()), 'query-failed'),
+                    ((1, b'', b'org.freedesktop.DBus.Error.NameHasNoOwner ' + SECRET.encode()), 'query-failed'),
                     ((1, SECRET.encode(), SECRET.encode()), 'query-failed'),
                     ((0, SECRET.encode(), b''), 'invalid-property'),
                     ((0, b'{"type":"s","data":["255"]}', b''), 'invalid-property'),
@@ -342,9 +448,9 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
                     replies = self.replies()[:index] + [failure]
                     result, session, cg = self.run_manager(replies)
                     self.diagnostic(result, stage, reason)
-                    self.assertEqual(result['status'], 'missing' if index == 0 and reason == 'missing' else 'unknown')
+                    self.assertEqual(result['status'], 'unknown')
                     self.assertEqual(session.run.call_count, index + 1)
-                    self.assertEqual('version_major' in result, index > 0)
+                    self.assertEqual('version_property' in result, index > 0)
                     self.assertEqual('cgroup' in result, index == 2)
                     self.assertEqual(cg.call_count, int(index == 2))
 
@@ -361,21 +467,34 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
                     self.diagnostic(result, stage, reason)
                     self.assertEqual(result['status'], 'unknown')
                     self.assertEqual(session.run.call_count, index + 1)
-                    self.assertEqual(result.get('version_major'), '255' if index else None)
+                    self.assertEqual(result.get('version_property'), VERSION_MARKER if index else None)
                     self.assertEqual('cgroup' in result, index == 2)
 
-    def test_version_parse_and_scope_failures_have_distinct_stages_and_no_later_query(self):
-        for version in (SECRET, '', '255' + SECRET):
-            result, session, cg = self.run_manager([(0, h.encode({'type': 's', 'data': version}), b'')])
-            self.diagnostic(result, 'version-parse', 'invalid-version')
-            self.assertEqual((result['status'], session.run.call_count), ('unknown', 1))
+    def test_informational_version_is_opaque_and_foreign_scope_still_refuses_without_extra_query(self):
+        encoded_results = []
+        for version in ('', SECRET, '255' + SECRET, '255.4-1ubuntu8+custom',
+                        'v255-devel-g0123456', 'systemd arbitrary informational string',
+                        'non-ASCII \u03b2\n\x00' + SECRET):
+            replies = self.replies()
+            replies[0] = (0, h.encode({'type': 'v', 'data': [{'type': 's', 'data': version}]}), b'')
+            self.assertLessEqual(len(replies[0][1]), h.CHILD_BYTES)
+            result, session, cg = self.run_manager(replies)
+            self.assertEqual((result['status'], session.run.call_count), ('observed', 3))
+            self.assertEqual(result['version_property'], VERSION_MARKER)
             self.assertNotIn('version_major', result)
+            self.assertEqual(result['diagnostics'], [])
+            cg.assert_called_once_with(session, self.CGROUP)
+            encoded_results.append(h.encode(result))
+        # Identical evidence for all contents: no raw value, hash, length or numeric major.
+        self.assertTrue(all(value == encoded_results[0] for value in encoded_results))
+        for raw in ('', '/', '/system.slice/' + SECRET,
+                    '/user.slice/user-1002.slice/user@1002.service/init.scope'):
+            replies = self.replies()[:1] + [(0, h.encode({'type': 'v', 'data': [{'type': 's', 'data': raw}]}), b'')]
+            result, session, cg = self.run_manager(replies)
+            self.diagnostic(result, 'cgroup-scope', 'foreign-cgroup-scope')
+            self.assertEqual((result['status'], result['version_property'], session.run.call_count),
+                             ('unknown', VERSION_MARKER, 2))
             cg.assert_not_called()
-        replies = self.replies()[:1] + [(0, h.encode({'type': 's', 'data': '/system.slice/' + SECRET}), b'')]
-        result, session, cg = self.run_manager(replies)
-        self.diagnostic(result, 'cgroup-scope', 'foreign-cgroup-scope')
-        self.assertEqual((result['status'], result['version_major'], session.run.call_count), ('unknown', '255', 2))
-        cg.assert_not_called()
 
     def test_cgroup_read_summary_retains_original_delegate_query_and_outcome(self):
         for status, expected in (('missing', 'complete-missing-unsupported'), ('unknown', 'incomplete-invalid')):
@@ -387,7 +506,7 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
             data['user_manager'] = result
             self.assertEqual(h.outcome(data, {'complete': True}, None)[0], expected)
         replies = self.replies()
-        replies[-1] = (0, b'{"type":"b","data":false}', b'')
+        replies[-1] = (0, b'{"type":"v","data":[{"type":"b","data":false}]}', b'')
         result, session, _cg = self.run_manager(replies)
         self.assertEqual((result['status'], result['diagnostics'], session.run.call_count), ('observed', [], 3))
         data = facts()
@@ -404,7 +523,7 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
                               (h.Refusal(SECRET), 'unknown'), (OSError(h.errno.EIO, SECRET), 'os-error')):
             result, session, _cg = self.run_manager(cgroup_error=error)
             self.diagnostic(result, 'cgroup-read', reason)
-            self.assertEqual((result['status'], result['version_major'], session.run.call_count), ('unknown', '255', 2))
+            self.assertEqual((result['status'], result['version_property'], session.run.call_count), ('unknown', VERSION_MARKER, 2))
         result, session, _cg = self.run_manager(self.replies()[:2] + [h.Refusal(SECRET)],
                                                cgroup_value={'status': 'unknown'})
         self.assertEqual(result['diagnostics'], [{'stage': 'cgroup-read', 'reason': 'unknown'},
@@ -426,6 +545,31 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
                          [{'stage': 'version-query', 'reason': 'denied'}])
         self.assertFalse(parsed['native_admission'])
         self.assertNotIn(SECRET.encode(), payload)
+
+
+    def test_forged_nonzero_property_error_names_never_complete_as_missing(self):
+        for index, stage in enumerate(self.STAGES):
+            for text in (b'org.freedesktop.DBus.Error.ServiceUnknown',
+                         b'org.freedesktop.DBus.Error.NameHasNoOwner',
+                         b'forged org.freedesktop.DBus.Error.ServiceUnknown ' + SECRET.encode(),
+                         b'{"error":"org.freedesktop.DBus.Error.NameHasNoOwner","private":"' + SECRET.encode() + b'"}'):
+                replies = self.replies()[:index] + [(1, SECRET.encode(), text)]
+                result, session, cg = self.run_manager(replies)
+                self.diagnostic(result, stage, 'query-failed')
+                self.assertEqual(result['status'], 'unknown')
+                self.assertEqual(session.run.call_count, index + 1)
+                self.assertEqual(result.get('version_property'), VERSION_MARKER if index else None)
+                self.assertEqual(cg.call_count, int(index == 2))
+                data = facts()
+                data['user_manager'] = result
+                status, decision = h.outcome(data, {'complete': True}, None)
+                self.assertEqual((status, decision), ('incomplete-invalid', 'unknown'))
+                payload = h.frame({'facts': data, 'observation_outcome': status,
+                                   'prerequisite_decision': decision, 'native_admission': False})
+                parsed = decode(payload)
+                self.assertFalse(parsed['native_admission'])
+                self.assertNotIn(SECRET.encode(), payload)
+                self.assertNotIn(b'org.freedesktop.DBus.Error.', payload)
 
 
 class HostedLifecycleControls(unittest.TestCase):
