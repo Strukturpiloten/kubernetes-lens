@@ -52,6 +52,21 @@ unsupported queries remain unknown. There is no bus/session/login creation, mana
 transient unit, system-manager fallback, sudo or permission/group change. A partial query retains
 already obtained sanitized facts without inferring successful manager operations.
 
+Manager failures add a bounded `diagnostics` list of fixed `{stage, reason}` records. Stages are
+`deadline`, `endpoint`, `version-query`, `version-parse`, `cgroup-query`, `cgroup-scope`,
+`cgroup-read` and `delegate-query`. Reasons distinguish missing endpoints/names, denied reads,
+other OS errors, rejected endpoint/version/property/scope evidence, and known fixed collection
+refusals. Unknown exception details remain `unknown`; exception text, stderr, UID, bus addresses
+and host/environment values never enter these diagnostics. Cgroup reads that already returned a
+sanitized missing/unknown result retain that generic reason and continue the original Delegate
+query. At most two records are possible: that cgroup-read summary and a later Delegate failure.
+Already obtained facts and existing missing/unknown statuses remain intact. These codes add no
+query, retry, autostart, schema version or prerequisite/native admission.
+
+The earlier run `41107863705`, attempt 1, remains retained **incomplete-invalid** evidence with
+an unknown user manager. Its absent diagnostic cannot be reconstructed from these new codes;
+this correction does not complete that observation or authorize a replacement run.
+
 Only the collector's own job cgroup and existing own manager scope are read. Requested files are
 `cgroup.controllers`, `cgroup.subtree_control`, `cpu.max`, `memory.max`, `pids.max` and
 `cpuset.cpus.effective`; subtree writability is a permission indicator, never a write. No task or

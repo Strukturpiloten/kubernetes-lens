@@ -422,30 +422,65 @@ def property_value(session, bus, address, object_path, interface, name, kind):
 
 def manager(session, tool, uid):
     result = {'status': 'unknown', 'no_autostart': True,
-              'scope': 'existing-own-UID-user-manager-init.scope', 'transient_unit_creation_proved': False}
+              'scope': 'existing-own-UID-user-manager-init.scope', 'transient_unit_creation_proved': False,
+              'diagnostics': []}
+    def reason(error):
+        if isinstance(error, FileNotFoundError):
+            return 'missing'
+        if isinstance(error, PermissionError):
+            return 'denied'
+        if isinstance(error, OSError):
+            return 'os-error'
+        # Lookup values are closed literals; never stringify or return exception data.
+        known = {
+            'manager-endpoint': 'unsafe-endpoint', 'manager-version': 'invalid-version',
+            'manager-query-invalid': 'invalid-property', 'manager-query-unknown': 'query-failed',
+            'manager-cgroup-scope': 'foreign-cgroup-scope',
+            'observation-timeout': 'observation-timeout', 'cleanup-uncertain': 'cleanup-uncertain',
+            'cancelled-or-deadline': 'cancelled-or-deadline', 'child-count-limit': 'child-count-limit',
+            'child-timeout': 'child-timeout', 'child-output-limit': 'child-output-limit',
+            'child-unavailable': 'child-unavailable', 'cgroup-path': 'invalid-cgroup-path',
+            'cgroup-symlink': 'cgroup-symlink', 'cgroup-value': 'invalid-cgroup-value',
+            'file-type': 'file-type', 'file-size': 'file-size', 'file-changed': 'file-changed',
+        }
+        code = error.args[0] if len(error.args) == 1 and type(error.args[0]) is str else None
+        return known.get(code, 'unknown')
+
+    stage = 'deadline'
     try:
         session.check()
+        stage = 'endpoint'
         path = Path('/run/user') / str(uid) / 'bus'
         parent, info = path.parent.lstat(), path.lstat()
         require(stat.S_ISDIR(parent.st_mode) and parent.st_uid == uid and not parent.st_mode & 0o077
                 and stat.S_ISSOCK(info.st_mode) and info.st_uid == uid, 'manager-endpoint')
         address = 'unix:path=' + str(path)
+        stage = 'version-query'
         version = property_value(session, tool, address, '/org/freedesktop/systemd1',
                                  'org.freedesktop.systemd1.Manager', 'Version', 's')
+        stage = 'version-parse'
         matched = re.match(r'([0-9]{1,6})(?:\.[0-9]{1,6})?(?: |$)', version)
         require(matched is not None, 'manager-version')
         result['version_major'] = matched.group(1)
         unit = '/org/freedesktop/systemd1/unit/init_2escope'
+        stage = 'cgroup-query'
         raw = property_value(session, tool, address, unit, 'org.freedesktop.systemd1.Unit', 'ControlGroup', 's')
+        stage = 'cgroup-scope'
         require(raw.startswith(f'/user.slice/user-{uid}.slice/user@{uid}.service/'), 'manager-cgroup-scope')
+        stage = 'cgroup-read'
         result['cgroup'] = cgroup(session, raw)
+        if result['cgroup']['status'] != 'observed':
+            # cgroup() intentionally keeps its underlying read error private.
+            result['diagnostics'].append({'stage': 'cgroup-read', 'reason':
+                                          {'missing': 'missing'}.get(result['cgroup']['status'], 'unknown')})
+        stage = 'delegate-query'
         result['delegate_property'] = property_value(session, tool, address, unit,
                                                      'org.freedesktop.systemd1.Scope', 'Delegate', 'b')
         result['status'] = 'observed'
-    except FileNotFoundError:
-        result['status'] = 'missing' if 'version_major' not in result else 'unknown'
-    except (OSError, Refusal):
-        pass
+    except (OSError, Refusal) as error:
+        if isinstance(error, FileNotFoundError):
+            result['status'] = 'missing' if 'version_major' not in result else 'unknown'
+        result['diagnostics'].append({'stage': stage, 'reason': reason(error)})
     return result
 
 

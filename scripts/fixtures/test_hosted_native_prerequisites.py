@@ -239,6 +239,195 @@ class HostedObservationControls(unittest.TestCase):
         self.assertNotIn(SECRET, json.dumps(result))
 
 
+class HostedManagerDiagnosticControls(unittest.TestCase):
+    """All endpoint, bus and cgroup facts are injected; no host query is made."""
+    UID = 1001
+    BUS = '/usr/bin/busctl'
+    CGROUP = '/user.slice/user-1001.slice/user@1001.service/init.scope'
+    STAGES = ('version-query', 'cgroup-query', 'delegate-query')
+
+    def replies(self):
+        return [(0, b'{"type":"s","data":"255 (255.4-1ubuntu8)"}', b''),
+                (0, h.encode({'type': 's', 'data': self.CGROUP}), b''),
+                (0, b'{"type":"b","data":true}', b'')]
+
+    def run_manager(self, replies=None, *, endpoint_error=None, check_error=None,
+                    parent=None, endpoint=None, cgroup_value=None, cgroup_error=None):
+        session = Mock()
+        session.check.side_effect = check_error
+        session.run.side_effect = self.replies() if replies is None else replies
+        parent = parent or SimpleNamespace(st_mode=stat.S_IFDIR | 0o700, st_uid=self.UID)
+        endpoint = endpoint or SimpleNamespace(st_mode=stat.S_IFSOCK | 0o600, st_uid=self.UID)
+        with patch.object(Path, 'lstat', side_effect=endpoint_error or [parent, endpoint]), \
+             patch.object(h, 'cgroup', return_value=deepcopy(cgroup_value or facts()['job_cgroup']),
+                          side_effect=cgroup_error) as cg:
+            result = h.manager(session, self.BUS, self.UID)
+        self.assertTrue(result['no_autostart'])
+        self.assertFalse(result['transient_unit_creation_proved'])
+        self.assertLessEqual(len(result['diagnostics']), 2)
+        self.assertNotIn(SECRET, h.encode(result).decode())
+        return result, session, cg
+
+    def diagnostic(self, result, stage, reason):
+        self.assertEqual(result['diagnostics'], [{'stage': stage, 'reason': reason}])
+
+    def test_success_has_no_diagnostic_and_exact_original_three_query_catalogue(self):
+        result, session, cg = self.run_manager()
+        self.assertEqual((result['status'], result['version_major'], result['delegate_property']),
+                         ('observed', '255', True))
+        self.assertEqual(result['diagnostics'], [])
+        cg.assert_called_once_with(session, self.CGROUP)
+        prefix = [self.BUS, '--address=unix:path=/run/user/1001/bus', '--auto-start=no',
+                  '--no-pager', '--timeout=2s', '--json=short', 'get-property',
+                  'org.freedesktop.systemd1']
+        unit = '/org/freedesktop/systemd1/unit/init_2escope'
+        suffixes = [['/org/freedesktop/systemd1', 'org.freedesktop.systemd1.Manager', 'Version'],
+                    [unit, 'org.freedesktop.systemd1.Unit', 'ControlGroup'],
+                    [unit, 'org.freedesktop.systemd1.Scope', 'Delegate']]
+        self.assertEqual([call.args[0] for call in session.run.call_args_list],
+                         [prefix + suffix for suffix in suffixes])
+        session.check.assert_called_once_with()
+        session.file.assert_not_called()
+        session.open.assert_not_called()
+
+    def test_deadline_known_refusals_and_unknown_exception_data_never_query(self):
+        for code in ('observation-timeout', 'cleanup-uncertain', 'cancelled-or-deadline'):
+            with self.subTest(code=code):
+                result, session, cg = self.run_manager(check_error=h.Refusal(code))
+                self.diagnostic(result, 'deadline', code)
+                self.assertEqual(result['status'], 'unknown')
+                session.run.assert_not_called()
+                cg.assert_not_called()
+        class PrivateRefusal(h.Refusal):
+            def __str__(self):
+                raise AssertionError('diagnostic must not stringify exceptions')
+        for error in (PrivateRefusal(SECRET), h.Refusal(SECRET), h.Refusal(['manager-version', SECRET]),
+                      h.Refusal('child-timeout' + SECRET), h.Refusal('manager-version', SECRET)):
+            result, session, _cg = self.run_manager(check_error=error)
+            self.diagnostic(result, 'deadline', 'unknown')
+            session.run.assert_not_called()
+
+    def test_endpoint_missing_denied_oserror_and_unsafe_facts_stop_before_queries(self):
+        for error, status, reason in ((FileNotFoundError(SECRET), 'missing', 'missing'),
+                                      (PermissionError(SECRET), 'unknown', 'denied'),
+                                      (OSError(h.errno.EIO, SECRET), 'unknown', 'os-error')):
+            result, session, cg = self.run_manager(endpoint_error=error)
+            self.assertEqual(result['status'], status)
+            self.diagnostic(result, 'endpoint', reason)
+            session.run.assert_not_called()
+            cg.assert_not_called()
+        for mode, owner, endpoint_mode, endpoint_owner in (
+                (stat.S_IFDIR | 0o755, self.UID, stat.S_IFSOCK, self.UID),
+                (stat.S_IFDIR | 0o700, 0, stat.S_IFSOCK, self.UID),
+                (stat.S_IFREG | 0o700, self.UID, stat.S_IFSOCK, self.UID),
+                (stat.S_IFDIR | 0o700, self.UID, stat.S_IFREG, self.UID),
+                (stat.S_IFDIR | 0o700, self.UID, stat.S_IFSOCK, 0)):
+            result, session, _cg = self.run_manager(
+                parent=SimpleNamespace(st_mode=mode, st_uid=owner),
+                endpoint=SimpleNamespace(st_mode=endpoint_mode, st_uid=endpoint_owner))
+            self.diagnostic(result, 'endpoint', 'unsafe-endpoint')
+            self.assertEqual(result['status'], 'unknown')
+            session.run.assert_not_called()
+
+    def test_property_missing_failed_and_invalid_are_stage_specific_without_extra_queries(self):
+        failures = [((1, b'', b'org.freedesktop.DBus.Error.ServiceUnknown ' + SECRET.encode()), 'missing'),
+                    ((1, b'', b'org.freedesktop.DBus.Error.NameHasNoOwner ' + SECRET.encode()), 'missing'),
+                    ((1, SECRET.encode(), SECRET.encode()), 'query-failed'),
+                    ((0, SECRET.encode(), b''), 'invalid-property'),
+                    ((0, b'{"type":"s","data":["255"]}', b''), 'invalid-property'),
+                    ((0, b'{"type":"s","data":"255","data":"256"}', b''), 'invalid-property')]
+        for index, stage in enumerate(self.STAGES):
+            for failure, reason in failures:
+                with self.subTest(stage=stage, reason=reason, response=failure[0]):
+                    replies = self.replies()[:index] + [failure]
+                    result, session, cg = self.run_manager(replies)
+                    self.diagnostic(result, stage, reason)
+                    self.assertEqual(result['status'], 'missing' if index == 0 and reason == 'missing' else 'unknown')
+                    self.assertEqual(session.run.call_count, index + 1)
+                    self.assertEqual('version_major' in result, index > 0)
+                    self.assertEqual('cgroup' in result, index == 2)
+                    self.assertEqual(cg.call_count, int(index == 2))
+
+    def test_child_refusals_oserrors_and_private_unknowns_keep_partial_facts(self):
+        errors = [(h.Refusal(code), code) for code in
+                  ('child-timeout', 'child-output-limit', 'child-count-limit', 'child-unavailable',
+                   'observation-timeout', 'cleanup-uncertain', 'cancelled-or-deadline')]
+        errors += [(h.Refusal(SECRET), 'unknown'), (PermissionError(SECRET), 'denied'),
+                   (OSError(h.errno.EIO, SECRET), 'os-error')]
+        for index, stage in enumerate(self.STAGES):
+            for error, reason in errors:
+                with self.subTest(stage=stage, reason=reason):
+                    result, session, _cg = self.run_manager(self.replies()[:index] + [error])
+                    self.diagnostic(result, stage, reason)
+                    self.assertEqual(result['status'], 'unknown')
+                    self.assertEqual(session.run.call_count, index + 1)
+                    self.assertEqual(result.get('version_major'), '255' if index else None)
+                    self.assertEqual('cgroup' in result, index == 2)
+
+    def test_version_parse_and_scope_failures_have_distinct_stages_and_no_later_query(self):
+        for version in (SECRET, '', '255' + SECRET):
+            result, session, cg = self.run_manager([(0, h.encode({'type': 's', 'data': version}), b'')])
+            self.diagnostic(result, 'version-parse', 'invalid-version')
+            self.assertEqual((result['status'], session.run.call_count), ('unknown', 1))
+            self.assertNotIn('version_major', result)
+            cg.assert_not_called()
+        replies = self.replies()[:1] + [(0, h.encode({'type': 's', 'data': '/system.slice/' + SECRET}), b'')]
+        result, session, cg = self.run_manager(replies)
+        self.diagnostic(result, 'cgroup-scope', 'foreign-cgroup-scope')
+        self.assertEqual((result['status'], result['version_major'], session.run.call_count), ('unknown', '255', 2))
+        cg.assert_not_called()
+
+    def test_cgroup_read_summary_retains_original_delegate_query_and_outcome(self):
+        for status, expected in (('missing', 'complete-missing-unsupported'), ('unknown', 'incomplete-invalid')):
+            result, session, _cg = self.run_manager(cgroup_value={'status': status})
+            self.diagnostic(result, 'cgroup-read', status)
+            self.assertEqual((result['status'], result['delegate_property'], session.run.call_count),
+                             ('observed', True, 3))
+            data = facts()
+            data['user_manager'] = result
+            self.assertEqual(h.outcome(data, {'complete': True}, None)[0], expected)
+        replies = self.replies()
+        replies[-1] = (0, b'{"type":"b","data":false}', b'')
+        result, session, _cg = self.run_manager(replies)
+        self.assertEqual((result['status'], result['diagnostics'], session.run.call_count), ('observed', [], 3))
+        data = facts()
+        data['user_manager'] = result
+        self.assertEqual(h.outcome(data, {'complete': True}, None), ('complete-missing-unsupported', 'missing'))
+
+    def test_cgroup_read_exception_and_second_failure_are_bounded_and_private(self):
+        for error, reason in ((h.Refusal('cgroup-path'), 'invalid-cgroup-path'),
+                              (h.Refusal('cgroup-symlink'), 'cgroup-symlink'),
+                              (h.Refusal('cgroup-value'), 'invalid-cgroup-value'),
+                              (h.Refusal('file-type'), 'file-type'), (h.Refusal('file-size'), 'file-size'),
+                              (h.Refusal('file-changed'), 'file-changed'),
+                              (FileNotFoundError(SECRET), 'missing'), (PermissionError(SECRET), 'denied'),
+                              (h.Refusal(SECRET), 'unknown'), (OSError(h.errno.EIO, SECRET), 'os-error')):
+            result, session, _cg = self.run_manager(cgroup_error=error)
+            self.diagnostic(result, 'cgroup-read', reason)
+            self.assertEqual((result['status'], result['version_major'], session.run.call_count), ('unknown', '255', 2))
+        result, session, _cg = self.run_manager(self.replies()[:2] + [h.Refusal(SECRET)],
+                                               cgroup_value={'status': 'unknown'})
+        self.assertEqual(result['diagnostics'], [{'stage': 'cgroup-read', 'reason': 'unknown'},
+                                                {'stage': 'delegate-query', 'reason': 'unknown'}])
+        self.assertEqual(result['cgroup'], {'status': 'unknown'})
+        self.assertEqual(session.run.call_count, 3)
+
+    def test_partial_unknown_diagnostic_survives_canonical_frame_without_changing_native_decision(self):
+        result, _session, _cg = self.run_manager([PermissionError(SECRET)])
+        data = facts()
+        data['user_manager'] = result
+        status, decision = h.outcome(data, {'complete': True}, None)
+        report = {'schema': 'kubernetes-lens-hosted-native-prerequisites-v1', 'facts': data,
+                  'observation_outcome': status, 'prerequisite_decision': decision, 'native_admission': False}
+        payload = h.frame(report)
+        parsed = decode(payload)
+        self.assertEqual((status, decision), ('incomplete-invalid', 'unknown'))
+        self.assertEqual(parsed['facts']['user_manager']['diagnostics'],
+                         [{'stage': 'version-query', 'reason': 'denied'}])
+        self.assertFalse(parsed['native_admission'])
+        self.assertNotIn(SECRET.encode(), payload)
+
+
 class HostedLifecycleControls(unittest.TestCase):
     def fake_collect(self, data=None, *, failure=None, clean=True):
         session = Mock(absolute_end=10**12, cleanup_end=10**12, children_started=0)
