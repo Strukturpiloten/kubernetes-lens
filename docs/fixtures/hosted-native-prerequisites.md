@@ -46,16 +46,32 @@ manifest. The package-query utility is inspected under the same bounds before it
 
 `/dev/kvm` permits only inspection, one owned control FD and `KVM_GET_API_VERSION`. There is no
 VM-creation ioctl or guest. The manager query uses only an already-present own-UID user bus,
-explicit address and `--auto-start=no`; fixed `get-property` requests read manager version and
-its existing `init.scope` ControlGroup/Delegate indicators. Missing sockets/names remain missing;
-unsupported queries remain unknown. There is no bus/session/login creation, manager start,
+explicit address and `--auto-start=no`; the three fixed `busctl call` requests use
+`org.freedesktop.DBus.Properties Get ss` for Manager.Version and the existing `init.scope`'s
+Scope.ControlGroup/Scope.Delegate properties. This method-call route applies NO_AUTO_START in
+reviewed upstream systemd v255; there is no generic Unit.ControlGroup property in that contract.
+Only an exact JSON variant envelope with one typed string/boolean child is accepted. Legacy
+`get-property` scalar replies and malformed/wrongly typed variants remain unknown.
+Missing endpoints remain missing; nonzero method calls remain unknown regardless diagnostic
+stderr. Unsupported queries remain unknown. There is no bus/session/login creation, manager start,
 transient unit, system-manager fallback, sudo or permission/group change. A partial query retains
 already obtained sanitized facts without inferring successful manager operations.
 
+Manager.Version is an informational string with no parseable release-format guarantee. Any
+bounded, correctly typed string, including an empty or distributor/VCS-specific value, produces
+only `version_property: informational-string-observed-raw-omitted`. Its value, hash and length
+are omitted; no numeric version/major is extracted. The manager release remains unattested.
+Separately observed host executable version prefixes do not attest the manager's release.
+
+Earlier `get-property --auto-start=no` argv assertions did not prove effective NO_AUTO_START in
+systemd v255: that verb did not apply the flag. Those historical pure tests prove their recorded
+argv checks only. No past service activation is inferred; the corrected route has no live result
+until separately reviewed observation evidence exists.
+
 Manager failures add a bounded `diagnostics` list of fixed `{stage, reason}` records. Stages are
-`deadline`, `endpoint`, `version-query`, `version-parse`, `cgroup-query`, `cgroup-scope`,
+`deadline`, `endpoint`, `version-query`, `cgroup-query`, `cgroup-scope`,
 `cgroup-read` and `delegate-query`. Reasons distinguish missing endpoints/names, denied reads,
-other OS errors, rejected endpoint/version/property/scope evidence, and known fixed collection
+other OS errors, rejected endpoint/property/scope evidence, and known fixed collection
 refusals. Unknown exception details remain `unknown`; exception text, stderr, UID, bus addresses
 and host/environment values never enter these diagnostics. Cgroup reads that already returned a
 sanitized missing/unknown result retain that generic reason and continue the original Delegate
@@ -66,6 +82,10 @@ query, retry, autostart, schema version or prerequisite/native admission.
 The earlier run `41107863705`, attempt 1, remains retained **incomplete-invalid** evidence with
 an unknown user manager. Its absent diagnostic cannot be reconstructed from these new codes;
 this correction does not complete that observation or authorize a replacement run.
+The later run `41124326070`, attempt 1, remains failed/incomplete evidence. Its retained
+`version-parse`/`invalid-version` diagnostic identifies the old parser branch, not the raw
+Version value, its distribution, an activation event or the sole cause. All future observations
+remain held until verified delivery and separate primary admission.
 
 Only the collector's own job cgroup and existing own manager scope are read. Requested files are
 `cgroup.controllers`, `cgroup.subtree_control`, `cpu.max`, `memory.max`, `pids.max` and
