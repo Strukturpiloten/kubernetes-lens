@@ -46,7 +46,15 @@ manifest. The package-query utility is inspected under the same bounds before it
 
 `/dev/kvm` permits only inspection, one owned control FD and `KVM_GET_API_VERSION`. There is no
 VM-creation ioctl or guest. The manager query uses only an already-present own-UID user bus,
-explicit address and `--auto-start=no`; the three fixed `busctl call` requests use
+explicit address and `--auto-start=no`. A fixed `busctl call` first reads the bus daemon's
+`org.freedesktop.DBus.NameHasOwner(s)` for the sole name `org.freedesktop.systemd1`. Its direct
+reply requires exact `type: b` and a singleton `data` array containing an actual JSON boolean;
+scalar/variant wrappers, numeric booleans, duplicates and malformed replies remain unknown.
+Only an obtained boolean adds the optional `name_has_owner` fact. False records that name as
+unowned on that bus at that instant, with scoped `missing`/`name-not-owned`, and skips all three
+Gets; true continues them unchanged. An absent field, including in old records, is unobserved,
+never false. Every nonzero NameHasOwner call is unknown regardless of stdout/stderr/exit value.
+The following three fixed `busctl call` requests use
 `org.freedesktop.DBus.Properties Get ss` for Manager.Version and the existing `init.scope`'s
 Scope.ControlGroup/Scope.Delegate properties. This method-call route applies NO_AUTO_START in
 reviewed upstream systemd v255; there is no generic Unit.ControlGroup property in that contract.
@@ -65,19 +73,20 @@ Separately observed host executable version prefixes do not attest the manager's
 
 Earlier `get-property --auto-start=no` argv assertions did not prove effective NO_AUTO_START in
 systemd v255: that verb did not apply the flag. Those historical pure tests prove their recorded
-argv checks only. No past service activation is inferred; the corrected route has no live result
-until separately reviewed observation evidence exists.
+argv checks only. No past service activation is inferred. The prior corrected Get route has retained failed/incomplete
+observation evidence; the new name-owner read has no live result or future observation admission.
 
 Manager failures add a bounded `diagnostics` list of fixed `{stage, reason}` records. Stages are
-`deadline`, `endpoint`, `version-query`, `cgroup-query`, `cgroup-scope`,
+`deadline`, `endpoint`, `name-owner-query`, `version-query`, `cgroup-query`, `cgroup-scope`,
 `cgroup-read` and `delegate-query`. Reasons distinguish missing endpoints/names, denied reads,
-other OS errors, rejected endpoint/property/scope evidence, and known fixed collection
+other OS errors, rejected endpoint/name-owner-reply/property/scope evidence, and known fixed collection
 refusals. Unknown exception details remain `unknown`; exception text, stderr, UID, bus addresses
 and host/environment values never enter these diagnostics. Cgroup reads that already returned a
 sanitized missing/unknown result retain that generic reason and continue the original Delegate
 query. At most two records are possible: that cgroup-read summary and a later Delegate failure.
 Already obtained facts and existing missing/unknown statuses remain intact. These codes add no
-query, retry, autostart, schema version or prerequisite/native admission.
+retry, autostart, schema version or prerequisite/native admission. Name presence adds just the one
+fixed query above; `invalid-name-owner-reply` and `name-not-owned` are closed reasons.
 
 The earlier run `41107863705`, attempt 1, remains retained **incomplete-invalid** evidence with
 an unknown user manager. Its absent diagnostic cannot be reconstructed from these new codes;
@@ -86,6 +95,15 @@ The later run `41124326070`, attempt 1, remains failed/incomplete evidence. Its 
 `version-parse`/`invalid-version` diagnostic identifies the old parser branch, not the raw
 Version value, its distribution, an activation event or the sole cause. All future observations
 remain held until verified delivery and separate primary admission.
+The corrected run `41140032241`, attempt 1, also remains incomplete-invalid: its first Get
+returned nonzero (`version-query`/`query-failed`); no output/numeric exit was retained and later
+reads were not reached. No name absence, raw Version, root cause, activation or nonactivation
+is inferred for any of these attempts. This new read neither repairs nor authorizes their retry.
+
+Name ownership is time-local: false can become true, and true can disappear/change before or
+between Gets. Separate busctl connections do not establish one stable owner/transaction. A later
+Get failure retains true plus any obtained facts and stays unknown, without rechecking or retry.
+A missing name is not proof of no manager process/install, activation behavior or native readiness.
 
 Only the collector's own job cgroup and existing own manager scope are read. Requested files are
 `cgroup.controllers`, `cgroup.subtree_control`, `cpu.max`, `memory.max`, `pids.max` and
@@ -104,7 +122,10 @@ per-attempt retirement; this observation does not bind a later hosted instance.
 
 The job has five minutes. Collection has sixty seconds plus at most ten seconds reserved for
 owned cleanup within the original seventy-second absolute limit. At most sixteen fixed child
-queries run; each has two seconds and 4 KiB combined stdout/stderr. Hashing uses chunks up to 64 KiB,
+queries run; each has two seconds and 4 KiB combined stdout/stderr. With all inventory reads
+eligible, the true path uses at most fourteen (two source Git + eight tool version/package +
+one name-owner + three Get queries); false/name-query failure uses eleven and endpoint absence
+ten. These consume the same original collection/cleanup/absolute ends; no new window is started. Hashing uses chunks up to 64 KiB,
 128 MiB per executable and 512 MiB total. Source-policy hash inputs have a 1 MiB per-file cap.
 Small fact reads are at most 4 KiB, with a 1 KiB own-cgroup locator. Canonical JSON is at most
 64 KiB and the entire framed public output at most 80 KiB. These bounds do not change native

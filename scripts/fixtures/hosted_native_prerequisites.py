@@ -422,13 +422,36 @@ def property_value(session, bus, address, object_path, interface, name, kind):
     return value
 
 
+def name_has_owner(session, bus, address):
+    code, out, _err = session.run([bus, '--address=' + address, '--auto-start=no', '--no-pager',
+                                  '--timeout=2s', '--json=short', 'call',
+                                  'org.freedesktop.DBus', '/org/freedesktop/DBus',
+                                  'org.freedesktop.DBus', 'NameHasOwner', 's', 'org.freedesktop.systemd1'])
+    if code:
+        raise Refusal('manager-query-unknown')
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            require(key not in result, 'manager-name-query-invalid')
+            result[key] = value
+        return result
+    try:
+        data = json.loads(out, object_pairs_hook=pairs)
+    except (ValueError, UnicodeError, RecursionError) as error:
+        raise Refusal('manager-name-query-invalid') from error
+    require(type(data) is dict and set(data) == {'type', 'data'} and data['type'] == 'b'
+            and type(data['data']) is list and len(data['data']) == 1
+            and type(data['data'][0]) is bool, 'manager-name-query-invalid')
+    return data['data'][0]
+
+
 def manager(session, tool, uid):
     result = {'status': 'unknown', 'no_autostart': True,
               'scope': 'existing-own-UID-user-manager-init.scope', 'transient_unit_creation_proved': False,
               'diagnostics': []}
     def reason(error):
         if isinstance(error, FileNotFoundError):
-            return 'missing'
+            return 'missing' if stage in ('endpoint', 'cgroup-read') else 'os-error'
         if isinstance(error, PermissionError):
             return 'denied'
         if isinstance(error, OSError):
@@ -437,6 +460,7 @@ def manager(session, tool, uid):
         known = {
             'manager-endpoint': 'unsafe-endpoint', 'manager-version': 'invalid-version',
             'manager-query-invalid': 'invalid-property', 'manager-query-unknown': 'query-failed',
+            'manager-name-query-invalid': 'invalid-name-owner-reply',
             'manager-cgroup-scope': 'foreign-cgroup-scope',
             'observation-timeout': 'observation-timeout', 'cleanup-uncertain': 'cleanup-uncertain',
             'cancelled-or-deadline': 'cancelled-or-deadline', 'child-count-limit': 'child-count-limit',
@@ -457,6 +481,12 @@ def manager(session, tool, uid):
         require(stat.S_ISDIR(parent.st_mode) and parent.st_uid == uid and not parent.st_mode & 0o077
                 and stat.S_ISSOCK(info.st_mode) and info.st_uid == uid, 'manager-endpoint')
         address = 'unix:path=' + str(path)
+        stage = 'name-owner-query'
+        result['name_has_owner'] = name_has_owner(session, tool, address)
+        if not result['name_has_owner']:
+            result['status'] = 'missing'
+            result['diagnostics'].append({'stage': stage, 'reason': 'name-not-owned'})
+            return result
         stage = 'version-query'
         property_value(session, tool, address, '/org/freedesktop/systemd1',
                        'org.freedesktop.systemd1.Manager', 'Version', 's')
@@ -477,8 +507,8 @@ def manager(session, tool, uid):
                                                      'org.freedesktop.systemd1.Scope', 'Delegate', 'b')
         result['status'] = 'observed'
     except (OSError, Refusal) as error:
-        if isinstance(error, FileNotFoundError):
-            result['status'] = 'missing' if 'version_property' not in result else 'unknown'
+        if isinstance(error, FileNotFoundError) and stage == 'endpoint':
+            result['status'] = 'missing'
         result['diagnostics'].append({'stage': stage, 'reason': reason(error)})
     return result
 
