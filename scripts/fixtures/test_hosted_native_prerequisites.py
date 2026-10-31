@@ -146,6 +146,7 @@ class HostedObservationControls(unittest.TestCase):
         for raw in ('/system.slice/foreign.service', '/user.slice/user-1001.slice/user@1001.service/init.scope'):
             session = Mock()
             with patch.object(Path, 'lstat', side_effect=[parent, endpoint]), \
+                 patch.object(h, 'name_has_owner', return_value=True), \
                  patch.object(h, 'property_value', side_effect=['255 (255.4-1ubuntu8)', raw, h.Refusal(SECRET)]), \
                  patch.object(h, 'cgroup', return_value={'status': 'observed'}) as cg:
                 result = h.manager(session, '/usr/bin/busctl', 1001)
@@ -358,7 +359,7 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
                     parent=None, endpoint=None, cgroup_value=None, cgroup_error=None):
         session = Mock()
         session.check.side_effect = check_error
-        session.run.side_effect = self.replies() if replies is None else replies
+        session.run.side_effect = [(0, b'{"type":"b","data":[true]}', b'')] + (self.replies() if replies is None else replies)
         parent = parent or SimpleNamespace(st_mode=stat.S_IFDIR | 0o700, st_uid=self.UID)
         endpoint = endpoint or SimpleNamespace(st_mode=stat.S_IFSOCK | 0o600, st_uid=self.UID)
         with patch.object(Path, 'lstat', side_effect=endpoint_error or [parent, endpoint]), \
@@ -390,8 +391,12 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
                      'org.freedesktop.systemd1.Scope', 'ControlGroup'],
                     [unit, 'org.freedesktop.DBus.Properties', 'Get', 'ss',
                      'org.freedesktop.systemd1.Scope', 'Delegate']]
+        presence = [self.BUS, '--address=unix:path=/run/user/1001/bus', '--auto-start=no',
+                    '--no-pager', '--timeout=2s', '--json=short', 'call',
+                    'org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus',
+                    'NameHasOwner', 's', 'org.freedesktop.systemd1']
         self.assertEqual([call.args[0] for call in session.run.call_args_list],
-                         [prefix + suffix for suffix in suffixes])
+                         [presence] + [prefix + suffix for suffix in suffixes])
         session.check.assert_called_once_with()
         session.file.assert_not_called()
         session.open.assert_not_called()
@@ -449,7 +454,7 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
                     result, session, cg = self.run_manager(replies)
                     self.diagnostic(result, stage, reason)
                     self.assertEqual(result['status'], 'unknown')
-                    self.assertEqual(session.run.call_count, index + 1)
+                    self.assertEqual(session.run.call_count, index + 2)
                     self.assertEqual('version_property' in result, index > 0)
                     self.assertEqual('cgroup' in result, index == 2)
                     self.assertEqual(cg.call_count, int(index == 2))
@@ -466,7 +471,7 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
                     result, session, _cg = self.run_manager(self.replies()[:index] + [error])
                     self.diagnostic(result, stage, reason)
                     self.assertEqual(result['status'], 'unknown')
-                    self.assertEqual(session.run.call_count, index + 1)
+                    self.assertEqual(session.run.call_count, index + 2)
                     self.assertEqual(result.get('version_property'), VERSION_MARKER if index else None)
                     self.assertEqual('cgroup' in result, index == 2)
 
@@ -479,7 +484,7 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
             replies[0] = (0, h.encode({'type': 'v', 'data': [{'type': 's', 'data': version}]}), b'')
             self.assertLessEqual(len(replies[0][1]), h.CHILD_BYTES)
             result, session, cg = self.run_manager(replies)
-            self.assertEqual((result['status'], session.run.call_count), ('observed', 3))
+            self.assertEqual((result['status'], session.run.call_count), ('observed', 4))
             self.assertEqual(result['version_property'], VERSION_MARKER)
             self.assertNotIn('version_major', result)
             self.assertEqual(result['diagnostics'], [])
@@ -493,7 +498,7 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
             result, session, cg = self.run_manager(replies)
             self.diagnostic(result, 'cgroup-scope', 'foreign-cgroup-scope')
             self.assertEqual((result['status'], result['version_property'], session.run.call_count),
-                             ('unknown', VERSION_MARKER, 2))
+                             ('unknown', VERSION_MARKER, 3))
             cg.assert_not_called()
 
     def test_cgroup_read_summary_retains_original_delegate_query_and_outcome(self):
@@ -501,14 +506,14 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
             result, session, _cg = self.run_manager(cgroup_value={'status': status})
             self.diagnostic(result, 'cgroup-read', status)
             self.assertEqual((result['status'], result['delegate_property'], session.run.call_count),
-                             ('observed', True, 3))
+                             ('observed', True, 4))
             data = facts()
             data['user_manager'] = result
             self.assertEqual(h.outcome(data, {'complete': True}, None)[0], expected)
         replies = self.replies()
         replies[-1] = (0, b'{"type":"v","data":[{"type":"b","data":false}]}', b'')
         result, session, _cg = self.run_manager(replies)
-        self.assertEqual((result['status'], result['diagnostics'], session.run.call_count), ('observed', [], 3))
+        self.assertEqual((result['status'], result['diagnostics'], session.run.call_count), ('observed', [], 4))
         data = facts()
         data['user_manager'] = result
         self.assertEqual(h.outcome(data, {'complete': True}, None), ('complete-missing-unsupported', 'missing'))
@@ -523,13 +528,13 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
                               (h.Refusal(SECRET), 'unknown'), (OSError(h.errno.EIO, SECRET), 'os-error')):
             result, session, _cg = self.run_manager(cgroup_error=error)
             self.diagnostic(result, 'cgroup-read', reason)
-            self.assertEqual((result['status'], result['version_property'], session.run.call_count), ('unknown', VERSION_MARKER, 2))
+            self.assertEqual((result['status'], result['version_property'], session.run.call_count), ('unknown', VERSION_MARKER, 3))
         result, session, _cg = self.run_manager(self.replies()[:2] + [h.Refusal(SECRET)],
                                                cgroup_value={'status': 'unknown'})
         self.assertEqual(result['diagnostics'], [{'stage': 'cgroup-read', 'reason': 'unknown'},
                                                 {'stage': 'delegate-query', 'reason': 'unknown'}])
         self.assertEqual(result['cgroup'], {'status': 'unknown'})
-        self.assertEqual(session.run.call_count, 3)
+        self.assertEqual(session.run.call_count, 4)
 
     def test_partial_unknown_diagnostic_survives_canonical_frame_without_changing_native_decision(self):
         result, _session, _cg = self.run_manager([PermissionError(SECRET)])
@@ -557,7 +562,7 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
                 result, session, cg = self.run_manager(replies)
                 self.diagnostic(result, stage, 'query-failed')
                 self.assertEqual(result['status'], 'unknown')
-                self.assertEqual(session.run.call_count, index + 1)
+                self.assertEqual(session.run.call_count, index + 2)
                 self.assertEqual(result.get('version_property'), VERSION_MARKER if index else None)
                 self.assertEqual(cg.call_count, int(index == 2))
                 data = facts()
@@ -570,6 +575,242 @@ class HostedManagerDiagnosticControls(unittest.TestCase):
                 self.assertFalse(parsed['native_admission'])
                 self.assertNotIn(SECRET.encode(), payload)
                 self.assertNotIn(b'org.freedesktop.DBus.Error.', payload)
+
+
+class HostedManagerPresenceControls(unittest.TestCase):
+    """Pure protocol/failure/budget controls with every host fact and child injected."""
+    BUS = '/usr/bin/busctl'
+    ADDRESS = 'unix:path=/run/user/1001/bus'
+    GROUP = '/user.slice/user-1001.slice/user@1001.service/init.scope'
+
+    def gets(self):
+        return [(0, b'{"type":"v","data":[{"type":"s","data":"opaque"}]}', b''),
+                (0, h.encode({'type': 'v', 'data': [{'type': 's', 'data': self.GROUP}]}), b''),
+                (0, b'{"type":"v","data":[{"type":"b","data":true}]}', b'')]
+
+    def invoke(self, replies):
+        session = Mock()
+        session.run.side_effect = replies
+        parent = SimpleNamespace(st_mode=stat.S_IFDIR | 0o700, st_uid=1001)
+        endpoint = SimpleNamespace(st_mode=stat.S_IFSOCK | 0o600, st_uid=1001)
+        with patch.object(Path, 'lstat', side_effect=[parent, endpoint]), \
+             patch.object(h, 'cgroup', return_value=deepcopy(facts()['job_cgroup'])) as cg:
+            result = h.manager(session, self.BUS, 1001)
+        self.assertNotIn(SECRET, h.encode(result).decode())
+        self.assertTrue(result['no_autostart'])
+        self.assertFalse(result['transient_unit_creation_proved'])
+        self.assertLessEqual(len(result['diagnostics']), 2)
+        return result, session, cg
+
+    def report(self, user, *, clean=True):
+        data = facts()
+        data['user_manager'] = user
+        session = Mock(absolute_end=170, cleanup_end=170, children_started=0)
+        session.cleanup.return_value = {'complete': clean, 'children_reaped': True,
+            'owned_readers_closed': True, 'fds_closed': True, 'scratch_removed': clean}
+        with patch.object(h, 'CANCELLED', False), patch.object(h.time, 'monotonic', return_value=100), \
+             patch.object(h, 'Session', return_value=session), patch.object(h.signal, 'setitimer'), \
+             patch.object(h, 'candidate', return_value={'source_sha': SHA}), \
+             patch.object(h, 'observe', return_value=data):
+            code, payload = h.collect(SHA, environment(), emit=Mock())
+        session.cleanup.assert_called_once_with()
+        parsed = decode(payload)
+        self.assertFalse(parsed['native_admission'])
+        self.assertEqual(parsed['required_native_prerequisites'], 'unknown')
+        self.assertNotIn(SECRET.encode(), payload)
+        return code, parsed
+
+    def test_direct_boolean_reply_and_exact_fixed_bus_daemon_call(self):
+        for value in (True, False):
+            session = Mock()
+            session.run.return_value = (0, h.encode({'type': 'b', 'data': [value]}), SECRET.encode())
+            actual = h.name_has_owner(session, self.BUS, self.ADDRESS)
+            self.assertIs(actual, value)
+            session.run.assert_called_once_with([
+                self.BUS, '--address=' + self.ADDRESS, '--auto-start=no', '--no-pager',
+                '--timeout=2s', '--json=short', 'call', 'org.freedesktop.DBus',
+                '/org/freedesktop/DBus', 'org.freedesktop.DBus', 'NameHasOwner', 's',
+                'org.freedesktop.systemd1'])
+
+    def test_false_is_scoped_missing_and_skips_all_gets_even_if_later_replies_exist(self):
+        with patch.object(h, 'property_value', side_effect=AssertionError('false must not Get')):
+            user, session, cg = self.invoke([(0, b'{"type":"b","data":[false]}', b'')] + self.gets())
+        self.assertIs(user['name_has_owner'], False)
+        self.assertEqual(user['status'], 'missing')
+        self.assertEqual(user['diagnostics'], [{'stage': 'name-owner-query', 'reason': 'name-not-owned'}])
+        self.assertEqual(session.run.call_count, 1)
+        cg.assert_not_called()
+        for key in ('version_property', 'cgroup', 'delegate_property'):
+            self.assertNotIn(key, user)
+        code, report = self.report(user)
+        self.assertEqual((code, report['observation_outcome'], report['prerequisite_decision']),
+                         (0, 'complete-missing-unsupported', 'missing'))
+        code, report = self.report(user, clean=False)
+        self.assertEqual((code, report['observation_outcome']), (1, 'incomplete-invalid'))
+        self.assertIs(report['facts']['user_manager']['name_has_owner'], False)
+
+    def test_malformed_duplicate_scalar_variant_and_numeric_replies_are_unknown_not_false(self):
+        deeply_nested = b'{"type":"b","data":' + b'[' * 1500 + b'false' + b']' * 1500 + b'}'
+        self.assertEqual(len(deeply_nested), 3025)
+        self.assertLessEqual(len(deeply_nested) + len(b'{"type":"b","data":[false]}'), h.CHILD_BYTES)
+        malformed = [deeply_nested, b'null', b'[]', b'{}', b'{"type":"b","data":false}',
+            b'{"type":"b","data":[]}', b'{"type":"b","data":[false,true]}',
+            b'{"type":"b","data":[false],"extra":true}', b'{"type":"s","data":[false]}',
+            b'{"type":"v","data":[{"type":"b","data":false}]}',
+            b'{"type":"b","type":"b","data":[false]}',
+            b'{"type":"b","data":[false],"data":[true]}',
+            b'{"type":"b","data":[{"type":"b","data":false,"data":true}]}',
+            b'{"type":"b","data":[false]} {}', b'\xff', SECRET.encode()]
+        malformed += [h.encode({'type': 'b', 'data': [v]})
+                      for v in (0, 1, 0.0, 1.0, None, 'false', 'true', [], {}, [False])]
+        for raw in malformed:
+            with self.subTest(raw=raw):
+                user, session, cg = self.invoke([(0, raw, b'{"type":"b","data":[false]}')])
+                self.assertEqual(user['status'], 'unknown')
+                self.assertEqual(user['scope'], 'existing-own-UID-user-manager-init.scope')
+                self.assertNotIn('name_has_owner', user)
+                self.assertEqual(user['diagnostics'],
+                                 [{'stage': 'name-owner-query', 'reason': 'invalid-name-owner-reply'}])
+                self.assertEqual(session.run.call_count, 1)
+                cg.assert_not_called()
+                code, report = self.report(user)
+                self.assertEqual((code, report['observation_outcome']), (1, 'incomplete-invalid'))
+                self.assertEqual(report['facts']['user_manager'], user)
+
+    def test_nonzero_recognized_or_private_stderr_never_becomes_name_absence(self):
+        for code in (1, 7, 255, -9):
+            for err in (b'org.freedesktop.DBus.Error.ServiceUnknown',
+                        b'org.freedesktop.DBus.Error.NameHasNoOwner',
+                        b'{"type":"b","data":[false]}', SECRET.encode()):
+                user, session, cg = self.invoke([(code, b'{"type":"b","data":[false]}', err)])
+                self.assertEqual(user['status'], 'unknown')
+                self.assertNotIn('name_has_owner', user)
+                self.assertEqual(user['diagnostics'], [{'stage': 'name-owner-query', 'reason': 'query-failed'}])
+                self.assertEqual(session.run.call_count, 1)
+                cg.assert_not_called()
+
+    def test_true_then_any_get_failure_retains_owner_fact_without_recheck_or_cause(self):
+        for index, stage in enumerate(('version-query', 'cgroup-query', 'delegate-query')):
+            for failure in ((1, SECRET.encode(), b'org.freedesktop.DBus.Error.NameHasNoOwner'),
+                            FileNotFoundError(SECRET)):
+                replies = [(0, b'{"type":"b","data":[true]}', b'')] + self.gets()[:index] + [failure]
+                user, session, cg = self.invoke(replies)
+                self.assertIs(user['name_has_owner'], True)
+                self.assertEqual(user['status'], 'unknown')
+                self.assertEqual(user['diagnostics'], [{'stage': stage, 'reason':
+                    'os-error' if isinstance(failure, FileNotFoundError) else 'query-failed'}])
+                self.assertEqual(session.run.call_count, index + 2)
+                self.assertEqual('version_property' in user, index > 0)
+                self.assertEqual('cgroup' in user, index == 2)
+                self.assertEqual(cg.call_count, int(index == 2))
+
+    def test_name_query_refusals_and_missing_client_stay_unknown_and_cleanup_runs(self):
+        class PrivateRefusal(h.Refusal):
+            def __str__(self):
+                raise AssertionError('private exception must not be stringified')
+        errors = [(h.Refusal(c), c) for c in ('child-timeout', 'child-output-limit', 'child-count-limit',
+                  'child-unavailable', 'cancelled-or-deadline', 'observation-timeout', 'cleanup-uncertain')]
+        errors += [(PrivateRefusal(SECRET), 'unknown'), (FileNotFoundError(SECRET), 'os-error'),
+                   (PermissionError(SECRET), 'denied'), (OSError(SECRET), 'os-error')]
+        for error, reason in errors:
+            user, session, cg = self.invoke([error])
+            self.assertEqual(user['status'], 'unknown')
+            self.assertNotIn('name_has_owner', user)
+            self.assertEqual(user['diagnostics'], [{'stage': 'name-owner-query', 'reason': reason}])
+            self.assertEqual(session.run.call_count, 1)
+            cg.assert_not_called()
+            code, report = self.report(user)
+            self.assertEqual((code, report['observation_outcome']), (1, 'incomplete-invalid'))
+
+    def test_full_fixed_catalogue_uses_fourteen_or_eleven_of_original_sixteen_slots(self):
+        versions = [b'QEMU emulator version 9.2.1 ', b'qemu-img version 9.2.1\n',
+                    b'OpenSSH_9.9p1, ', b'1:9.9p1-3ubuntu1', b'systemd 255\n',
+                    b'systemd 255\n', b'systemd 255\n', b'Python 3.12.1\n']
+        for owned, expected in ((True, 14), (False, 11)):
+            session = Mock()
+            session.hashed_file.return_value = (None, 'a' * 64, b'')
+            responses = iter([(0, (SHA + '\n').encode(), b''), (0, b'', b'')]
+                + [(0, v, b'') for v in versions]
+                + [(0, h.encode({'type': 'b', 'data': [owned]}), b'')] + self.gets())
+            calls = []
+            def run(argv):
+                h.require(len(calls) < h.CHILD_MAX, 'child-count-limit')
+                calls.append(argv)
+                return next(responses)
+            session.run.side_effect = run
+            parent = SimpleNamespace(st_mode=stat.S_IFDIR | 0o700, st_uid=1001)
+            endpoint = SimpleNamespace(st_mode=stat.S_IFSOCK | 0o600, st_uid=1001)
+            with patch.object(h, 'tool_identity', side_effect=lambda _s, p: {'path': p}), \
+                 patch.object(Path, 'lstat', side_effect=[parent, endpoint]), \
+                 patch.object(h, 'cgroup', return_value=deepcopy(facts()['job_cgroup'])):
+                h.candidate(session, SHA, environment())
+                inventory = h.tools(session)
+                user = h.manager(session, inventory['busctl']['path'], 1001)
+            self.assertEqual(len(calls), expected)
+            self.assertEqual(sum(len(a) > 10 and a[10] == 'NameHasOwner' for a in calls), 1)
+            self.assertEqual(sum(len(a) > 10 and a[10] == 'Get' for a in calls), 3 if owned else 0)
+            self.assertIs(user['name_has_owner'], owned)
+            self.assertEqual((h.CHILD_MAX, h.COLLECTION_SECONDS, h.CLEANUP_SECONDS,
+                              h.CHILD_SECONDS, h.CHILD_BYTES), (16, 60, 10, 2, 4096))
+
+    def test_exhausted_original_budget_starts_no_presence_child(self):
+        parent = SimpleNamespace(st_mode=stat.S_IFDIR | 0o700, st_uid=1001)
+        endpoint = SimpleNamespace(st_mode=stat.S_IFSOCK | 0o600, st_uid=1001)
+        with patch.object(h.time, 'monotonic', return_value=100), patch.object(h, 'CANCELLED', False), \
+             patch.object(Path, 'lstat', side_effect=[parent, endpoint]), patch.object(h.subprocess, 'Popen') as spawn:
+            session = h.Session()
+            session.children_started = 16
+            user = h.manager(session, self.BUS, 1001)
+            self.assertEqual(user['diagnostics'], [{'stage': 'name-owner-query', 'reason': 'child-count-limit'}])
+            self.assertNotIn('name_has_owner', user)
+            self.assertEqual(user['status'], 'unknown')
+            spawn.assert_not_called()
+            self.assertTrue(session.cleanup()['complete'])
+
+    def test_presence_child_output_limit_closes_owned_readers_and_does_not_extend_deadline(self):
+        class Reader:
+            closed = False
+            def fileno(self): return 42
+            def close(self): self.closed = True
+        stdout, stderr = Reader(), Reader()
+        process = Mock(returncode=None, stdout=stdout, stderr=stderr)
+        selector = MagicMock()
+        selector.__enter__.return_value = selector
+        selector.get_map.return_value = {42: True}
+        selector.select.return_value = [(SimpleNamespace(fileobj=stdout, data=0), None)]
+        def retire(p): p.returncode = -9
+        parent = SimpleNamespace(st_mode=stat.S_IFDIR | 0o700, st_uid=1001)
+        endpoint = SimpleNamespace(st_mode=stat.S_IFSOCK | 0o600, st_uid=1001)
+        with patch.object(h.time, 'monotonic', return_value=100), patch.object(h, 'CANCELLED', False), \
+             patch.object(Path, 'lstat', side_effect=[parent, endpoint]), \
+             patch.object(h.signal, 'pthread_sigmask', return_value=set()), \
+             patch.object(h.subprocess, 'Popen', return_value=process) as spawn, \
+             patch.object(h.selectors, 'DefaultSelector', return_value=selector), \
+             patch.object(h.os, 'set_blocking'), patch.object(h.os, 'read', return_value=b'x' * 4097), \
+             patch.object(h.Session, 'retire', side_effect=retire):
+            session = h.Session()
+            original = (session.end, session.absolute_end)
+            user = h.manager(session, self.BUS, 1001)
+            self.assertEqual((session.end, session.absolute_end), original)
+            self.assertEqual(user['diagnostics'], [{'stage': 'name-owner-query', 'reason': 'child-output-limit'}])
+            self.assertNotIn('name_has_owner', user)
+            self.assertEqual(session.children_started, 1)
+            spawn.assert_called_once()
+            self.assertEqual(spawn.call_args.kwargs['env'], h.CLEAN_ENV)
+            selector.select.assert_called_once_with(2)
+            cleanup = session.cleanup()
+        self.assertFalse(cleanup['complete'])
+        self.assertTrue(cleanup['children_reaped'] and cleanup['owned_readers_closed'])
+        self.assertTrue(stdout.closed and stderr.closed)
+
+    def test_absent_optional_field_in_old_or_unknown_record_is_not_false(self):
+        old = {'status': 'unknown', 'diagnostics': [{'stage': 'version-query', 'reason': 'query-failed'}]}
+        code, report = self.report(deepcopy(old))
+        user = report['facts']['user_manager']
+        self.assertNotIn('name_has_owner', user)
+        self.assertIsNone(user.get('name_has_owner'))
+        self.assertEqual(user, old)
+        self.assertEqual((code, report['observation_outcome']), (1, 'incomplete-invalid'))
 
 
 class HostedLifecycleControls(unittest.TestCase):
