@@ -374,7 +374,7 @@ class OwningIntegration(unittest.TestCase):
         frame = {"bound": "frame"}
         with patch.object(vm, "check_source_bindings"), patch.object(vm, "worker_pre_child") as guard, patch.object(vm, "admit_tools") as admit:
             vm.verify_source(c, self.budget, host_view=frame)
-        guard.assert_called_once_with(c, self.budget, frame)
+        guard.assert_called_once_with(c, self.budget, frame, helper=None, helper_ref=None)
         admit.assert_not_called()
 
     def test_direct_worker_main_alias_shares_exception_budget_and_cancellation_state(self):

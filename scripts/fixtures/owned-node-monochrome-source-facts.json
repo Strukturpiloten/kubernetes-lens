@@ -1,0 +1,304 @@
+{
+  "evidence_limits": [
+    "Upstream tag/source facts do not attest the installed node systemd build, entrypoint bytes or image build equivalence.",
+    "The recorded node prefix identifies systemd major257; existing guest259.9 query color facts are separate.",
+    "An authenticated truncated prefix does not prove unseen tail length, source EOF, readiness, native success or retirement.",
+    "This presentation change does not establish that a new stream will fit the unchanged16384byte ceiling.",
+    "Selected legacy profile presentation effectiveness remains unqualified; each native profile still needs separately admitted evidence."
+  ],
+  "facts": [
+    {
+      "fact": "Official systemd v257 parses the explicit string zero as false/COLOR_OFF, ahead of automatic terminal color selection.",
+      "id": "fixed-false",
+      "source_refs": [
+        "src/basic/parse-util.c:23-45",
+        "src/basic/string-table.h:29-39",
+        "src/basic/terminal-util.c:1478-1534"
+      ]
+    },
+    {
+      "fact": "PID 1 initializes ordinary log color from colors_enabled; normal job status highlight decoration follows log_get_show_color. Message generation, severity and show-status decisions are separate.",
+      "id": "pid1-and-normal-status",
+      "source_refs": [
+        "src/core/main.c:3158-3160",
+        "src/core/job.c:830-840",
+        "src/core/manager.c:4692-4707"
+      ]
+    },
+    {
+      "fact": "The retained official kind entrypoint preserves the supplied container environment and execs its command; official image source names that entrypoint and /sbin/init. Kind does not automatically pass arbitrary host environment. Explicit fixed node argv delivery is required.",
+      "id": "node-delivery",
+      "source_refs": [
+        "images/base/files/usr/local/bin/entrypoint:572-574",
+        "images/base/Dockerfile:240-247",
+        "pkg/cluster/internal/providers/podman/provision.go:132-154"
+      ]
+    },
+    {
+      "fact": "TERM-driven ephemeral status/cursor CSI and terminal palette-reset OSC are independent. Selected emergency/end-of-support labels use raw SGR. An explicit SYSTEMD_URLIFY setting can override its default colors-dependent decision. Later log-color configuration can override initial state. No second variable, filtering, quiet level, status suppression or new observer is selected.",
+      "id": "not-all-ansi",
+      "source_refs": [
+        "src/core/show-status.c:95-117",
+        "src/basic/terminal-util.c:653-665",
+        "src/shared/pretty-print.c:59-96",
+        "src/core/main.c:1453",
+        "src/core/main.c:2102",
+        "src/basic/log.c:1414-1420"
+      ]
+    },
+    {
+      "fact": "Existing status ellipsization and ephemeral display behavior remain; source facts support normal color reduction, not an all-ANSI or lossless-output guarantee.",
+      "id": "no-lossless-claim",
+      "source_refs": ["src/core/show-status.c:107", "src/core/manager.c:4692-4707"]
+    }
+  ],
+  "implemented_selection": {
+    "caller_selected_or_ambient_forwarding": false,
+    "delivery": "fixed -e pair in source-owned translated node run argv immediately before content-addressed image identity",
+    "host_or_guest_global_export": false,
+    "new_query_or_process": false,
+    "value": "0",
+    "variable": "SYSTEMD_COLORS"
+  },
+  "kind": {
+    "archive_bytes": 1953757,
+    "archive_sha256": "71b3931cf0a1029e5c7f4dc5ace3c1fb7e821dcfe56904a278e6c3ce3f4e76d2",
+    "commit": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+    "provenance_sha256": "8f6679a28a96f521c24d7496c44d86150334ec169e0d3e534012b8868220dbdd",
+    "source_archive_url": "https://codeload.github.com/kubernetes-sigs/kind/tar.gz/407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+    "sources": [
+      {
+        "archive_member": "kind-407a9675e6d9af1200b5f57f9ca52ec6cdacce74/LICENSE",
+        "blob_sha1": "8dada3edaf50dbc082c9a125058f25def75e625a",
+        "bytes": 11357,
+        "commit": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+        "evidence_lines_inclusive": [[1, 202]],
+        "license_spdx": "Apache-2.0",
+        "path": "LICENSE",
+        "sha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+        "url": "https://github.com/kubernetes-sigs/kind/blob/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/LICENSE"
+      },
+      {
+        "archive_member": "kind-407a9675e6d9af1200b5f57f9ca52ec6cdacce74/images/base/files/usr/local/bin/entrypoint",
+        "blob_sha1": "ed2afdd2bdb5881dcfdc3f91b266fe1349d6c8cb",
+        "bytes": 24428,
+        "commit": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+        "evidence_lines_inclusive": [[572, 574]],
+        "license_spdx": "Apache-2.0",
+        "path": "images/base/files/usr/local/bin/entrypoint",
+        "sha256": "d9fce9a15f585727d51417225d548ffc301e1ff77a7517ead472e5e91873a1eb",
+        "url": "https://github.com/kubernetes-sigs/kind/blob/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/images/base/files/usr/local/bin/entrypoint"
+      },
+      {
+        "archive_member": "kind-407a9675e6d9af1200b5f57f9ca52ec6cdacce74/images/base/Dockerfile",
+        "blob_sha1": "64da241837c015f0e7c7752e14db84e64b4060a0",
+        "bytes": 11596,
+        "commit": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+        "evidence_lines_inclusive": [[240, 247]],
+        "license_spdx": "Apache-2.0",
+        "path": "images/base/Dockerfile",
+        "sha256": "c1bdaa878643a7dc42a471d9661277a4aea26f319474a7eda6174cb33da58f4c",
+        "url": "https://github.com/kubernetes-sigs/kind/blob/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/images/base/Dockerfile"
+      },
+      {
+        "archive_member": "kind-407a9675e6d9af1200b5f57f9ca52ec6cdacce74/pkg/cluster/internal/providers/podman/provision.go",
+        "blob_sha1": "e02f8645a291b3b84145c4485f2034a56963ed38",
+        "bytes": 15454,
+        "commit": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+        "evidence_lines_inclusive": [
+          [132, 154],
+          [209, 210]
+        ],
+        "license_spdx": "Apache-2.0",
+        "path": "pkg/cluster/internal/providers/podman/provision.go",
+        "sha256": "1232926b8a2af921f9df0fc2bf3c63fcd2a7f2950be31ebc2bc41db8785d47b5",
+        "url": "https://github.com/kubernetes-sigs/kind/blob/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/pkg/cluster/internal/providers/podman/provision.go"
+      }
+    ],
+    "tag": "v0.33.0"
+  },
+  "operational_tool_pin": false,
+  "preserved": {
+    "cleanup_seconds": 120,
+    "cpus": 2,
+    "deadline_seconds": 1800,
+    "delegated_guest_output_bytes": 1048576,
+    "disk_gib": 24,
+    "fixed_diagnostic_patterns": 314,
+    "follow_stderr_bytes": 4096,
+    "follow_stdout_bytes": 16384,
+    "guest_memory_mib": 4096,
+    "native_command_and_query_budgets_unchanged": true,
+    "original_total_output_bytes": 2097152,
+    "outer_memory_mib": 8192,
+    "pids": 256,
+    "poison_eof_retirement_unchanged": true,
+    "private_failure_prefix_bytes": 16384
+  },
+  "redistribution": "Immutable identities/URLs/line references/license labels and independently written factual summaries only; no upstream implementation copied, translated or executed.",
+  "renovate": {
+    "classification": "historical fixture-source anchors",
+    "config_path": ".github/renovate.json",
+    "config_sha256": "010a04a129ab54edcd30e6788a77c0a159522700eca110bc8093a468e47fb221",
+    "existing_exclusion": "**/fixtures/**",
+    "new_operational_owner_or_manager": false,
+    "no_change_reason": "Only source/facts/test/ADR/documentation changes; no installed tool, dependency, image, checksum inventory or operational version pin changes."
+  },
+  "reviewed_source_report": {
+    "bytes": 16160,
+    "role": "independent metadata-only source review; no upstream bodies redistributed",
+    "sha256": "90c6ce1ac915ae598f18b5b92d6d3b57b55ed67ed59590f02b19ea3c61015c77"
+  },
+  "schema": "kubernetes-lens-owned-node-monochrome-source-facts-v1",
+  "status": "source-supported fixed node presentation proposal; native qualification pending",
+  "systemd_sources": [
+    {
+      "blob_sha1": "faa5344921c40f69ce9e045cb6011355d433aa7b",
+      "bytes": 20773,
+      "commit": "70bae7648f2c18010187c9cf20093155eaa26029",
+      "evidence_lines_inclusive": [[23, 45]],
+      "license_spdx": "LGPL-2.1-or-later",
+      "path": "src/basic/parse-util.c",
+      "sha256": "064aee728df31dd10cc521e199e260a2bf1a5359e66d5009d9a1e2fb78d08d0f",
+      "url": "https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/src/basic/parse-util.c"
+    },
+    {
+      "blob_sha1": "639443d02b38b404e8cc742c5e7316d81fb2de7f",
+      "bytes": 7008,
+      "commit": "70bae7648f2c18010187c9cf20093155eaa26029",
+      "evidence_lines_inclusive": [[29, 39]],
+      "license_spdx": "LGPL-2.1-or-later",
+      "path": "src/basic/string-table.h",
+      "sha256": "b8924002af8010aa464ac4340f410688a6f4b291f7f06fe1c23288cfd3b7aaa7",
+      "url": "https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/src/basic/string-table.h"
+    },
+    {
+      "blob_sha1": "c30faf168c0df4964506a51c4ecac701bc4c8330",
+      "bytes": 5624,
+      "commit": "70bae7648f2c18010187c9cf20093155eaa26029",
+      "evidence_lines_inclusive": [
+        [68, 75],
+        [124, 127]
+      ],
+      "license_spdx": "LGPL-2.1-or-later",
+      "path": "src/basic/terminal-util.h",
+      "sha256": "f6db7f25318e71db630dbfb9b8c82cbd25440e74255c34bfcdd87e8e175e15ce",
+      "url": "https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/src/basic/terminal-util.h"
+    },
+    {
+      "blob_sha1": "878c1ec06a629b841110a9e8e9c20848627ec8cc",
+      "bytes": 78488,
+      "commit": "70bae7648f2c18010187c9cf20093155eaa26029",
+      "evidence_lines_inclusive": [
+        [653, 665],
+        [1478, 1534],
+        [1544, 1581]
+      ],
+      "license_spdx": "LGPL-2.1-or-later",
+      "path": "src/basic/terminal-util.c",
+      "sha256": "aefb262e23478d3b1b3160c0d235a5274eb187ae742be3a1559cec8c21263995",
+      "url": "https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/src/basic/terminal-util.c"
+    },
+    {
+      "blob_sha1": "5f1418109c83b1aceafeaafa68039b00ca083225",
+      "bytes": 7571,
+      "commit": "70bae7648f2c18010187c9cf20093155eaa26029",
+      "evidence_lines_inclusive": [[72, 111]],
+      "license_spdx": "LGPL-2.1-or-later",
+      "path": "src/basic/ansi-color.h",
+      "sha256": "7014717d661456aae80811360a625f274abca6a03109747a240cbf69507da934",
+      "url": "https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/src/basic/ansi-color.h"
+    },
+    {
+      "blob_sha1": "b99f37385cec64dad81df63659188d817992af94",
+      "bytes": 61684,
+      "commit": "70bae7648f2c18010187c9cf20093155eaa26029",
+      "evidence_lines_inclusive": [
+        [457, 458],
+        [476, 497],
+        [1414, 1420],
+        [1474, 1480]
+      ],
+      "license_spdx": "LGPL-2.1-or-later",
+      "path": "src/basic/log.c",
+      "sha256": "d74af164227b2185bf0c790681dee9c4da9bc3f56ce2422b6b651a35eb33b826",
+      "url": "https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/src/basic/log.c"
+    },
+    {
+      "blob_sha1": "172742c76985121215cdb0251adfdd1be2321519",
+      "bytes": 149558,
+      "commit": "70bae7648f2c18010187c9cf20093155eaa26029",
+      "evidence_lines_inclusive": [
+        [1432, 1458],
+        [2098, 2105],
+        [2794, 2834],
+        [3149, 3161],
+        [3449, 3456]
+      ],
+      "license_spdx": "LGPL-2.1-or-later",
+      "path": "src/core/main.c",
+      "sha256": "40a7ed758f5d18d12fc9948dfd242f8f26d698499bd41102e213b42a4e6ec2be",
+      "url": "https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/src/core/main.c"
+    },
+    {
+      "blob_sha1": "8fbbe757feb31d4fa0d55e78073f8ca2f91d8a90",
+      "bytes": 62408,
+      "commit": "70bae7648f2c18010187c9cf20093155eaa26029",
+      "evidence_lines_inclusive": [[830, 840]],
+      "license_spdx": "LGPL-2.1-or-later",
+      "path": "src/core/job.c",
+      "sha256": "8552f03c07f0b51af2eb095e14888d850e5628fe430b39312f9723016441ee0f",
+      "url": "https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/src/core/job.c"
+    },
+    {
+      "blob_sha1": "7c7c10f96367ff66d6cdcba4abbdde027252a0c9",
+      "bytes": 4647,
+      "commit": "70bae7648f2c18010187c9cf20093155eaa26029",
+      "evidence_lines_inclusive": [
+        [49, 54],
+        [95, 117]
+      ],
+      "license_spdx": "LGPL-2.1-or-later",
+      "path": "src/core/show-status.c",
+      "sha256": "139d2716330b08f89bed7989fd5c9afdfa1eb739942b51c9a187ae9cecc56187",
+      "url": "https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/src/core/show-status.c"
+    },
+    {
+      "blob_sha1": "f21a4f7ceb828c7b3fd24da8b17f31da829b75a0",
+      "bytes": 203586,
+      "commit": "70bae7648f2c18010187c9cf20093155eaa26029",
+      "evidence_lines_inclusive": [[4692, 4707]],
+      "license_spdx": "LGPL-2.1-or-later",
+      "path": "src/core/manager.c",
+      "sha256": "b60965ba2499941de2f0faa7b8ffffa6ac43286ff2b45aea568eca8772b8c8da",
+      "url": "https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/src/core/manager.c"
+    },
+    {
+      "blob_sha1": "4e38e60775f4e496e580671e050621fe3c246aef",
+      "bytes": 19794,
+      "commit": "70bae7648f2c18010187c9cf20093155eaa26029",
+      "evidence_lines_inclusive": [[59, 96]],
+      "license_spdx": "LGPL-2.1-or-later",
+      "path": "src/shared/pretty-print.c",
+      "sha256": "70a98ceb6bcaecc00be9f7055fc9a46601d80c67a75d95457cdcaad8bc117722",
+      "url": "https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/src/shared/pretty-print.c"
+    },
+    {
+      "blob_sha1": "2d26bf72428ec012a5941221dc5ead52f7889a5a",
+      "bytes": 12614,
+      "commit": "70bae7648f2c18010187c9cf20093155eaa26029",
+      "evidence_lines_inclusive": [[194, 221]],
+      "license_spdx": "LGPL-2.1-or-later",
+      "path": "man/common-variables.xml",
+      "sha256": "826eb28e6aceed9882d7bf8352c5252197e04e668b0e84f6d0ca93a90d4b8938",
+      "url": "https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/man/common-variables.xml"
+    }
+  ],
+  "systemd_tag": {
+    "annotated_tag_sha1": "19581ac7710c3095a01a1267c4febdc74881f787",
+    "commit": "70bae7648f2c18010187c9cf20093155eaa26029",
+    "github_reported_tag_verification": true,
+    "independent_signature_verification": false,
+    "tag": "v257"
+  }
+}

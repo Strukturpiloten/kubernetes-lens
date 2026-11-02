@@ -1,0 +1,128 @@
+{
+  "schema": "kubernetes-lens-owned-boot-profile-source-facts-v1",
+  "status": "publisher-expected-source-profile; no runtime admission",
+  "fcos_and_ignition": [
+    {
+      "repository": "coreos/fedora-coreos-docs",
+      "commit": "29902db128790e9584375789ea816bce3da14fbb",
+      "license": "CC-BY-SA-3.0",
+      "documents": [
+        {
+          "path": "modules/ROOT/pages/composefs.adoc",
+          "blob": "4a020c4f7177178c356cc99a4ad4ef20cb1af5b3",
+          "bytes": 1533,
+          "sha256": "5b4981f0370d8f47f11f21dcd388c3949ed804f3a9b68e0baae7ab94a4da5f64",
+          "lines": [3, 5, 24, 33]
+        },
+        {
+          "path": "modules/ROOT/pages/storage.adoc",
+          "blob": "cec4565499aef2d517d265d1ff968793fd636d8e",
+          "bytes": 23755,
+          "sha256": "1c3d378d7d9ef02d3be3c4e4758d5878d965a2d5828651ab2a16adb267c09465",
+          "lines": [555, 605]
+        }
+      ]
+    },
+    {
+      "repository": "coreos/ignition",
+      "commit": "85a6480cd4c6e4eadde5ce90d2107d6ebcd0913b",
+      "license": "Apache-2.0",
+      "documents": [
+        {
+          "path": "docs/configuration-v3_4.md",
+          "blob": "94e1b0df98665d39fe6c8900276f5e074c6759dc",
+          "bytes": 22622,
+          "sha256": "ed76c96f695735fb688eb8f8c0e06b198657b3d3b87755379e9a64db9bf20eb2",
+          "lines": [186, 188]
+        },
+        {
+          "path": "docs/ignition-flow.md",
+          "blob": "a127a6fbfde571ea16f3849c5cc8e9cac1325187",
+          "bytes": 7367,
+          "sha256": "eba5218cf65bd0ea94677cd7ca10384431568b0d2e8bc4ce3fcbfc0545c0e99e",
+          "lines": [92, 118]
+        },
+        {
+          "path": "docs/distributor-notes.md",
+          "blob": "d7f34e51d0ef384130e862fe662c8f7d0d443a94",
+          "bytes": 2612,
+          "sha256": "ac020d6a93d08cec814bd995e93f588819b609bdd799c388dda37720d7ec228f",
+          "lines": [31, 37]
+        }
+      ]
+    }
+  ],
+  "publisher_expected_facts": [
+    "FCOS Composefs default sinceFedora41, read-only overlay root presentation.",
+    "Underlying XFS physical root partition4 and sharedvar do not establish rootmount presentation.",
+    "Disable token documented as ostree.prepare-root.composefs=0.",
+    "Ignition3.4 supports kernelArguments.shouldExist.",
+    "Changedkargs cause reboot/restart before disks,mount,filesandrealroottransition.",
+    "Current QEMU uses-no-reboot; config-only change lacks compatible reviewed lifecycle."
+  ],
+  "qemu": {
+    "repository": "https://github.com/qemu/qemu",
+    "tag": "v11.1.2",
+    "annotated_tag_object": "ceaea6cb3e2a7d966f9ca97c7ebb5b88cd764dd0",
+    "commit": "4fc49f46dc95d4a27de2509e7fceb2931e91faeb",
+    "signature": "GitHub verified:false reason:no_user; no signature verification claimed",
+    "sources": [
+      {
+        "path": "qemu-options.hx",
+        "blob": "34970fffc94b4d79b6c2cbfc12efab9ad88855f2",
+        "bytes": 293430,
+        "sha256": "39be98e63d1b2d7b65bcec4bca0e704a2bb79cc4bb52a6f6d071babc189c6e63",
+        "lines": "5212-5230",
+        "fact": "-no-reboot exits; normal default reboot action reset"
+      },
+      {
+        "path": "system/vl.c",
+        "blob": "061cbdf860bfc5f056aab26f347eeea0b82dc4e8",
+        "bytes": 120566,
+        "sha256": "a5fb2a78e45ec8edb256188eed44e8f06f7dba99c1dd029dd8a0d74cfab74266",
+        "lines": "3486-3489",
+        "fact": "-no-reboot sets reboot=shutdown"
+      },
+      {
+        "path": "system/runstate.c",
+        "blob": "08acf801b0e6cdbade400a64a3de6e2d1f08d1ca",
+        "bytes": 31536,
+        "sha256": "cc0ceeffd2dd2b8c61eed5d9bf14c25d211c2259df3de537ebf8f2927c1ae7ab",
+        "lines": "737-750,913-953",
+        "fact": "reset/resume inside continuing event loop, no QEMU host relaunch"
+      }
+    ],
+    "boundary": "Upstream source supports expected model only; not downstream binary attestation or exercised reset evidence"
+  },
+  "qemu_licenses": {
+    "emulator": "GPL-2.0 per LICENSE8-9",
+    "system/runstate.c": "MIT explicit notice6-22",
+    "system/vl.c": "MIT explicit notice6-22",
+    "qemu-options.hx": "GPL-2.0-or-later under LICENSE11-15 default, not per-file SPDX",
+    "firmware": "Separate licenses; excluded"
+  },
+  "qemu_license_sources": [
+    {
+      "path": "LICENSE",
+      "blob": "f19b018486a61aedb113b79f47d04845249666ae",
+      "bytes": 1177,
+      "sha256": "139c64b7a9ae62858ff969aae622ecfcf4f1519655bd92d2e70a1a2fb615690e"
+    },
+    {
+      "path": "COPYING",
+      "blob": "8095135d50d970174ab0167816e259b677f4430a",
+      "bytes": 17880,
+      "sha256": "dd3ce02338c3a48abb6ba59b48809f7108a8bd242cb0cc8be90daafa30707c28",
+      "content": "GPLv2"
+    }
+  ],
+  "redistribution": "Only immutableURLs/identities/hashes/license labels/independently written factual summaries; no QEMU implementation/firmware/binaries/release archives copied or redistributed",
+  "limits": [
+    "Only immutable identities and independently written factual summaries are redistributed.",
+    "No upstream implementation, documentation bodies, images, firmware or binary tools copied.",
+    "No actual selected-image mount, kernel-argument application, reset count or failure cause established.",
+    "Supplemental synthetic build metadata is unverified and not used as authority.",
+    "Upstream QEMU source facts do not attest the installed downstream binary or establish exercised reset evidence.",
+    "No operational software pin added or changed; historical evidence retained."
+  ]
+}

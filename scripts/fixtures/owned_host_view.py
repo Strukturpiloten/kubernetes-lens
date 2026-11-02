@@ -11,7 +11,9 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import socket
 import stat
+import struct
 import uuid
 
 import owned_qemu as vm
@@ -23,6 +25,10 @@ NS_GET_PARENT = 0xb702
 DENIED = ("chroot", "clone3", "fsconfig", "fsmount", "fsopen", "fspick", "mount",
           "mount_setattr", "move_mount", "open_tree", "pivot_root", "setns", "umount2", "unshare")
 TRUST = "trusted-systemd-constructor-v1"
+DIAGNOSTIC_CREDIT_PROFILE = vm.DIAGNOSTIC_CREDIT_PROFILE
+DIAGNOSTIC_CREDIT_BYTES = vm.DIAGNOSTIC_CREDIT_BYTES
+DIAGNOSTIC_FRAME_BYTES = vm.DIAGNOSTIC_FRAME_BYTES
+DIAGNOSTIC_BODY_BYTES = vm.DIAGNOSTIC_BODY_BYTES
 # Fixed historical constructor profile, not an operational tool installer/pin.
 # Exact selected-policy normalization remains runtime qualification evidence.
 MANAGER_VERSION = "261.4"
@@ -250,13 +256,207 @@ def walk(root, path, budget, *, readonly=False):
         os.close(current)
 
 
-def compare_object(authority, observed, *, uid_map=None, gid_map=None, overflow_uid=None, overflow_gid=None):
+MISMATCH_SITES = {"parent-attest", "parent-recheck", "worker-local"}
+MISMATCH_OBJECTS = {"root", "usr", "bin", "tool-busctl", "tool-python", "tool-qemu",
+                    "tool-qemu_img", "tool-ssh", "tool-ssh_keygen", "tool-systemctl", "tool-systemd_run"}
+IDENTITY_MEMBERS = ("dev", "ino", "size", "mtime_ns", "ctime_ns")
+
+
+def object_alias(path, tools):
+    fixed = {"/": "root", "/usr": "usr", "/usr/bin": "bin"}
+    if path in fixed:
+        return fixed[path]
+    for role, record in tools.items():
+        alias = "tool-" + role
+        if alias in MISMATCH_OBJECTS and record.get("path") == path:
+            return alias
+    return None
+
+
+def _object_differences(expected, observed):
+    """Build only bounded allow-listed scalar details from projected records."""
+    try:
+        allowed = {"identity", "type", "mode", "uid", "gid", "sha256", "capabilities_sha256"}
+        if type(expected) is not dict or type(observed) is not dict or set(expected) != set(observed) \
+                or not {"identity", "type", "mode", "uid", "gid"}.issubset(expected) \
+                or not set(expected).issubset(allowed):
+            return None
+        expected_id, observed_id = expected["identity"], observed["identity"]
+        if type(expected_id) is not list or type(observed_id) is not list or len(expected_id) != 5 \
+                or len(observed_id) != 5:
+            return None
+        rows = []
+        limits = ((0, 2**64 - 1), (0, 2**64 - 1), (0, 2**64 - 1),
+                  (-(2**63), 2**63 - 1), (-(2**63), 2**63 - 1))
+        for index, (member, bounds) in enumerate(zip(IDENTITY_MEMBERS, limits)):
+            before, after = expected_id[index], observed_id[index]
+            if type(before) is not int or type(after) is not int \
+                    or not bounds[0] <= before <= bounds[1] or not bounds[0] <= after <= bounds[1]:
+                return None
+            if before != after:
+                rows.append({"field": "identity", "member": member,
+                             "expected": before, "observed": after})
+        for field in ("type", "mode", "uid", "gid", "sha256"):
+            if field not in expected:
+                continue
+            before, after = expected[field], observed[field]
+            if field == "type":
+                types = {stat.S_IFDIR: "directory", stat.S_IFREG: "regular"}
+                if type(before) is not int or type(after) is not int or before not in types or after not in types:
+                    return None
+                before, after = types[before], types[after]
+            elif field == "mode":
+                if type(before) is not int or type(after) is not int or not 0 <= before <= 0o7777 \
+                        or not 0 <= after <= 0o7777:
+                    return None
+            elif field in ("uid", "gid"):
+                if type(before) is not int or type(after) is not int \
+                        or not 0 <= before <= 2**32 - 1 or not 0 <= after <= 2**32 - 1:
+                    return None
+            elif (type(before) is not str or type(after) is not str
+                  or re.fullmatch(r"[0-9a-f]{64}", before) is None
+                  or re.fullmatch(r"[0-9a-f]{64}", after) is None):
+                return None
+            if before != after:
+                rows.append({"field": field, "expected": before, "observed": after})
+        rows.sort(key=lambda row: (row["field"], row.get("member", "")))
+        if not 1 <= len(rows) <= 11:
+            return None
+        return rows
+    except (KeyError, TypeError, ValueError, OverflowError, RecursionError):
+        return None
+
+
+def compare_object(authority, observed, *, uid_map=None, gid_map=None, overflow_uid=None, overflow_gid=None,
+                   site=None, object_name=None):
     expected = dict(authority)
     vm.require(authority["uid"] == 0 and not authority["mode"] & 0o022, "host-view-parent-authority")
     if uid_map is not None:
         expected["uid"] = project(authority["uid"], uid_map, overflow_uid)
         expected["gid"] = project(authority["gid"], gid_map, overflow_gid)
-    vm.require(expected == observed, "host-view-object-not-equivalent")
+    try:
+        vm.require(expected == observed, "host-view-object-not-equivalent")
+    except vm.Refusal as error:
+        if str(error) == "host-view-object-not-equivalent" and site in MISMATCH_SITES \
+                and object_name in MISMATCH_OBJECTS:
+            rows = _object_differences(expected, observed)
+            if rows is not None:
+                record = {"schema": vm.HOST_VIEW_MISMATCH_SCHEMA, "site": site,
+                          "object": object_name, "differences": rows}
+                try:
+                    error.host_view_mismatch = vm.validated_host_view_mismatch(record)
+                except (vm.Refusal, TypeError, ValueError, RecursionError):
+                    pass
+        raise
+
+
+class PendingDiagnosticReservation:
+    """One prepaid controller wire allowance, bound only after channel authentication."""
+    def __init__(self, budget, config_sha):
+        vm.require(type(config_sha) is str and vm.HEX.fullmatch(config_sha),
+                   "host-view-diagnostic-config-binding")
+        vm.require(not getattr(budget, "_host_view_diagnostic_credit_claimed", False),
+                   "host-view-diagnostic-credit-already-claimed")
+        budget._host_view_diagnostic_credit_claimed = True
+        vm.require(type(budget.output_left) is int and budget.output_left >= DIAGNOSTIC_CREDIT_BYTES,
+                   "host-view-diagnostic-credit-unavailable")
+        budget.output_left -= DIAGNOSTIC_CREDIT_BYTES
+        self.budget = budget
+        self.config_sha = config_sha
+        self.state = "pending"
+        self.channel = None
+        self.worker = None
+        self.observed_bytes = 0
+
+    def bind_authenticated(self, budget, channel, worker, config_sha):
+        if (self.state != "pending" or budget is not self.budget or channel is None or type(worker) is not dict
+                or config_sha != self.config_sha):
+            if self.state in ("pending", "bound"):
+                self.state = "finalized-unbound"
+            elif self.state == "active":
+                self.state = "finalized-unused"
+            raise vm.Refusal("host-view-diagnostic-channel-binding")
+        self.channel = channel
+        self.worker = worker
+        self.state = "bound"
+
+    def activate(self, budget, channel, config_sha):
+        if (self.state != "bound" or budget is not self.budget or channel is not self.channel
+                or config_sha != self.config_sha):
+            if self.state in ("pending", "bound", "active"):
+                self.state = "finalized-unbound" if self.state == "pending" else "finalized-unused"
+            raise vm.Refusal("host-view-diagnostic-credit-state")
+        self.state = "active"
+
+    def drain_once(self, budget, channel):
+        if self.state != "active" or budget is not self.budget or channel is not self.channel:
+            if self.state in ("pending", "bound", "active"):
+                self.state = "finalized-unbound" if self.state == "pending" else "finalized-unused"
+            raise vm.Refusal("host-view-diagnostic-drain-state")
+        self.state = "draining"
+        try:
+            channel.setblocking(False)
+            raw = channel.recv(DIAGNOSTIC_CREDIT_BYTES, socket.MSG_DONTWAIT)
+        except (BlockingIOError, InterruptedError, OSError, socket.timeout, TypeError, ValueError):
+            self.state = "omitted-absent"
+            return None
+        if type(raw) is not bytes:
+            self.state = "omitted-invalid"
+            return None
+        self.observed_bytes = len(raw)
+        if not raw:
+            self.state = "omitted-absent"
+            return None
+        if len(raw) < 4:
+            self.state = "omitted-partial"
+            return None
+        size = struct.unpack(">I", raw[:4])[0]
+        if not 1 <= size <= DIAGNOSTIC_BODY_BYTES:
+            self.state = "omitted-over-cap" if size > DIAGNOSTIC_BODY_BYTES else "omitted-invalid"
+            return None
+        expected = 4 + size
+        if expected > DIAGNOSTIC_FRAME_BYTES or len(raw) < expected:
+            self.state = "omitted-partial"
+            return None
+        if len(raw) > expected:
+            self.state = "omitted-trailing"
+            return None
+        try:
+            detail = vm.validated_host_view_mismatch(vm.strict_json(raw[4:]))
+        except (vm.Refusal, TypeError, ValueError, RecursionError):
+            self.state = "omitted-invalid"
+            return None
+        if detail["site"] != "worker-local":
+            self.state = "omitted-site"
+            return None
+        self.state = "retained"
+        return detail
+
+    def finalize(self):
+        vm.require(self.state in ("pending", "bound", "active", "draining"),
+                   "host-view-diagnostic-reservation-finalized")
+        self.state = "finalized-unbound" if self.state == "pending" else \
+            "omitted-invalid" if self.state == "draining" else "finalized-unused"
+
+
+def send_optional_diagnostic(channel, value, profile):
+    """Make one nonblocking best-effort worker send after the mandatory barrier."""
+    if profile != DIAGNOSTIC_CREDIT_PROFILE or value is None:
+        return False
+    try:
+        channel.setblocking(False)
+        detail = vm.validated_host_view_mismatch(value)
+        if detail["site"] != "worker-local":
+            return False
+        body = vm.encode(detail)
+        if len(body) > DIAGNOSTIC_BODY_BYTES:
+            return False
+        frame = struct.pack(">I", len(body)) + body
+        if len(frame) > DIAGNOSTIC_FRAME_BYTES:
+            return False
+        return channel.send(frame, socket.MSG_DONTWAIT) == len(frame)
+    except (vm.Refusal, OSError, TypeError, ValueError, RecursionError):
+        return False
 
 
 def binding(config, config_sha, process, invocation, cgroup):
@@ -430,7 +630,8 @@ class ParentView:
         for tool in self.config["tools"].values():
             for path, item in walk(root, tool["path"], self.budget, readonly=True).items():
                 observed[path] = item
-                compare_object(self.objects[path], item)
+                compare_object(self.objects[path], item, site="parent-attest",
+                               object_name=object_alias(path, self.config["tools"]))
                 readonly_mount(records, path)
         cgroup_fd = directory_at(root, "sys/fs/cgroup", self.budget)
         try:
@@ -443,7 +644,8 @@ class ParentView:
         executable = os.open("exe", os.O_RDONLY, dir_fd=proc)
         try:
             compare_object(self.objects[self.config["tools"]["python"]["path"]],
-                           object_record(executable, executable=True, budget=self.budget))
+                           object_record(executable, executable=True, budget=self.budget),
+                           site="parent-attest", object_name="tool-python")
         finally:
             os.close(executable)
         self.check_process(process)
@@ -488,7 +690,8 @@ class ParentView:
                    and typed_guards(self.config, self.budget) == self.frame["guards"], "host-view-final-observation-drift")
         for tool in self.config["tools"].values():
             for path, item in walk(self.root, tool["path"], self.budget, readonly=True).items():
-                compare_object(self.objects[path], item)
+                compare_object(self.objects[path], item, site="parent-recheck",
+                               object_name=object_alias(path, self.config["tools"]))
         descriptor = directory_at(self.root, "sys/fs/cgroup", self.budget)
         try:
             vm.require(os.fstatvfs(descriptor).f_flag & os.ST_RDONLY
@@ -540,7 +743,8 @@ def validate_local(frame, config, budget):
             for path, item in walk(root, tool["path"], budget, readonly=True).items():
                 vm.require(path in frame["objects"], "host-view-local-object-unknown")
                 compare_object(frame["objects"][path], item, uid_map=frame["uid_map"], gid_map=frame["gid_map"],
-                               overflow_uid=frame["overflow"][0], overflow_gid=frame["overflow"][1])
+                               overflow_uid=frame["overflow"][0], overflow_gid=frame["overflow"][1],
+                               site="worker-local", object_name=object_alias(path, config["tools"]))
                 readonly_mount(records, path)
                 observed[path] = item
         vm.require(set(observed) == set(frame["objects"]), "host-view-local-object-incomplete")

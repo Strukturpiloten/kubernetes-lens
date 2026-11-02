@@ -1,0 +1,252 @@
+{
+  "schema": "kubernetes-lens-owned-kubeadm-logging-source-facts-v1",
+  "state": "PROPOSED_SOURCE_POLICY_UNAPPLIED_CANONICAL_RECEIVER_BOUND",
+  "policy": {
+    "profile": "modern-1.37.0",
+    "classified_action": "init",
+    "requested_final_token": "--v=6",
+    "effective_final_token": "--v=0",
+    "zero_based_token_index": 7,
+    "requested_token_count": 8,
+    "placement": "After exact provider_classify and original work/cleanup action guards, before existing dispatch.",
+    "legacy": "legacy-1.20.15 remains exactly requested --v=6, including skip-phases=preflight.",
+    "unknown_requests": "Original strict classifier is unchanged; requested0/5/7, split/reordered/extra/bootstrap flags or foreign node/profile do not gain admission.",
+    "wire_or_status_shape_changed": false,
+    "new_per_run_argv_observer": false,
+    "receiver_binding": {
+      "precanonical": {
+        "bytes": 65361,
+        "sha256": "35035fe7b0e2d981fff0a0bd44a2de57b97cb11040bef4371297d338eb6516b6"
+      },
+      "canonical": {
+        "bytes": 65361,
+        "sha256": "35035fe7b0e2d981fff0a0bd44a2de57b97cb11040bef4371297d338eb6516b6",
+        "integration_limit": 65408,
+        "integration_headroom": 47,
+        "hard_limit": 65536,
+        "hard_headroom": 175
+      },
+      "final_source_enrollment": "Exact canonical receiver hash/size bound in owned_qemu, current rootful-test source constants and two current QEMU-test scalars; existing strict frozen inverses retained. Actual integration/adoption remains primary-owned."
+    }
+  },
+  "frozen_sources": {
+    "kind": {
+      "version": "0.33.0",
+      "revision": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74"
+    },
+    "kubernetes": {
+      "version": "1.37.0",
+      "revision": "f54c212e3a2f75d674b717a9b29052b20b60aefc"
+    }
+  },
+  "source_files": [
+    {
+      "repository": "kubernetes-sigs/kind",
+      "revision": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/kubernetes-sigs/kind/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/LICENSE",
+      "bytes": 11357,
+      "sha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+      "license": "Apache-2.0"
+    },
+    {
+      "repository": "kubernetes/kubernetes",
+      "revision": "f54c212e3a2f75d674b717a9b29052b20b60aefc",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "license": "Apache-2.0"
+    },
+    {
+      "repository": "kubernetes/kubernetes",
+      "revision": "f54c212e3a2f75d674b717a9b29052b20b60aefc",
+      "path": "cmd/kubeadm/app/cmd/init.go",
+      "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/cmd/kubeadm/app/cmd/init.go",
+      "bytes": 25269,
+      "sha256": "a560929c131e418ead38e9ea635e2e881a5d1c7b17a208e210fbb9e56c99ff6e",
+      "license": "Apache-2.0"
+    },
+    {
+      "repository": "kubernetes/kubernetes",
+      "revision": "f54c212e3a2f75d674b717a9b29052b20b60aefc",
+      "path": "cmd/kubeadm/app/cmd/cmd.go",
+      "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/cmd/kubeadm/app/cmd/cmd.go",
+      "bytes": 4410,
+      "sha256": "524773121ecefd3d3ef3a193946e13edba101567bb2f701bfef8c4a01c762ae4",
+      "license": "Apache-2.0"
+    },
+    {
+      "repository": "kubernetes/kubernetes",
+      "revision": "f54c212e3a2f75d674b717a9b29052b20b60aefc",
+      "path": "cmd/kubeadm/kubeadm.go",
+      "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/cmd/kubeadm/kubeadm.go",
+      "bytes": 745,
+      "sha256": "b6e1598fdca0949c9f7acd08e7dc425c6994a1edeafec2ec0d5cbbce8965c4ab",
+      "license": "Apache-2.0"
+    },
+    {
+      "repository": "kubernetes-sigs/kind",
+      "revision": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+      "path": "pkg/cluster/internal/create/actions/kubeadminit/init.go",
+      "url": "https://raw.githubusercontent.com/kubernetes-sigs/kind/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/pkg/cluster/internal/create/actions/kubeadminit/init.go",
+      "bytes": 6075,
+      "sha256": "50c196e54bdeb245e424519d1fe29fc5403ba0c4501a3701fab21b2b7dd49394",
+      "license": "Apache-2.0"
+    },
+    {
+      "repository": "kubernetes/kubernetes",
+      "revision": "f54c212e3a2f75d674b717a9b29052b20b60aefc",
+      "path": "cmd/kubeadm/app/kubeadm.go",
+      "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/cmd/kubeadm/app/kubeadm.go",
+      "bytes": 1345,
+      "sha256": "3a5ba7fa06ef3fc3ccb370eedf6e61150892897e3e2fa50bda7dd19f15c273be",
+      "license": "Apache-2.0"
+    },
+    {
+      "repository": "kubernetes/kubernetes",
+      "revision": "f54c212e3a2f75d674b717a9b29052b20b60aefc",
+      "path": "cmd/kubeadm/app/util/errors/errors.go",
+      "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/cmd/kubeadm/app/util/errors/errors.go",
+      "bytes": 5176,
+      "sha256": "24d5de28688d9fa8bd4d4e78c502399eff816ce23e981600798cea01d5673c4b",
+      "license": "Apache-2.0"
+    },
+    {
+      "repository": "kubernetes/kubernetes",
+      "revision": "f54c212e3a2f75d674b717a9b29052b20b60aefc",
+      "path": "vendor/k8s.io/klog/v2/klog.go",
+      "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/vendor/k8s.io/klog/v2/klog.go",
+      "bytes": 63057,
+      "sha256": "75382386ea425b315a3ecd148937ed76e052619af415613c93bea2683a0fe58a",
+      "license": "Apache-2.0"
+    }
+  ],
+  "claims": [
+    {
+      "id": "K1",
+      "claim": "Kind explicitly requests kubeadm init verbosity6 for increased debugging, then treats command error as an init error.",
+      "repository": "kubernetes-sigs/kind",
+      "revision": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+      "path": "pkg/cluster/internal/create/actions/kubeadminit/init.go",
+      "url": "https://raw.githubusercontent.com/kubernetes-sigs/kind/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/pkg/cluster/internal/create/actions/kubeadminit/init.go#L78-L98",
+      "first_line": 78,
+      "last_line": 98,
+      "important_lines": [78, 79, 95, 98],
+      "full_file_sha256": "50c196e54bdeb245e424519d1fe29fc5403ba0c4501a3701fab21b2b7dd49394",
+      "span_bytes": 653,
+      "span_sha256": "089039f8545869ab658835e4b748f0a70d7a2c5ca28efc1c02e95fed5c94df72",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "K2",
+      "claim": "Kubeadm registers only klog v/vmodule flags and returns command.Execute error.",
+      "repository": "kubernetes/kubernetes",
+      "revision": "f54c212e3a2f75d674b717a9b29052b20b60aefc",
+      "path": "cmd/kubeadm/app/kubeadm.go",
+      "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/cmd/kubeadm/app/kubeadm.go#L32-L48",
+      "first_line": 32,
+      "last_line": 48,
+      "important_lines": [32, 34, 39, 45, 48],
+      "full_file_sha256": "3a5ba7fa06ef3fc3ccb370eedf6e61150892897e3e2fa50bda7dd19f15c273be",
+      "span_bytes": 555,
+      "span_sha256": "26768099e207165d553047b9b41b16fa81fc1ec1ab2c6bb1ed4fa13b22eecb94",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "K3",
+      "claim": "Pinned klog initializes verbosity0, registers v as log-level verbosity, and V logging is threshold based. This is not a critical-errors-only mode.",
+      "repository": "kubernetes/kubernetes",
+      "revision": "f54c212e3a2f75d674b717a9b29052b20b60aefc",
+      "path": "vendor/k8s.io/klog/v2/klog.go",
+      "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/vendor/k8s.io/klog/v2/klog.go#L434-L1617",
+      "first_line": 434,
+      "last_line": 1617,
+      "important_lines": [434, 444, 1405, 1410, 1581, 1617],
+      "full_file_sha256": "75382386ea425b315a3ecd148937ed76e052619af415613c93bea2683a0fe58a",
+      "span_bytes": 41669,
+      "span_sha256": "6fd20325f3bebb981f18f15fc263767d3c69cddc92f9f5929df71b83c23069d1",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "K4",
+      "claim": "Kubeadm init returns phase errors; stdout progress and bootstrap options are separate from the global logging flag.",
+      "repository": "kubernetes/kubernetes",
+      "revision": "f54c212e3a2f75d674b717a9b29052b20b60aefc",
+      "path": "cmd/kubeadm/app/cmd/init.go",
+      "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/cmd/kubeadm/app/cmd/init.go#L121-L134",
+      "first_line": 121,
+      "last_line": 134,
+      "important_lines": [121, 124, 132, 134],
+      "full_file_sha256": "a560929c131e418ead38e9ea635e2e881a5d1c7b17a208e210fbb9e56c99ff6e",
+      "span_bytes": 342,
+      "span_sha256": "6ae660332dbfa1a0c1cc08fa708d642cd33383400ae359b23268c9bcb0826364",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "K5",
+      "claim": "Returned errors keep their message, stderr error prefix and exit1 atv0. Verbosity>4 additionally formats stacktrace; v0 instead prints the base message plus a v5 diagnostic hint.",
+      "repository": "kubernetes/kubernetes",
+      "revision": "f54c212e3a2f75d674b717a9b29052b20b60aefc",
+      "path": "cmd/kubeadm/app/util/errors/errors.go",
+      "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/cmd/kubeadm/app/util/errors/errors.go#L36-L201",
+      "first_line": 36,
+      "last_line": 201,
+      "important_lines": [36, 163, 167, 181, 187, 192, 199, 201],
+      "full_file_sha256": "24d5de28688d9fa8bd4d4e78c502399eff816ce23e981600798cea01d5673c4b",
+      "span_bytes": 4195,
+      "span_sha256": "aea8aa3f3570187c4f3b3222fece38ad2c22daaf3e9c18ef97a3e0873cf7e207",
+      "license": "Apache-2.0"
+    }
+  ],
+  "hash_definition": "SHA-256 full raw files and exact inclusive one-based line bytes with original terminators retained for spans.",
+  "diagnostic_fidelity": {
+    "preserved": "Base returned errors and exit1; ungated Info/Warning/Error logging; stdout and stderr/status transport remain unchanged.",
+    "reduced": "Positive-verbosity debug records and kubeadm v>4 stacktrace formatting are intentionally omitted at0; the base message and v5 diagnostic hint remain.",
+    "critical_errors_only_claim": false,
+    "every_diagnostic_byte_preserved_claim": false,
+    "all_timing_or_callsite_equivalence_claim": false
+  },
+  "unchanged_limits": {
+    "init_stdout": 32768,
+    "init_stderr": 32768,
+    "deployment_stdout": 4096,
+    "deployment_stderr": 4096,
+    "native_actions": {
+      "work": 70,
+      "cleanup": 5,
+      "total": 75
+    },
+    "seconds": {
+      "total": 1800,
+      "work": 1680,
+      "cleanup": 120
+    },
+    "other_actors_queries_utilities_output_retirement": "unchanged; no new command/process/observer/capture/flag/bootstrap option, no budget or cap increase"
+  },
+  "history": {
+    "V33": "Spent failed attempt and independently known retirement remain historical; checked stderr32769>32768, wrapper125/capture23 retained.",
+    "underlying_provider_or_kubeadm_cause": "unknown; a4KiB prefix is not full output/root-cause evidence",
+    "future_capture_fit_bootstrap_API_native_qualification": "not established; no retry/adoption authority"
+  },
+  "operational_pin_ownership": {
+    "versions_images_tools_runtime_ledgers": "unchanged",
+    "Renovate_config_changed": false,
+    "rationale": "Fixed source evidence under scripts/fixtures is covered by existing **/fixtures/** ignorePaths. Existing custom managers target workflow refs, scripts/renovate-tool.json and scripts/kind-vm-image.json only. This adds no dependency, installer, software inventory or competing pin owner."
+  },
+  "provenance": {
+    "kind_source": "exact frozen0.33.0 official revision",
+    "kubernetes_source": "exact frozen1.37.0 official revision including vendored klog",
+    "license": "Apache-2.0; upstream LICENSE rows included",
+    "implementation_oracle_copied_or_translated": false,
+    "source_download_or_execution_in_this_change": false,
+    "use": "Own policy/prose plus public URLs, hashes and source facts; no upstream implementation text redistributed."
+  },
+  "qualification": {
+    "source_policy_specified_only": true,
+    "canonical_formatting_ShellCheck_or_tests_executed": true,
+    "native_or_source_publication_adoption": false,
+    "only_canonical_formatter_and_ShellCheck_executed": true,
+    "tests_executed": false
+  }
+}

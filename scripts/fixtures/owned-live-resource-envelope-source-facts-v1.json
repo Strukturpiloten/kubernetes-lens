@@ -1,0 +1,137 @@
+{
+  "schema": "owned-live-resource-envelope-source-facts-v1",
+  "resource_profile": "owned-vm-live-v1",
+  "qualification": {
+    "state": "relevant-source-qualified",
+    "matrix_sha256": "d662a0975e0e2c4acaf69727d3787c40f251593cb93dcde5a51a1ce421e04c8c",
+    "findings_sha256": "8a0b98194b25bf8c5225b8a613c40fa6fae474f818c04871a9b552715edf476b",
+    "independent_source_review_sha256": "51b50a21a80f8c2e89371834698ca57236e8c99c6a41f2537f2de41f7de330f4",
+    "primary_source_qualification_acceptance_sha256": "e32a71fe2031bc40fbb0733af62a1b99757b4122b98b6a65fb2ccf73f0e16a4d",
+    "independent_profile_adoption": "required-separately",
+    "native_qualification": "not-claimed"
+  },
+  "canonical_image": {
+    "owner": "scripts/kind-vm-image.json",
+    "schema": "kubernetes-lens-owned-vm-image-v1",
+    "release": "44.20260928.3.2",
+    "archive_sha256": "62806adfa651daf69e7e42b80050c55de0aac6fa2ba34d86ff5bf51aebb0dea9"
+  },
+  "domain": {
+    "name": "local-kvm-fcos44-opensuse-qemu1112-v1",
+    "architecture": "x86_64",
+    "kernel": "kernel-7.2.7-200.fc44.x86_64",
+    "qemu": {
+      "version": "qemu-x86-11.1.2-1.1.x86_64",
+      "bytes": 32471304,
+      "sha256": "d8e0263462377705f77930221caecb7afd76b59fa43b1a28887c2b4e1a0111e8",
+      "owner": 0,
+      "mode": "0755"
+    },
+    "machine": "q35,accel=kvm",
+    "guest_memory_mib": 4096,
+    "managed_system_ram_max_bytes": 4294967296,
+    "memory_expansion": "no slots/maxmem/additional RAM device/backend/QMP; fixed no-user-config/nodefaults argv",
+    "reserved_device_rom_ram": "not Linux buddy managed stack RAM; coherent firmware/E820/allocator premise required"
+  },
+  "theorem": {
+    "minimum_unique_resident_managed_page_bytes": 4096,
+    "live_normal_owner_tasks_upper": 1048576,
+    "standard_vfs_slots_tight": 268435392,
+    "fd_slots_per_owner_conservative": 268435456,
+    "aggregate_upper": 281474976710656,
+    "original_strict_ceiling": 327669999967233,
+    "existing_occupied_index_ceiling": 1073741816,
+    "one_page_uint_max_negative": 4503599626321920
+  },
+  "scope": {
+    "included": "instantaneous logical numeric user FD slots per simultaneous LIVE normal-lifecycle user/helper FD owner; shared tables counted per owner",
+    "excluded": [
+      "recursive-fault dead/leaked files pointers",
+      "detached or pinned tables",
+      "in-flight transfers and kernel file references",
+      "allocated/RCU table backing capacity",
+      "cumulative opens or task births",
+      "global PID-number domain or atomic census",
+      "creation/continuous/ABA node identity",
+      "unjustified kernel-worker lifecycle generalization"
+    ],
+    "excluded_resource_containment": "unchanged physical guest/host RAM/backing storage and independently observed per-run whole-VM retirement"
+  },
+  "residual_premises": [
+    "trusted official distribution build connects authenticated source to admitted image/binary; no binary reproducibility asserted",
+    "coherent native kernel and ordinary exclusive allocator semantics",
+    "normal LIVE FD owners only; recursive-fault dead leaks excluded",
+    "trusted loaded kernel/module/livepatch/OS/program/global state; no absence audit",
+    "configured QEMU system RAM and ordinary firmware/E820-managed-RAM boundary; ROM/device backing not counted as managed stack RAM",
+    "no implication of global PID domain, atomic census, complete cache, future absence or profile adoption"
+  ],
+  "provenance": {
+    "kernel_upstream": "f42acb3678424d1e08f6ed27c0d8ba8a125e14d6",
+    "qemu_upstream": "4fc49f46dc95d4a27de2509e7fceb2931e91faeb",
+    "fedora": {
+      "srpm": "kernel-7.2.7-200.fc44.signed.src.rpm",
+      "rpm_signature": "verified RSA/SHA256",
+      "fingerprint": "36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6",
+      "key_origin": "official Fedora key bundle; independently matching official security page",
+      "koji_build": 3105625,
+      "distgit_commit": "516f1e16c35d72ccda81f419f53a13b59c1dc20a",
+      "nested_tar_manifest": "SHA512 exact match",
+      "signed_srpm_sha256": "7dfc6f39d52fbae59e0024fc1bc1d666900b6848d7e1fff53813d8b6b03aa5e8"
+    },
+    "opensuse": {
+      "srpm": "qemu-11.1.2-1.1.src.rpm",
+      "rpm_signature": "verified RSA/SHA512",
+      "fingerprint": "AD485664E901B867051AB15F35A2F86E29B700A4",
+      "key_origin": "official source-repository HTTPS key bootstrap; signed repomd verified; separate wiki403",
+      "obs_rev": 314,
+      "obs_srcmd5": "2d06692e9025b6a2db883ae29e0d10b7",
+      "downstream_git_commit": "8aad2c5b9dcfa370a1de7a7ce3fe5ac33904bc3c",
+      "nested_tar_manifest": "OBS MD5 identity exact match; signature supplies cryptographic integrity",
+      "signed_srpm_sha256": "2eb487e1eef827d5e97ce8399a2c240ccdb2dedb91527ba727ec921de42ea5bc"
+    },
+    "kernel_compared_paths": [
+      "fs/file.c",
+      "fs/file_table.c",
+      "include/linux/fdtable.h",
+      "include/linux/file.h",
+      "fs/open.c",
+      "kernel/fork.c",
+      "kernel/exit.c",
+      "kernel/sched/core.c",
+      "mm/vmalloc.c",
+      "include/linux/sched/task_stack.h",
+      "arch/x86/include/asm/page_64_types.h",
+      "arch/x86/Kconfig",
+      "arch/Kconfig",
+      "include/vdso/page.h",
+      "include/uapi/asm-generic/int-ll64.h",
+      "arch/x86/include/uapi/asm/bitsperlong.h",
+      "include/linux/threads.h",
+      "kernel/pid.c",
+      "kernel/sys.c",
+      "init/init_task.c",
+      "include/asm-generic/resource.h",
+      "include/uapi/linux/fs.h",
+      "kernel/umh.c"
+    ],
+    "qemu_compared_paths": [
+      "qemu-options.hx",
+      "hw/core/machine.c",
+      "hw/i386/pc.c",
+      "hw/i386/pc_q35.c",
+      "system/vl.c",
+      "hw/mem/pc-dimm.c",
+      "hw/core/numa.c"
+    ],
+    "qemu_scoped_differences": {
+      "hw/i386/pc_q35.c": "Only legacy <=8.0/7.0 SMBIOS/maxCPU compatibility placement; selected q35 alias11.1; memory init unchanged",
+      "system/vl.c": "Only include sys/resource.h and host RLIMIT_AS soft raise to existing hard; guest memory parsing/defaults unchanged"
+    },
+    "licenses": [
+      "Linux GPL-2.0 with marked UAPI syscall exceptions",
+      "QEMU existing GPL/BSD/LGPL/MIT notices"
+    ],
+    "redistribution": "original proof metadata only; no upstream implementation or archive redistributed"
+  },
+  "ownership": "compatibility anchor only; canonical FCOS/kind/kubectl/host-tool owners unchanged; no installer or operational pin"
+}

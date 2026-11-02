@@ -1,0 +1,158 @@
+{
+  "schema": "owned-modern-storage-capture-source-facts-v1",
+  "policy_identity": "owned-rootful-modern137-default-storage-capture-v1",
+  "receiver": {
+    "bytes": 65397,
+    "sha256": "0a512e1f5d2a9463e17fd5d10319b4a989129eb1149a5c4f4fbfc84b688424ad",
+    "integration_limit": 65408,
+    "integration_headroom": 11,
+    "hard_limit": 65536,
+    "hard_headroom": 139
+  },
+  "domain": {
+    "profile": "modern-1.37.0",
+    "kind_version": "0.33.0",
+    "kind_revision": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+    "node_parent_sha256": "a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5",
+    "node_manifest_sha256": "1aac8018c42eb5d48fae5be507caaee789fc6d9b9b3f560359dd4157ac00d4f6",
+    "complete_file": "/kind/manifests/default-storage.yaml"
+  },
+  "role_change": {
+    "role": "storage retrieval",
+    "stdout_old": 4096,
+    "stdout_new": 8192,
+    "stderr": 4096,
+    "explicit_increase": 4096,
+    "existing_precharged_work_slots_old": 2,
+    "existing_precharged_work_slots_new": 3,
+    "allocator_unchanged": true,
+    "all_three_slots_before_collectors_and_exec": true
+  },
+  "unchanged": {
+    "aggregate_output": 1048576,
+    "work_output_slots": 245,
+    "cleanup_output_slots": 10,
+    "sentinels": 150,
+    "native_actions": [70, 5, 75],
+    "time_seconds_total_work_cleanup": [1800, 1680, 120],
+    "utility_actions_work_cleanup": [680, 64],
+    "record_guards": 24,
+    "storage_install_stdout_stderr": [4096, 4096],
+    "legacy_and_all_other_roles": true,
+    "argv_grammar_phase_source_owner_admission": true,
+    "raw_status_poison_retirement": true
+  },
+  "authenticated_payload": {
+    "bytes": 4567,
+    "sha256": "dc16a44e6a49a1f26fc39f341c361e7939993bd68431efc3a49d216e5914e903",
+    "all_bytes_and_final_newline_required": true,
+    "body_redistributed": false,
+    "archive_reread_in_this_change": false
+  },
+  "portable_control_payload": {
+    "bytes": 4567,
+    "sha256": "477591d525e2f170663374d21fb8ca295ed97cfdc8ac6a8daf657e65053e2757",
+    "authorship": "original independent ConfigMap DATA; not archive contents or oracle implementation",
+    "used_to_model_transport_only": true
+  },
+  "full_stdin_route": "Existing capture files and cats -> kind bytes buffer/Reader -> unchanged short-i shim/provider -> native FD0 -> existing apply; main4096 execution-packet parser is separate. No new input cap/framing/observer.",
+  "historical_V34": "Failed/spent source337 records preserved. First exact inner predicate/provider child/wrapper remain unobserved/null; no historical collector23/wrapper125 attribution manufactured. Original independent retirement review remains authoritative.",
+  "history": {
+    "strict_predecessor_bytes": 65361,
+    "strict_predecessor_sha256": "35035fe7b0e2d981fff0a0bd44a2de57b97cb11040bef4371297d338eb6516b6",
+    "older_domains_491078_5bc_and_original_delta_lists_preserved": true,
+    "accept_both_source_domains": false
+  },
+  "official_source_references": [
+    {
+      "bytes": 12289,
+      "license": "Apache-2.0",
+      "path": "pkg/build/nodeimage/buildcontext.go",
+      "repository": "kubernetes-sigs/kind",
+      "revision": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+      "sha256": "262b381fcd9d4a32de9285c29dc63396228c742f7635d2498063a390d712d62e",
+      "url": "https://github.com/kubernetes-sigs/kind/blob/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/pkg/build/nodeimage/buildcontext.go"
+    },
+    {
+      "bytes": 918,
+      "license": "Apache-2.0",
+      "path": "pkg/build/nodeimage/const.go",
+      "repository": "kubernetes-sigs/kind",
+      "revision": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+      "sha256": "03c14cd744fc4bdc12ec01086387ca57cc1fa591876b11ff0e0fdebe9ddc4d82",
+      "url": "https://github.com/kubernetes-sigs/kind/blob/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/pkg/build/nodeimage/const.go"
+    },
+    {
+      "bytes": 5734,
+      "license": "Apache-2.0",
+      "path": "pkg/build/nodeimage/const_storage.go",
+      "repository": "kubernetes-sigs/kind",
+      "revision": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+      "sha256": "a50b6d4360d96d90005e8ea76f0d5c5171fd51c1c33ecc7a8049dfa32f3d6803",
+      "url": "https://github.com/kubernetes-sigs/kind/blob/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/pkg/build/nodeimage/const_storage.go"
+    },
+    {
+      "bytes": 1682,
+      "license": "Apache-2.0",
+      "path": "pkg/build/nodeimage/helpers.go",
+      "repository": "kubernetes-sigs/kind",
+      "revision": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+      "sha256": "a545edfb08eadc464a5cba60f2f8b08e04979d9c6b005d4c4344edf64ed5f859",
+      "url": "https://github.com/kubernetes-sigs/kind/blob/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/pkg/build/nodeimage/helpers.go"
+    },
+    {
+      "bytes": 2796,
+      "license": "Apache-2.0",
+      "path": "pkg/cluster/internal/create/actions/installstorage/storage.go",
+      "repository": "kubernetes-sigs/kind",
+      "revision": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+      "sha256": "19af28a8c452253d759d5d26a7014afdc90f50419d3b8bd9ec06ba51a83b55de",
+      "url": "https://github.com/kubernetes-sigs/kind/blob/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/pkg/cluster/internal/create/actions/installstorage/storage.go"
+    },
+    {
+      "bytes": 4087,
+      "license": "Apache-2.0",
+      "path": "pkg/cluster/internal/providers/podman/node.go",
+      "repository": "kubernetes-sigs/kind",
+      "revision": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+      "sha256": "c98def0e08ce6b37ec2f76676de815061e30796f9a8984dca86a47f62db798b0",
+      "url": "https://github.com/kubernetes-sigs/kind/blob/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/pkg/cluster/internal/providers/podman/node.go"
+    },
+    {
+      "bytes": 1304,
+      "license": "Apache-2.0",
+      "path": "pkg/exec/default.go",
+      "repository": "kubernetes-sigs/kind",
+      "revision": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+      "sha256": "563614849ca486b5ab4d4a718b61ab1304f2106e7be15a6ba9c90b42f71442a9",
+      "url": "https://github.com/kubernetes-sigs/kind/blob/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/pkg/exec/default.go"
+    },
+    {
+      "bytes": 4484,
+      "license": "Apache-2.0",
+      "path": "pkg/exec/local.go",
+      "repository": "kubernetes-sigs/kind",
+      "revision": "407a9675e6d9af1200b5f57f9ca52ec6cdacce74",
+      "sha256": "42f53025abbb21e110f025dba12a6af29721e88f200bf80cea89bf7af6ab013d",
+      "url": "https://github.com/kubernetes-sigs/kind/blob/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/pkg/exec/local.go"
+    }
+  ],
+  "upstream_license": {
+    "license": "Apache-2.0",
+    "bytes": 11357,
+    "sha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+    "url": "https://github.com/kubernetes-sigs/kind/blob/407a9675e6d9af1200b5f57f9ca52ec6cdacce74/LICENSE"
+  },
+  "ownership": "Frozen compatibility/source evidence only; canonical operational pins/versions/installers and Renovate ownership unchanged. Existing fixtures exclusions apply; no actual-engine pass claimed.",
+  "implementation_oracle_copied_or_translated": false,
+  "proposal_creation_state": "UNAPPLIED_CANONICAL_SOURCE_PROPOSAL_TESTS_UNEXECUTED",
+  "creation_time_validation_snapshot": {
+    "static_format_and_ShellCheck_only": true,
+    "subject_controls_executed": false,
+    "complete_gate_executed": false,
+    "future_route_fit_defaultSC_API_native_or_retirement_qualification": false,
+    "fresh_adoption_or_retry": false,
+    "record_scope": "Immutable evidence snapshot at packet/source proposal creation; never a live validation or adoption status."
+  },
+  "later_validation_and_adoption_records": "Later formatting, test, complete-gate and adoption results live in separate records and must never be inferred from this immutable creation-time snapshot; successful checks require no source update."
+}

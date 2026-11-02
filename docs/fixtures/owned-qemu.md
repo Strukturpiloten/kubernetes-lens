@@ -253,6 +253,52 @@ credentials. It always records Kubernetes readiness and runtime conformance as
 **not performed**. Abrupt owner death supplies no positive outside receipt;
 the supplementary unit runtime guard is not retirement evidence.
 
+## Bounded outside-retirement evidence
+
+[ADR 0071](../decisions/0071-bounded-owned-retirement-evidence.md) refines the
+existing observer and receipt contract. It records the same manager, process,
+cgroup and boot reads used for retirement admission; it starts no second
+observer. Raw bytes, parsed values and their observation associations remain in
+private evidence. Only actual ordered producer prefixes, from zero through five,
+are recorded. Missing producers are never invented.
+
+The initial policy/stop observations plus a two-frame ring whose newest slot may
+be partial use bounded lossless deduplication. The encoded trace is capped at 32 KiB;
+one atomic-update temporary reserves 64 KiB within the existing 4 MiB metadata
+allowance. The complete private artifact catalogue must fit before unit effects.
+The reader checks schema, references and expansion budgets before accepting the
+trace. Pruned frames cannot leave an unbounded retained history.
+
+The observer shares the original 128-command budget, 2 MiB output budget and
+absolute deadline. An explicit 128-poll limit grants no additional command fuel.
+Each manager action is bounded by five seconds and the remaining original time.
+Two complete empty observations must be at least 0.100 seconds apart. The
+retirement end also bounds reads, persistence, receipt staging, lease removal,
+publication and stdout. Existing charged manager bytes are not charged twice;
+compression never refunds an observation's actual charge.
+
+The same budget fences each normal file operation before and after its call.
+When a call returns after the effective end, no subsequent normal file operation
+may start. Prepared files and atomic-update temporaries remain quarantined;
+required descriptor cleanup still runs. This prevents later work or positive
+completion after expiry and makes no claim of interrupting an operating-system
+call at the exact deadline.
+
+Complete evidence and the full private receipt are persisted before lease
+removal. The private receipt is **prepared and non-authorizing**. Success requires
+the matching source/receipt-bound public commit acknowledgement **and actual
+controller exit 0**. A positive-looking filename alone cannot establish commit.
+If final publication fails after removing the staging link, the exact last full
+prepared receipt remains under its owned name for quarantine review. Rollback
+may remove a created final link only after proving the exact staging copy
+survives; it never removes foreign replacements.
+
+Capture, budget or persistence failure remains a sticky cleanup failure while
+preserving the original native failure separately. A complete physical-retirement
+record establishes only its two-point scope; it cannot promote a failed native
+scenario or establish continuous or future absence. Pure controls and the
+complete repository gate remain separate from real owned runtime qualification.
+
 ## Official image provenance
 
 The initially reviewed input is Fedora CoreOS stable x86_64 QEMU release
@@ -382,3 +428,141 @@ retained. A closed sanitized `guest_info` receipt field is populated only after
 the controller validates the exact expected summary and boolean types; raw guest
 JSON and producer frames are not copied into that field. Without that validation
 the field is `null`.
+
+The separate source-selected `run-rootful-kind` phase is documented in the
+[owned rootful kind contract](owned-rootful-kind.md). Its implementation and pure
+controls establish no runtime qualification; the original qualify/stage routes
+and their refusals remain available unchanged.
+
+## Rootful-only internal reset profile (source contract)
+
+Only `run-rootful-kind` omits `-no-reboot`, alongside its explicit Ignition
+Composefs-disable kernel argument. Qualify and standalone stage retain their exact
+historical arguments and serialized Ignition. An internal QEMU reset does not
+create a new host producer, overlay, cgroup or Budget: original PID/start identity,
+absolute work/cleanup ends, cumulative output and all finite caps continue. Exit
+remains failure and cannot trigger a relaunch or retry. Reset count and cause are
+unobserved; source inspection does not prove any reset occurred.
+
+The [rootful lifecycle](owned-rootful-kind.md) requires explicit closed
+prerequisite/execution intents, one-time same-boot ready0 publication under the
+existing stage lock, and strict old-epoch refusal before later guest state/payload
+or runtime effects. No refusal-before-SSH-spawn claim is made. The standalone
+receiver remains byte-exact; only the explicit rootful source variant uses the
+reviewed literal host transform and generated-source/Ignition/checksum bindings.
+Immutable [publisher facts](../../scripts/fixtures/owned-boot-profile-source-facts.json)
+support only an expected configuration and upstream process model. They establish
+no actual image mounts, earlier failure cause, downstream binary attestation,
+runtime qualification or permission to retry.
+
+The original rootful worker prepays 24 exact-record comparisons inside its
+unchanged 768 utility delegation (680 ordinary work, 24 guards, 64 cleanup), while
+the separate historical stage 256 reservation remains unchanged. Each existing
+producer purpose is consumed once before pre-child checks/spawn; failure never
+reissues it. Fixed `cmp` status-zero checks supply complete byte/EOF evidence,
+with no new metadata/version query or helper. Failure accounting retains prepaid
+fuel and consumed purposes while leaving actual guest attempts unknown; completed
+execution evidence separately reports actual guarded and ordinary actions. See the
+[rootful record partition](owned-rootful-kind.md#exact-record-reads-and-prepaid-guard-partition)
+for the finite schedule and trusted serial-source boundary.
+
+The rootful resource receiver's [ADR0085](../decisions/0085-phase-specific-guest-census.md)
+separates stable pre-node admission from its post-kind live census. It retains both
+bounded scans, every numeric/resource guard, the final second-scan identity map and
+selected-node stat/cgroup/stat checks. Only post-create topology byte equality is
+replaced; initial stable checks, inherited-bound/trusted-global premises, original
+host/VM caps and1800/1680/120 timing remain. Sampled census observations do not become
+atomic/continuous containment or outside-retirement authority. The controller and
+all runtime preflight, failure, privacy and retirement obligations remain unchanged.
+
+[ADR0086](../decisions/0086-owned-node-cgroup-membership.md) refines only a guest
+selected-node membership assertion to canonical exact-owned-root-or-descendant,
+preserving exact inspect-root and PID/cache/stat/read guards. This does not add host
+or guest namespace attestation, continuous membership, signal or retirement authority.
+The existing reader-view/trusted-program, physical VM/resource and independent outside
+retirement requirements remain. No controller, profile, queries, budgets, retries or
+wire schema changes; actual V24n pl2.g cause remains unknown.
+
+## Current private V9 k attribution
+
+[ADR0087](../decisions/0087-closed-k-stage-failure-evidence.md) uses the same private
+wire/receipt fields with explicit V9. pl2.k may retain one closed k1.a–n active
+group and six groups' existing native-wrapper/collector-wait observations. Both
+worker and parent revalidate encoded summary/durable equality. Malformed/mutated
+fields quarantine; public descriptors/CLI remain redacted. Earlier schema/evidence
+domains and actual V26 failed-retired/spent result stay unchanged.
+
+Active group is no proof of predicate evaluation, launch or cause. Original
+readiness continuations and cache reset before every k native guard prevent
+promotion of earlier rounds; exhaustion reports only the last rejected second
+round at the original parent failure. Source Deployment marker denotes final
+scenario acceptance only. No new runtime observation, catalogue role, raw value,
+budget or native retry authority; current source enrollment requires final exact
+bytes, independent review and complete validation.
+
+## Proposed V10 private readiness atom custody
+
+[ADR0088](../decisions/0088-node-readiness-conjunct-evidence.md) retains existing outer
+fields and adds only closed V10 i reasons with source-bound round/admission/status/
+first-false semantics. No OS-launch inference, raw NodeList, arbitrary error or public
+field is added. Existing worker/parent encoded-summary revalidation, exact durable
+wire, quarantine and retirement stay independent. Old V1–V9 source/raw domains remain
+sealed, including broad V9 k1.i. Scratch model/oracle checks are not runtime proof,
+final source/gate approval or automatic retry authority.
+
+The proposed [V11 Ready-condition contract](../decisions/0090-ready-condition-text-class-evidence.md)
+keeps the original caller Budget, source-spec/request, five producers and retirement unchanged.
+Only explicit V11/k3 private tokens can identify no Ready type or the fixed supplied-message
+marker; old V10 e.68/e.69 stay opaque. Current receiver enrollment changes as one exact scalar.
+Private revalidation/durability and public redaction remain; no marker or raw NodeList is public.
+
+## Proposed V12 rootful wait source enrollment
+
+[ADR0091](../decisions/0091-owned-node-ready-wait.md) versions the rootful constructor
+spec/result and private k vocabulary while preserving existing forced intents,
+request digest framing, original worker budgets, outside ends and retirement authority.
+The enrollment scalar binds the exact current receiver; a strict inverse retains
+V11 and earlier source domains. The one owned Ready wait is an additional conservative
+gate followed by all independent strict checks, never native acceptance by itself.
+No new service, VM, channel, capture role, deadline or retry allowance is introduced.
+Source formatting/focused controls establish neither native qualification nor a
+successful residual-budget fit, and authorize no parent creation or fresh attempt.
+
+## Proposed capture-helper source enrollment refinement
+
+[ADR0093](../decisions/0093-capture-size-helper-status.md) changes only the rootful
+receiver enrollment and source-bound ordinary capture-helper status, retaining V12
+spec/result pairing, k4/raw status shapes, existing driver/CLI and admission route.
+The helper's new raw23 is meaningful only with its exact source/call binding;
+historical23 and V30's1 are not reinterpreted. Original budgets/actors/FD closure,
+parent/worker custody, redaction and outside retirement stay unchanged. No new
+wire field, helper, observer, source-custody capture or native adoption is supplied.
+
+## Proposed compact-root output source enrollment
+
+[ADR0094](../decisions/0094-compact-root-dry-run-json.md) updates only the exact
+rootful receiver source enrollment for the existing server dry-run's full-root
+compact JSON printer. V12 wire/spec/k4 contracts, all strict response assertions,
+parent/worker budgets, protected values, public redaction and independent outside
+retirement remain unchanged. The strict inverse retains frozen ADR0093 and every
+older source domain; current enrollment changes as one scalar. Modern output can
+include managedFields previously omitted by JSON. Source compatibility, formatting
+and inert controls establish no actual 4096-byte fit, native/runtime acceptance,
+new custody authority or permission for another attempt.
+
+## Proposed V13 LIVE compatibility envelope
+
+[ADR0101](../decisions/0101-kernel-bounded-live-resource-envelope.md) replaces only
+the new profile's LIVE whole-guest census and cache interval with qualified conditional
+aggregate capacity and direct target samples. Earlier source/evidence domains above
+remain historical and exact. The host source-custody route binds closed fact/schema
+hashes to the canonical FCOS image and the explicitly reviewed local-KVM QEMU domain;
+it changes no outer lifecycle, producer, original Budget, source/tool owner or retirement
+policy. No extra VM, native observer, fallback or kernel probe is introduced.
+
+Configured managed system RAM remains4GiB under fixed QEMU arguments and coherent
+firmware/kernel allocation semantics. Reserved ROM/device RAM mappings are not silently
+counted as managed stack RAM. Official distro-build, OS/module/livepatch/global and
+allocator premises remain explicit; no runtime integrity or absence audit is claimed.
+V13 rejects V12 semantics, and native/profile adoption remains separate from source
+qualification and code proposal.

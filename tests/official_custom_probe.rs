@@ -277,6 +277,7 @@ fn original_custom_driver_pure_contracts_are_part_of_the_gate() -> TestResult {
         ))
         .arg("--self-test")
         .env_clear()
+        .env("PYTHONDONTWRITEBYTECODE", "1")
         .env("PATH", "/usr/bin:/bin")
         .env("LANG", "C.UTF-8")
         .output()
