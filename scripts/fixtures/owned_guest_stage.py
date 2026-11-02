@@ -29,6 +29,7 @@ GUEST_NAMES = MappingProxyType({"kind": "kind", "kubectl": "kubectl", "node-oci"
 MAX_INPUT = 2 * CLIENT_MAX + ARCHIVE_MAX + sum(len(phase) + 1 for phase in PHASES)
 RECEIVER_COMMAND = ("/usr/bin/sudo -n /usr/bin/env -i HOME=/root PATH=/usr/bin:/usr/sbin "
                     "/var/lib/kubernetes-lens-stage/receiver")
+ROOTFUL_RECEIVER_COMMAND = RECEIVER_COMMAND + " rootful-kind-v1"
 
 
 class StageRefusal(vm.Refusal):
@@ -150,7 +151,7 @@ def ssh_arguments(config):
     vm.require(argv.count("-n") == 1 and argv[-2:] == ["core@127.0.0.1", vm.FIXED_COMMAND],
                "stage-ssh-command-contract")
     argv.remove("-n")
-    argv[-1] = RECEIVER_COMMAND
+    argv[-1] = ROOTFUL_RECEIVER_COMMAND if config.get("phase") == "run-rootful-kind" else RECEIVER_COMMAND
     index = argv.index("-i")
     argv[index + 1] = str(Path(config["directory"]) / "stage_key")
     return argv
@@ -527,8 +528,48 @@ def admit_inputs(args, owner, budget, select_profile):
     return raw, plan, evidence
 
 
-def guest_files(plan_raw, receiver_raw):
+_ROOTFUL_RECEIVER_EDITS = (
+    (b'[[ $# == 0 && $EUID == 0 && $BASH_VERSION == 5.3.9* ]] || fail\n', b'[[ $# == 1 && $1 == rootful-kind-v1 && $EUID == 0 && $BASH_VERSION == 5.3.9* ]] || fail\n'),
+    (b'if [[ ! -e state && ! -L state ]]; then\n  # Only a pristine first use can establish the boot-bound cursor.\n  for name in kind kubectl node.oci.tar header.in payload.in extra.in; do [[ ! -e $name && ! -L $name ]] || fail; done\n  state_write ready 0\nfi\n', b'# Rootful mode never initializes a cursor. Its prerequisite owns ready0.\nrecord_guard_fuel=3\nrootful_record() {\n  [[ $# == 2 && $record_guard_fuel -gt 0 && ${#2} -le 255 && $2 != *$\'\\n\'* ]] || fail\n  [[ -f $1 && ! -L $1 && -O $1 ]] || fail\n  record_guard_fuel=$((record_guard_fuel - 1))\n  /usr/bin/cmp -s -- "$1" - <<< "$2" || fail\n}\nreadonly rootful=/var/lib/kubernetes-lens-rootful\n[[ -f state && ! -L state && ! -e $rootful/state/poison && ! -L $rootful/state/poison ]] || fail\nrootful_record "$rootful/state/phase" "$owner $plan $boot staged-required"\nrootful_record "$rootful/state/mode" work\nrootful_record "$rootful/state/prerequisite-claimed" "$owner $plan $boot"\n((record_guard_fuel == 0)) || fail\n'),
+)
+
+def rootful_receiver(receiver_raw):
+    """Closed host-side source transform; standalone receiver bytes stay exact."""
+    vm.require(type(receiver_raw) is bytes and 0 < len(receiver_raw) <= vm.META_MAX
+               and b"\x00" not in receiver_raw, "rootful-stage-base-source")
+    intervals = []
+    for anchor, replacement in _ROOTFUL_RECEIVER_EDITS:
+        vm.require(type(anchor) is bytes and bool(anchor) and type(replacement) is bytes
+                   and receiver_raw.count(anchor) == 1, "rootful-stage-source-anchor")
+        start = receiver_raw.index(anchor)
+        intervals.append((start, start + len(anchor), replacement))
+    intervals.sort(key=lambda value: value[0])
+    vm.require(all(left[1] <= right[0] for left, right in zip(intervals, intervals[1:])),
+               "rootful-stage-source-overlap")
+    parts, offset = [], 0
+    for start, end, replacement in intervals:
+        parts.extend((receiver_raw[offset:start], replacement))
+        offset = end
+    parts.append(receiver_raw[offset:])
+    result = b"".join(parts)
+    vm.require(0 < len(result) <= vm.META_MAX, "rootful-stage-generated-budget")
+    return result
+
+
+def rootful_receiver_binding(receiver_raw, generated):
+    vm.require(type(generated) is bytes and generated == rootful_receiver(receiver_raw),
+               "rootful-stage-generated-source")
+    return {"schema": "kubernetes-lens-rootful-stage-source-v1",
+            "derivation": "closed-literal-rootful-stage-v1",
+            "base": {"bytes": len(receiver_raw), "sha256": vm.digest(receiver_raw)},
+            "generated": {"bytes": len(generated), "sha256": vm.digest(generated)}}
+
+
+def guest_files(plan_raw, receiver_raw, *, rootful=False):
     """Closed root-only Ignition payload, never generated from network input."""
+    vm.require(type(rootful) is bool, "rootful-stage-mode")
+    if rootful:
+        receiver_raw = rootful_receiver(receiver_raw)
     plan = parse_plan(plan_raw, vm.digest(plan_raw))
     root = "/var/lib/kubernetes-lens-stage"
     table = ("kubernetes-lens-owned-guest-table-v1\n" + plan.owner + "\n" + plan.profile + "\n" + plan.sha256 + "\n"

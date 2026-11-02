@@ -1,0 +1,108 @@
+{
+  "evidence_limits": [
+    "No evidence establishes color was enabled in the failed guest or establishes the failed display/status.",
+    "Source facts do not independently attest the built executable, authentication, receiver execution or runtime acceptance."
+  ],
+  "facts": [
+    {
+      "fact": "SYSTEMD_COLORS boolean false overrides automatic terminal color detection.",
+      "lines": [225, 231],
+      "source": "man/common-variables.xml"
+    },
+    {
+      "fact": "The explicit boolean setting is parsed before automatic selection and false selects COLOR_OFF.",
+      "lines": [35, 59, 102],
+      "source": "src/basic/ansi-color.c"
+    },
+    {
+      "fact": "COLOR_OFF disables conditional ANSI highlight/reset strings.",
+      "lines": [20, 22, 99, 102],
+      "source": "src/basic/ansi-color.h"
+    },
+    {
+      "fact": "version() uses numerical PROJECT_VERSION, parenthesized GIT_VERSION and conditional styling; its selected path does not need URLIFY.",
+      "lines": [290, 299],
+      "source": "src/basic/build.c"
+    },
+    {
+      "fact": "The selected distro recipe uses its package version/release as version-tag without a leading v.",
+      "lines": [874],
+      "source": "Fedora systemd.spec"
+    }
+  ],
+  "fedora_recipe": {
+    "commit": "29f902fb5a9fc3d5a5c1de5cfc1075dac7f309ec",
+    "license": "Package license expression at line88: LGPL-2.1-or-later AND MIT AND GPL-2.0-or-later; no separate spec-file SPDX header established",
+    "limits": "Pinned HTTPS publisher source, not independently verified source-package build attestation. %autorelease was not evaluated.",
+    "raw_url": "https://src.fedoraproject.org/rpms/systemd/raw/29f902fb5a9fc3d5a5c1de5cfc1075dac7f309ec/f/systemd.spec",
+    "sha256": "dd461c521de3912a70c902eb83ad1873cb5554c3ddf72d9635f559c07550ecba",
+    "url": "https://src.fedoraproject.org/rpms/systemd/blob/29f902fb5a9fc3d5a5c1de5cfc1075dac7f309ec/f/systemd.spec"
+  },
+  "fixture_source_anchor": true,
+  "implemented_scope": "The temporary SYSTEMD_COLORS=0 assignment remains on the same u invocation inside one command substitution. A separate utility-status refinement now checks captured query status before the unchanged text predicate.",
+  "operational_tool_pin": false,
+  "redistribution": "Metadata and original factual summaries only; no upstream implementation source is copied, translated, compiled or redistributed.",
+  "renovate": {
+    "classification": "historical fixture-source anchors",
+    "complete_engine_regressions": "remain main-owned in final complete gate",
+    "config_path": ".github/renovate.json",
+    "config_sha256": "010a04a129ab54edcd30e6788a77c0a159522700eca110bc8093a468e47fb221",
+    "verified_no_change_basis": "All changed and new source-fact paths lie under fixtures and match existing ignorePaths **/fixtures/**. No operational tool pin, owner, manager pattern, grouping, approval or automerge rule changes."
+  },
+  "schema": "kubernetes-lens-owned-systemd-color-source-facts-v1",
+  "sources": [
+    {
+      "commit": "63c0371fa71ae32ba02f05f90658bc40aaa19168",
+      "git_blob_sha1": "af2aa296d05871ec620604e00b2125fa87c0b00a",
+      "license": "LGPL-2.1-or-later (source SPDX; common manual variable document is also part of upstream source)",
+      "sha256": "fd10aabb0c6aac16b2f99badcd837e6ae0b97126930414c75f5a4fb703292eb7",
+      "upstream_path": "src/basic/ansi-color.c",
+      "url": "https://github.com/systemd/systemd/blob/63c0371fa71ae32ba02f05f90658bc40aaa19168/src/basic/ansi-color.c"
+    },
+    {
+      "commit": "63c0371fa71ae32ba02f05f90658bc40aaa19168",
+      "git_blob_sha1": "d4f8f325677bc30d7ab9e1bc064abbf9ae4f0776",
+      "license": "LGPL-2.1-or-later (source SPDX; common manual variable document is also part of upstream source)",
+      "sha256": "25063e9c96ae8a25b1978d49320306714644ae9dd23040242b944cebbf081e80",
+      "upstream_path": "src/basic/ansi-color.h",
+      "url": "https://github.com/systemd/systemd/blob/63c0371fa71ae32ba02f05f90658bc40aaa19168/src/basic/ansi-color.h"
+    },
+    {
+      "commit": "63c0371fa71ae32ba02f05f90658bc40aaa19168",
+      "git_blob_sha1": "991946f60df1843a5281a54135f02ecd4d48b4e1",
+      "license": "LGPL-2.1-or-later (source SPDX; common manual variable document is also part of upstream source)",
+      "sha256": "e7ffa2c074408fa14610ef35a8b3bc86a0815b408e34c26e24639ca6bb81a323",
+      "upstream_path": "man/common-variables.xml",
+      "url": "https://github.com/systemd/systemd/blob/63c0371fa71ae32ba02f05f90658bc40aaa19168/man/common-variables.xml"
+    },
+    {
+      "commit": "63c0371fa71ae32ba02f05f90658bc40aaa19168",
+      "git_blob_sha1": "b9341b184d69b4e51ae0c531fb75929513b31daf",
+      "license": "LGPL-2.1-or-later (file SPDX header)",
+      "sha256": "10f2ad58775a624359a08d23cfd6c4e16e4a1c3fb0eb99e5d78c29a75980a1e8",
+      "upstream_path": "src/basic/build.c",
+      "url": "https://github.com/systemd/systemd/blob/63c0371fa71ae32ba02f05f90658bc40aaa19168/src/basic/build.c"
+    }
+  ],
+  "sources_executed": false,
+  "status_limit": "Nonzero selected utility statuses now refuse explicitly before text/persistence/effects. A zero utility status alone establishes no data validity; existing semantic checks remain. The intentional node-readiness false branch remains unchanged. Underlying utility numeric statuses are not independently retained; the SSH/controller outcome remains genuinely observed.",
+  "upstream_commit": "63c0371fa71ae32ba02f05f90658bc40aaa19168",
+  "upstream_tag": "v259.9",
+  "utility_status_refinement": {
+    "audit_sha256": "bdf312d25ecb41c8693e6b0987519b0fb6309ea2acb182d222d410cdf9a825b8",
+    "baseline_source_sha256": "52151c4477f96ff745eb660ba3075f97070f30eaf8d7c8c035580a6825ef1b20",
+    "baseline_static_sites": 49,
+    "capture_policy": "One value at a time using existing local/global scalar slots where available; one new function-local EOF size scalar. Clear new inline captures immediately after comparison. Preserve lazy three-hash query order and stop before later queries on earlier status failure or mismatch.",
+    "failure_policy": "Fourteen former inline queries retain their existing comparison refusal code. Thirteen former implicit assignments and four standalone calls use generic fail, poisoning work state and exiting1 rather than relying on implicit errexit/ERR behavior. No package/version cause or underlying utility numeric status is invented.",
+    "former_inline_queries": 14,
+    "formerly_implicit_assignments": 13,
+    "formerly_implicit_standalone_calls": 4,
+    "inventory_sha256": "6b23554bb37ff85616b0de9f2618c644a854b7f2e0fab3d36d3d2df74d961eb6",
+    "new_explicit_status_guards": 31,
+    "new_query_or_utility_invocations": 0,
+    "refusal_map_sha256": "e71fdec5c465e98c9237d93c3e4c9db6efba87ab900e3e37ec29f87b188a092d",
+    "unchanged": "u, utility_launch, native, actual utility argv, successful query counts, scoped color setting, all34 fixed patterns, budgets, deadlines and cleanup controls.",
+    "unchanged_explicit_guard_sites": 17,
+    "unchanged_intentional_readiness_branch": 1
+  }
+}

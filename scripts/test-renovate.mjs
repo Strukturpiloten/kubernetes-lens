@@ -955,6 +955,27 @@ assert.throws(
 const vmFile = "scripts/kind-vm-image.json";
 const vmText = files.get(vmFile);
 const vmPin = JSON.parse(vmText);
+
+// ADR0101: reviewed compatibility metadata, never another image/tool manager.
+const liveFactsFile = "scripts/fixtures/owned-live-resource-envelope-source-facts-v1.json";
+const liveSchemaFile = "scripts/fixtures/owned-live-resource-envelope-source-facts-v1.schema.json";
+const liveFactsText = await fs.readFile(path.join(root, liveFactsFile), "utf8");
+const liveSchemaText = await fs.readFile(path.join(root, liveSchemaFile), "utf8");
+const liveFacts = JSON.parse(liveFactsText);
+const liveSchema = JSON.parse(liveSchemaText);
+assert.deepEqual(liveSchema.const, liveFacts);
+assert.equal(liveFacts.resource_profile, "owned-vm-live-v1");
+const { owner: liveImageOwner, ...liveImageAnchor } = liveFacts.canonical_image;
+assert.equal(liveImageOwner, vmFile);
+assert.deepEqual(liveImageAnchor, vmPin, "canonical FCOS changes require fresh compatibility review");
+assert.deepEqual(await inventory(new Map([[liveFactsFile, liveFactsText], [liveSchemaFile, liveSchemaText]])), []);
+for (const manager of config.customManagers)
+  assert(!manager.managerFilePatterns.some((pattern) =>
+    matchRegexOrGlob(liveFactsFile, pattern) || matchRegexOrGlob(liveSchemaFile, pattern)),
+    "compatibility anchors must not become duplicate operational pin owners");
+assert.equal(BigInt(liveFacts.theorem.aggregate_upper), 2n ** 48n);
+assert(BigInt(liveFacts.theorem.aggregate_upper) < 32767n * 9999999999n);
+
 const vmManager = config.customManagers.find((m) =>
   m.managerFilePatterns.includes("/^scripts/kind-vm-image\\.json$/"),
 );

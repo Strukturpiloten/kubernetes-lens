@@ -1,0 +1,175 @@
+{
+  "schema": "kubernetes-lens-owned-systemd-path-source-facts-v1",
+  "status": "source-only-expected-profile-requirement",
+  "reviewed_date": "2026-10-24",
+  "expected_executable": "/usr/lib/systemd/systemd",
+  "command_contract": {
+    "argv": ["/usr/lib/systemd/systemd", "--version"],
+    "scoped_environment": {
+      "SYSTEMD_COLORS": "0"
+    },
+    "fallback": "none",
+    "additional_queries": 0,
+    "query_count_preserved": 49
+  },
+  "upstream": {
+    "repository": "https://github.com/systemd/systemd",
+    "tag": "v259.9",
+    "annotated_tag_object": "bcc1b11ee1a215114b067ae0f8a722f8e2fcd34d",
+    "commit": "63c0371fa71ae32ba02f05f90658bc40aaa19168",
+    "tag_api_url": "https://api.github.com/repos/systemd/systemd/git/tags/bcc1b11ee1a215114b067ae0f8a722f8e2fcd34d",
+    "verification": "Host gh API resolved annotated tag to commit and reported signature valid; no independent local signature verification.",
+    "root_meson": {
+      "url": "https://github.com/systemd/systemd/blob/63c0371fa71ae32ba02f05f90658bc40aaa19168/meson.build",
+      "git_blob": "faa607f9a704d1aaa7e1aa5c2ce2e589e796d399",
+      "bytes": 129384,
+      "sha256": "2425c096d79637a5b2aecf38188682c64f96d554f1a76e2edc0809ca3c198672",
+      "license": "LGPL-2.1-or-later",
+      "line_facts": [
+        {
+          "lines": "3-13,122",
+          "fact": "Default prefix is /usr; prefixdir derives from prefix option."
+        },
+        {
+          "lines": "137,281",
+          "fact": "libexecdir is prefix/lib/systemd; SYSTEMD_BINARY_PATH is libexecdir/systemd."
+        },
+        {
+          "lines": "2281-2283",
+          "fact": "libexec_template selects libexecdir for installation."
+        },
+        {
+          "lines": "2618-2619,2891 onward",
+          "fact": "public=true enables public-program tests, not automatic bin alias installation."
+        }
+      ]
+    },
+    "core_meson": {
+      "url": "https://github.com/systemd/systemd/blob/63c0371fa71ae32ba02f05f90658bc40aaa19168/src/core/meson.build",
+      "git_blob": "002afe4f7894db094d7a1e1aec4b5fc44b4b084d",
+      "bytes": 9483,
+      "sha256": "2fe7ed7fb91c42bde09c8b76180c3905c7b52847cc7732a4cbdd28a878858640",
+      "license": "LGPL-2.1-or-later",
+      "verification": "Returned bytes SHA256 and Git blob identity independently computed; blob matched requested ID.",
+      "line_facts": [
+        {
+          "lines": "194-211",
+          "fact": "Executable named systemd uses libexec_template."
+        },
+        {
+          "lines": "297-300",
+          "fact": "Explicit sbindir/init symlink targets ../lib/systemd/systemd."
+        }
+      ],
+      "boundary": "These installation rules declare no /usr/bin/systemd alias; this does not prove absence in an image."
+    }
+  },
+  "fedora": {
+    "repository": "https://src.fedoraproject.org/rpms/systemd",
+    "dist_git_commit": "29f902fb5a9fc3d5a5c1de5cfc1075dac7f309ec",
+    "spec": {
+      "url": "https://src.fedoraproject.org/rpms/systemd/raw/29f902fb5a9fc3d5a5c1de5cfc1075dac7f309ec/f/systemd.spec",
+      "derived_git_blob": "db587b95ca35ef4b3fc0bace327aea2bfe44ca0b",
+      "bytes": 60263,
+      "sha256": "dd461c521de3912a70c902eb83ad1873cb5554c3ddf72d9635f559c07550ecba",
+      "package_license_expression": "LGPL-2.1-or-later AND MIT AND GPL-2.0-or-later",
+      "spec_license": "not-separately-established",
+      "line_facts": [
+        {
+          "lines": "6",
+          "fact": "pkgdir is prefix/lib/systemd."
+        },
+        {
+          "lines": "34-39,79-85,94-106",
+          "fact": "Default upstream/OBS conditions are off; default version 259.9 selects v259.9 Source0 and Source2 splitter; version_override is possible; Release uses unevaluated autorelease."
+        },
+        {
+          "lines": "775,806-947,968",
+          "fact": "autosetup applies patches; CONFIGURE_OPTS has no explicit prefix/libexec override found, uses split-bin=true; meson accepts optional external extra configuration; meson_install installs."
+        },
+        {
+          "lines": "1120-1124",
+          "fact": "Conditional sbin alias movement does not move the libexec binary."
+        },
+        {
+          "lines": "1154-1155,1496",
+          "fact": "Source2 generates file lists and main package consumes .file-list-main."
+        }
+      ],
+      "boundary": "No explicit /usr/bin/systemd alias creation/removal found. External branch/commit/version/build-macro and meson_extra_configure_options overrides are not independently attested."
+    },
+    "source0": {
+      "default_url": "https://github.com/systemd/systemd/archive/v259.9/systemd-259.9.tar.gz",
+      "filename": "systemd-259.9.tar.gz",
+      "declared_sha512": "9343f531d1110253213cef103862e96057de9d0edb9a1957bcbf899aa313882a997a1e3cdb93c01de50dfa5684fc74b6f1794388123bb898fc1c2e3e0da13608",
+      "verification": "Publisher sources manifest declaration only; tarball not downloaded or independently hashed."
+    },
+    "sources_manifest": {
+      "url": "https://src.fedoraproject.org/rpms/systemd/raw/29f902fb5a9fc3d5a5c1de5cfc1075dac7f309ec/f/sources",
+      "bytes": 161,
+      "sha256": "c2e60583f0a6dc99327ca32935db83493969dc0fbd016f087b237fe37b1190db",
+      "license": "not-separately-established"
+    },
+    "splitter": {
+      "url": "https://src.fedoraproject.org/rpms/systemd/raw/29f902fb5a9fc3d5a5c1de5cfc1075dac7f309ec/f/split-files.py",
+      "bytes": 11136,
+      "sha256": "f51d9b6f8ef2bf1ee031f2f9d170f1c52b5ae5f00776b4978c773f4f16c27840",
+      "license": "not-separately-established",
+      "line_facts": [
+        {
+          "lines": "46-104",
+          "fact": "Traverses existing buildroot files, opens output file lists, filters generic directories/documentation/debug entries."
+        },
+        {
+          "lines": "269-291",
+          "fact": "Unmatched canonical binary falls into main category and emitted RPM pathname, if present in buildroot."
+        }
+      ],
+      "boundary": "Classification does not create executable bytes or establish actual RPM/image contents; no alias-specific creation/removal found."
+    },
+    "downstream_patch_scope": "Five recipe patch sources were read only; none changed root/core executable installation rules or contained either executable path. No patch execution/application or build attestation.",
+    "exact_nvr_lookup": {
+      "url": "https://src.fedoraproject.org/rpms/systemd/raw/systemd-259.9-1.fc44/f/systemd.spec",
+      "http_status": 404,
+      "boundary": "No exact systemd-259.9-1.fc44 NVR-to-dist-git attestation. The retained old-tag list is not such proof."
+    }
+  },
+  "selected_build_metadata": {
+    "build": "44.20260928.3.2",
+    "architecture": "x86_64",
+    "ostree_commit": "0084d3b9079023c87226e342504cf610aabe56abe790ae24cd592406b77d7f64",
+    "meta": {
+      "url": "https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/44.20260928.3.2/x86_64/meta.json",
+      "bytes": 17536,
+      "sha256": "a3a03475a891cf25e101de7ce42e077a4bbd7a1333bfd7a14147a3ac824f6e74"
+    },
+    "commitmeta": {
+      "url": "https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/44.20260928.3.2/x86_64/commitmeta.json",
+      "bytes": 44332,
+      "sha256": "f8bca380812e271325a3a615d6d1fd3eff599a35c9a559c0c6db2dc5d790a0b2",
+      "package_pointer": "/rpmostree.rpmdb.pkglist/445",
+      "package": "systemd-259.9-1.fc44",
+      "synthetic": true
+    },
+    "boundary": "Retained local supplemental metadata reports this package/version/build tuple. Its publisher-versus-local origin and top-level synthetic flag semantics remain unverified. It is excluded from canonical-path justification and is not observed executable, RPM, image or authentication evidence.",
+    "status": "unverified-supplemental-record",
+    "origin_and_synthetic_semantics": "unverified"
+  },
+  "not_established": [
+    "actual selected-image executable path or file membership",
+    "absence of /usr/bin/systemd or any alias",
+    "actual systemd execution or its process status",
+    "cause of recorded V12 q127 diagnostic or outer SSH status",
+    "manufacture/build attestation of RPM bytes",
+    "exact NVR-to-dist-git linkage",
+    "runtime, kind, Kubernetes API or controller qualification"
+  ],
+  "redistribution": "Metadata, URLs, hashes, license labels and independently written factual summaries only. No upstream implementation, tarball, binary, RPM or image is redistributed by this fixture.",
+  "update_policy": {
+    "classification": "fixed source-compatibility evidence; not operational software pins",
+    "existing_exclusions": ["**/fixtures/**", "docs/evidence/**"],
+    "configuration": ".github/renovate.json",
+    "change": "none; existing operational image/shared-tool inventory and owners remain unchanged",
+    "existing_regressions": "scripts/test-renovate.mjs tests historical fixtures/docs-evidence exclusions and VM-pin moved-file refusal; this source-only slice does not rerun or alter the actual Renovate engine suite."
+  }
+}

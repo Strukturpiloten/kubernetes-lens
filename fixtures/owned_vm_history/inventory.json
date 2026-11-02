@@ -1,0 +1,84 @@
+{
+  "schema": "kubernetes-lens-owned-vm-source-history-v1",
+  "purpose": "Immutable project-owned historical test DATA; no runtime or current-source qualification",
+  "asset": {
+    "path": "owned_qemu-b857fb2.source",
+    "bytes": 140693,
+    "sha256": "b857fb2f20d98483466ab252c0580b9bcfab0d81d4b7c3a47d8748326d8ab682",
+    "mode": "0644",
+    "encoding": "UTF-8",
+    "line_endings": "LF",
+    "one_final_newline": true,
+    "trailing_whitespace": false
+  },
+  "provenance": {
+    "owner": "Strukturpiloten/kubernetes-lens",
+    "original_path": "scripts/fixtures/owned_qemu.py",
+    "source_epoch": "pre-retirement-evidence baseline for issue62",
+    "custody": "issue62-retirement-evidence-implementation-20261026/PRODUCTION-V1/before/owned_qemu.py",
+    "exact_byte_copy": true,
+    "license": "MPL-2.0",
+    "repository_license_path": "../../LICENSE",
+    "upstream_oracle_source": false,
+    "verified_git_revision": null
+  },
+  "historical_reader": {
+    "function": "before_host_view_diagnostics",
+    "input_bytes": 140693,
+    "input_sha256": "b857fb2f20d98483466ab252c0580b9bcfab0d81d4b7c3a47d8748326d8ab682",
+    "output_bytes": 131127,
+    "output_sha256": "4ede9ab56d7c850fc8c80f6bbdbf9b70992c532a073b46b1d3df7a655957344a",
+    "hunk_ids": [
+      "D01",
+      "D02",
+      "D03",
+      "D04",
+      "D05",
+      "D06",
+      "D07",
+      "D08",
+      "D09",
+      "D10",
+      "D11",
+      "D12",
+      "D13",
+      "D14",
+      "D15",
+      "D16",
+      "D17",
+      "D18",
+      "D19",
+      "D20",
+      "D21",
+      "D22",
+      "D23"
+    ],
+    "hunk_tuple_literal_sha256": "854bdc9db9ef79e17be9b34e5da9389c5125119879788ef475bdcf6e1b865a8d",
+    "apply_and_before_helper_source_sha256": "009ee8322438cdc2dcbc0fad20627c1f0e6c08ef8d571a484d9421eb6dd23753",
+    "hash_scope": "Exact original source slices retained in proposal preservation audit; not a new runtime module digest",
+    "read_bound_bytes": 140694,
+    "consumers": [
+      "test_owned_qemu.HistoricalDiagnosticInverseControls",
+      "test_owned_qemu.HardNofileV2EnrollmentControls.test_controller_only_change_is_new_receiver_enrollment_and_all314_patterns_remain",
+      "test_owned_qemu.PrivatePrefixReceiverEnrollmentControls.test_only_current_enrollment_changes_and_pattern_or_guard_mutation_fails_identity",
+      "test_owned_qemu.NodeMonochromeEnrollmentControls.test_only_derived_receiver_enrollment_changes_not_any_historical_pattern"
+    ],
+    "boot_settling_composition_consumers": [
+      "test_owned_qemu.HardNofileV2EnrollmentControls.test_controller_only_change_is_new_receiver_enrollment_and_all314_patterns_remain",
+      "test_owned_qemu.PrivatePrefixReceiverEnrollmentControls.test_only_current_enrollment_changes_and_pattern_or_guard_mutation_fails_identity"
+    ]
+  },
+  "boundaries": {
+    "import_or_execute_fixture": false,
+    "fallback_to_host_or_current_source": false,
+    "current_source_or_runtime_authority": false,
+    "operational_dependency_pin": false,
+    "cargo_package_included": false,
+    "future_change": "Use a new versioned historical asset and separately reviewed reader; never repin this one."
+  },
+  "actual_runtime_consumer_preserved": {
+    "test": "test_owned_qemu.RootfulBootSettlingControls.test_exact_source_inverse_rejects_helper_or_call_mutation",
+    "source": "actual imported runtime owned_qemu.py; not historical fixture",
+    "reason": "before_boot_settling authenticates exact scheduling helper+call region, which remains identical in frozen V3 and old own-source fixture."
+  }
+}

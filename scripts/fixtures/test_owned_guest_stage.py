@@ -358,5 +358,53 @@ class StageControls(unittest.TestCase):
         self.assertTrue(self.session.failed)
 
 
+
+
+class RootfulStageTransformControls(unittest.TestCase):
+    def source(self):
+        return Path(stage.__file__).with_name('owned_guest_receiver.sh').read_bytes()
+
+    def test_standalone_source_is_frozen_and_generated_variant_has_independent_identity(self):
+        base=self.source(); generated=stage.rootful_receiver(base)
+        self.assertEqual((len(base),vm.digest(base)),(5671,'1a1f9a4a31ab403d1aa203aeed53084da177d2dd47cd9e689ac5140c14a9dd15'))
+        self.assertEqual((len(generated),vm.digest(generated)),(6152, '46a405180c60217edfcc53fc757637f319f07bb74f55a9ebda019a56e6189370'))
+        binding=stage.rootful_receiver_binding(base,generated)
+        self.assertEqual(binding['base'],{'bytes':len(base),'sha256':vm.digest(base)})
+        self.assertEqual(binding['generated'],{'bytes':len(generated),'sha256':vm.digest(generated)})
+        self.assertIn(b'[[ $# == 1 && $1 == rootful-kind-v1',generated)
+        self.assertNotIn(b'Only pristine first use',generated)
+        self.assertLess(generated.index(b'rootful_record "$rootful/state/phase"'),generated.index(b'state_write inflight'))
+
+    def test_missing_duplicate_mutated_or_overlapping_anchors_and_bad_bytes_refuse(self):
+        base=self.source()
+        for anchor,_ in stage._ROOTFUL_RECEIVER_EDITS:
+            for bad in (base.replace(anchor,b'',1),base+anchor,base.replace(anchor,b'changed',1)):
+                with self.assertRaisesRegex(vm.Refusal,'rootful-stage-source-anchor'): stage.rootful_receiver(bad)
+        for bad in (b'',b'\x00',b'x'*65537,'not-bytes'):
+            with self.assertRaises(vm.Refusal): stage.rootful_receiver(bad)
+        with patch.object(stage,'_ROOTFUL_RECEIVER_EDITS',((b'abc',b'one'),(b'bc',b'two'))):
+            with self.assertRaisesRegex(vm.Refusal,'rootful-stage-source-overlap'): stage.rootful_receiver(b'abc')
+        with patch.object(stage,'_ROOTFUL_RECEIVER_EDITS',((b'abc',b'x'*65537),)):
+            with self.assertRaisesRegex(vm.Refusal,'rootful-stage-generated-budget'): stage.rootful_receiver(b'abc')
+        with self.assertRaisesRegex(vm.Refusal,'rootful-stage-generated-source'):
+            stage.rootful_receiver_binding(base,stage.rootful_receiver(base)+b'x')
+
+    def test_explicit_host_mode_selects_only_literal_rootful_stage_command(self):
+        fixture=StageControls(); fixture.setUp(); self.addCleanup(fixture.doCleanups)
+        old=stage.ssh_arguments(fixture.config)
+        self.assertEqual(old[-1],stage.RECEIVER_COMMAND)
+        fixture.config['phase']='run-rootful-kind'
+        selected=stage.ssh_arguments(fixture.config)
+        self.assertEqual(selected[:-1],old[:-1]); self.assertEqual(selected[-1],stage.ROOTFUL_RECEIVER_COMMAND)
+        base=self.source()
+        standalone=stage.guest_files(vm.encode(fixture.item),base)
+        rootful=stage.guest_files(vm.encode(fixture.item),base,rootful=True)
+        receiver='/var/lib/kubernetes-lens-stage/receiver'
+        self.assertEqual(standalone[receiver][0],base)
+        self.assertEqual(rootful[receiver][0],stage.rootful_receiver(base))
+        for mode in (None,1,'true'):
+            with self.assertRaisesRegex(vm.Refusal,'rootful-stage-mode'): stage.guest_files(vm.encode(fixture.item),base,rootful=mode)
+
+
 if __name__ == "__main__":
     unittest.main()

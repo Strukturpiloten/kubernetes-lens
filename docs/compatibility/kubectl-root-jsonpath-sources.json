@@ -1,0 +1,335 @@
+{
+  "schema": "kubectl-root-jsonpath-source-facts-v1",
+  "retrieved": "2026-10-31",
+  "purpose": "Historical official source references for the fixed full-root compact JSONPath output; documentation anchors, not operational tool declarations.",
+  "profiles": [
+    {
+      "version": "v1.20.15",
+      "revision": "8f1e5bf0b9729a899b8df86249b56e2c74aebc55",
+      "release_reference": {
+        "url": "https://api.github.com/repos/kubernetes/kubernetes/git/ref/tags/v1.20.15",
+        "bytes": 349,
+        "sha256": "edf73e2a3ba36da81c0141ddc253b764ac2b9bd4f7c43d92c2d3fec984e1a219",
+        "annotated_tag_object": "a136d19b2065959341ac5cc73560c620f6637ff1"
+      },
+      "annotated_tag": {
+        "url": "https://api.github.com/repos/kubernetes/kubernetes/git/tags/a136d19b2065959341ac5cc73560c620f6637ff1",
+        "bytes": 731,
+        "sha256": "68efa65eebcda9e16da7a9faf0937cd632cb8e02d023a321ee707d03b948ea79"
+      },
+      "source_files": [
+        {
+          "path": "LICENSE",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/LICENSE",
+          "bytes": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/genericclioptions/jsonpath_flags.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/cli-runtime/pkg/genericclioptions/jsonpath_flags.go",
+          "bytes": 4302,
+          "sha256": "7037865137233eb0605dd4e6143b78e297959b61440ceae2984d5cb936b4930d",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/genericclioptions/print_flags.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/cli-runtime/pkg/genericclioptions/print_flags.go",
+          "bytes": 4925,
+          "sha256": "b726ed0e128b70bc9321810c7f22b8d0eedc36b042835f9300a1f359a4fd6d2f",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/genericclioptions/json_yaml_flags.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/cli-runtime/pkg/genericclioptions/json_yaml_flags.go",
+          "bytes": 2117,
+          "sha256": "f4f3f350d3fba275a77330d5c693fe258b6b46a2d71855316415adcb3a85df09",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/printers/jsonpath.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/cli-runtime/pkg/printers/jsonpath.go",
+          "bytes": 4385,
+          "sha256": "c3ae45850a065405e187f1c9ef6b31d42a2cd7c5b2323c7414dbfbef5190cf4c",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/printers/json.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/cli-runtime/pkg/printers/json.go",
+          "bytes": 4247,
+          "sha256": "773fb5c57d209a38541cd0e559afb7610e9f41e4738a78a07a070e6970ccab12",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/client-go/util/jsonpath/parser.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/client-go/util/jsonpath/parser.go",
+          "bytes": 11773,
+          "sha256": "b9f6a35f7fe325fae96d58f33ff01cd7a09ea1a3dff615e7b496fde2c13726a0",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/client-go/util/jsonpath/jsonpath.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/client-go/util/jsonpath/jsonpath.go",
+          "bytes": 15186,
+          "sha256": "6b5f48327c637f65c694e95c1993a7d08b6a4a9b467468d9d4b366dc44f943c8",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/kubectl/pkg/cmd/create/create.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/kubectl/pkg/cmd/create/create.go",
+          "bytes": 15116,
+          "sha256": "87e7523b4fd6ec0eaeaa48f56c336763925febff7b31e7f6beea030e9dbfaa64",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/genericclioptions/kube_template_flags.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/cli-runtime/pkg/genericclioptions/kube_template_flags.go",
+          "bytes": 3020,
+          "sha256": "d83d151afd418ca19d236387774799490bde48980ab2c8765098fdbe0d23348c",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/printers/typesetter.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/cli-runtime/pkg/printers/typesetter.go",
+          "bytes": 2628,
+          "sha256": "e6c1867b53f475e6bbf39118cde02fcb2de8906854d67ebd68ac37a7c0185610",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/resource/helper.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/cli-runtime/pkg/resource/helper.go",
+          "bytes": 7863,
+          "sha256": "c121296ce3e3b91c7afdc54920b2aec8b4487428b91cdeac21c67fa278017d8f",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/resource/visitor.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/cli-runtime/pkg/resource/visitor.go",
+          "bytes": 21744,
+          "sha256": "064bf5fe7de74c3474f48aad15ae043ec8556a84d10feae5d096e9d3f4f6a259",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/resource/builder.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/cli-runtime/pkg/resource/builder.go",
+          "bytes": 36006,
+          "sha256": "6a3b487ad398335382511e72f7733409f20d7d2eca030d83a1eff1db33b2243c",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/resource/mapper.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/cli-runtime/pkg/resource/mapper.go",
+          "bytes": 4701,
+          "sha256": "e395f4c3d09c1bd24625c99417e41ccbc42bdb071733bde714f5d046b3d1804d",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/resource/client.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/cli-runtime/pkg/resource/client.go",
+          "bytes": 1718,
+          "sha256": "cb0eccf5e24ae400c4e6adcf75549b013e3ceab456f0ecbc2602d0c4998bcaa0",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/unstructured.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/unstructured.go",
+          "bytes": 14146,
+          "sha256": "0da99a723a97468278092edc66e234f3c49125bb4953202359551faea99e94b0",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/resource/scheme.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/cli-runtime/pkg/resource/scheme.go",
+          "bytes": 2881,
+          "sha256": "9d73dc75e6d4eccc8dd2ccdbe5de59a370db6e9bf940be9594f09a28befe045d",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/helpers.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/8f1e5bf0b9729a899b8df86249b56e2c74aebc55/staging/src/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/helpers.go",
+          "bytes": 16564,
+          "sha256": "99f6301700168adb3783fa593fdbd3fa49bb8f9361f98a569e823de817aec915",
+          "license": "Apache-2.0"
+        }
+      ]
+    },
+    {
+      "version": "v1.37.0",
+      "revision": "f54c212e3a2f75d674b717a9b29052b20b60aefc",
+      "release_reference": {
+        "url": "https://api.github.com/repos/kubernetes/kubernetes/git/ref/tags/v1.37.0",
+        "bytes": 347,
+        "sha256": "6bff2e1b165220509649a70b50a07ea2752310fb29bc09a000695eb096885c26",
+        "annotated_tag_object": "157e582fcc3ebba3c22b16721f49d6890f784c1f"
+      },
+      "annotated_tag": {
+        "url": "https://api.github.com/repos/kubernetes/kubernetes/git/tags/157e582fcc3ebba3c22b16721f49d6890f784c1f",
+        "bytes": 729,
+        "sha256": "3bf1c2feecdd4a860b7bc5c3a0c683c9247241bb67f9687c3c95197198cf6a33"
+      },
+      "source_files": [
+        {
+          "path": "LICENSE",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/LICENSE",
+          "bytes": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/genericclioptions/jsonpath_flags.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/genericclioptions/jsonpath_flags.go",
+          "bytes": 4365,
+          "sha256": "2dbb6c263df182a9213e84164aa661f3dd3a22dc608e9e50c490817383641a18",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/genericclioptions/print_flags.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/genericclioptions/print_flags.go",
+          "bytes": 5743,
+          "sha256": "5711b701b6cb8d83eb4be4975cc2ccafceb3830a3a8f3b56d776d96df9d8d59d",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/genericclioptions/json_yaml_flags.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/genericclioptions/json_yaml_flags.go",
+          "bytes": 2750,
+          "sha256": "20e3dfddcb76598887b8354bb66feb48ac9a31f026b3c88780af37eba5fbb930",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/printers/jsonpath.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/printers/jsonpath.go",
+          "bytes": 4399,
+          "sha256": "67f01cb9f4d133c4fc962312962b0fc7ca0dfac515a7d78e6722292dce87d01c",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/printers/json.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/printers/json.go",
+          "bytes": 2374,
+          "sha256": "4cbdb0a5703ae02e74d6b73edaf8782b7a95c256df267ac71f249d378c728955",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/client-go/util/jsonpath/parser.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/client-go/util/jsonpath/parser.go",
+          "bytes": 11774,
+          "sha256": "877798f72eed2bfd22a382dd143cfc7249186778f88714506a9ace2d986293d3",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/client-go/util/jsonpath/jsonpath.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/client-go/util/jsonpath/jsonpath.go",
+          "bytes": 15258,
+          "sha256": "b9eb0d92b0e2fbed7e1e2a693b44f1cbc68ffbfb2101e5e1b8ada267ed2ed396",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/kubectl/pkg/cmd/create/create.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/kubectl/pkg/cmd/create/create.go",
+          "bytes": 10030,
+          "sha256": "d3a9ac3c53252de3af128473f470f0293d2e5298aa27cd4beef7b18b6f88d35b",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/genericclioptions/kube_template_flags.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/genericclioptions/kube_template_flags.go",
+          "bytes": 3372,
+          "sha256": "f430a613efe82e99fa5ed07a001af26971adcb5169421477bda658a0e087b6be",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/printers/typesetter.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/printers/typesetter.go",
+          "bytes": 2628,
+          "sha256": "e6c1867b53f475e6bbf39118cde02fcb2de8906854d67ebd68ac37a7c0185610",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/resource/helper.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/resource/helper.go",
+          "bytes": 10741,
+          "sha256": "6c3225f922ae1dedb452e3fc8ba2b21d79509c238684140eae9308b53bc15a7d",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/resource/visitor.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/resource/visitor.go",
+          "bytes": 21830,
+          "sha256": "6c4caad6296e4e0db489c9bc1ffc7e7f5e72c3847da6955f68abda2347176dc0",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/resource/builder.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/resource/builder.go",
+          "bytes": 38830,
+          "sha256": "d1cfcc76ef0e5545da21d853ffe90a2b917b07d43fc519df84f13a4db3c249f2",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/resource/mapper.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/resource/mapper.go",
+          "bytes": 4956,
+          "sha256": "285497f359295a9b614aa0d73685d54356de560eba91946f7dc03f7c7f1cd878",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/resource/client.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/resource/client.go",
+          "bytes": 2126,
+          "sha256": "2ba0a0ea077e1f309559fee765786cf23396b0982e8f543ba876d71dd58533ae",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/unstructured.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/unstructured.go",
+          "bytes": 14099,
+          "sha256": "5a7c30acf086a1ab253b4e704cd154d6467f351357d3e2be1ffb0f80654607d8",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/resource/scheme.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/resource/scheme.go",
+          "bytes": 2881,
+          "sha256": "092514b07ae00bca4c54061d0ff252b49414035d618d1f67db16dd473efe8f04",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/helpers.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/helpers.go",
+          "bytes": 18814,
+          "sha256": "4a15fb6b780f2c075254b672855cbf33465a7790682ebdad6d02d21784009d1a",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "staging/src/k8s.io/cli-runtime/pkg/printers/managedfields.go",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/f54c212e3a2f75d674b717a9b29052b20b60aefc/staging/src/k8s.io/cli-runtime/pkg/printers/managedfields.go",
+          "bytes": 1687,
+          "sha256": "a95ec3a346592da7bdb056ab6b1be9adc16e5b5fa336f00e8153ddebaeeb132c",
+          "license": "Apache-2.0"
+        }
+      ]
+    }
+  ],
+  "contracts": {
+    "selection": "Ordinary JSONPath current-object token selects the complete root without field projection, range, or results-array wrapper.",
+    "unstructured": "Create uses unstructured request/response objects; the printer uses UnstructuredContent directly, retaining the available returned map and nested JSON value types.",
+    "typed_fallback": "Other typed runtime objects use a marshal/unmarshal fallback; no arbitrary typed-object numeric precision guarantee is inferred.",
+    "serialization": "Root map PrintResults uses JSON marshaling, not scalar stringification; whitespace, escaping representation, key order, and final newline may differ.",
+    "type_setter": "Both original JSON and JSONPath routes use the same TypeSetter; its source is identical in these releases.",
+    "modern_difference": "Modern JSON defaults omit managedFields through a deep-copy wrapper; ordinary JSONPath retains them. This can increase modern output size.",
+    "validation": "The existing four exact string identity checks and all failure/capture limits remain unchanged.",
+    "qualification": "Source compatibility only; neither native/runtime acceptance nor actual response fit within 4096 bytes is established."
+  },
+  "license_and_redistribution": {
+    "license": "Apache-2.0",
+    "source_headers_and_license": "Upstream copyright/license headers and LICENSE were checked. Exact source-file references include the official LICENSE for each revision.",
+    "implementation": "No upstream implementation is copied or mechanically translated. This file distributes source metadata and public references only, not upstream source bodies."
+  },
+  "update_ownership": {
+    "classification": "Frozen historical compatibility documentation; no operational pin changed or introduced.",
+    "existing_exclusion": "docs/compatibility/** in .github/renovate.json",
+    "canonical_tools": "Existing shared BoxFerry tool ownership, versions, checksums, managers, grouping, and approvals remain unchanged.",
+    "verification": "Static path/policy inspection only; no claim that the actual Renovate engine ran for this change."
+  }
+}

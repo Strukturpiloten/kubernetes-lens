@@ -7,6 +7,7 @@ No Podman, SSH, VM, service, registry or Kubernetes program is invoked.
 from copy import deepcopy
 import gzip
 import hashlib
+import json
 import io
 import os
 from pathlib import Path
@@ -753,6 +754,107 @@ class InputAuthority(unittest.TestCase):
         self.ledger["runtime_profiles"].append(deepcopy(self.ledger["runtime_profiles"][0]))
         with self.assertRaisesRegex(self.native_refusal, "unknown-runtime-profile"):
             self.run_admission()
+
+
+
+
+class RootfulGeneratedReceiverProtocol(unittest.TestCase):
+    """Execute source-owned protocol with private path/OS predicate projections."""
+    def fixture(self):
+        fixture=ReceiverProtocol(); fixture.prepare(); self.addCleanup(fixture.tearDown)
+        base=Path(stage.__file__).with_name('owned_guest_receiver.sh').read_bytes()
+        source=stage.rootful_receiver(base).decode()
+        begin=source.index('[[ $# == 1');end=source.index('cd "$root"')
+        source=source[:begin]+'[[ $# == 1 && $1 == rootful-kind-v1 ]] || fail\n'+source[end:]
+        for old,new in (('readonly root=/var/lib/kubernetes-lens-stage','readonly root='+str(fixture.root)),
+                        ('readonly receiver=/var/lib/kubernetes-lens-stage/receiver','readonly receiver='+str(fixture.root/'receiver')),
+                        ('readonly boot_path=/proc/sys/kernel/random/boot_id','readonly boot_path='+str(fixture.root/'boot')),
+                        ('readonly rootful=/var/lib/kubernetes-lens-rootful','readonly rootful='+str(fixture.root/'rootful')),
+                        ('== 0:600:1','== '+str(os.getuid())+':600:1')):
+            source=source.replace(old,new)
+        receiver=fixture.root/'receiver'; receiver.chmod(0o600);receiver.write_text(source);receiver.chmod(0o500)
+        checks=fixture.root/'checks.sha256';checks.chmod(0o600)
+        rows=checks.read_text().splitlines()
+        checks.write_text('\n'.join(vm.digest(receiver.read_bytes())+'  '+str(receiver) if row.endswith('  '+str(receiver)) else row for row in rows)+'\n');checks.chmod(0o400)
+        state=fixture.root/'rootful/state';state.mkdir(parents=True)
+        prefix='a'*32+' '+fixture.plan.sha256+' '+fixture.boot.decode().strip()
+        for name,raw in (('phase',prefix+' staged-required\n'),('mode','work\n'),('prerequisite-claimed',prefix+'\n')):
+            (state/name).write_text(raw);(state/name).chmod(0o600)
+        (fixture.root/'state').write_text('v1 '+prefix.replace(' '+fixture.boot.decode().strip(),' modern-1.37.0 '+fixture.boot.decode().strip())+' ready 0\n')
+        (fixture.root/'state').chmod(0o600)
+        return fixture
+
+    def exchange(self,fixture,packet,args=('rootful-kind-v1',)):
+        child=OwnedPipeChild(['/usr/bin/bash',str(fixture.root/'receiver'),*args],self.addCleanup)
+        if packet: os.write(child.process.stdin.fileno(),packet)
+        return child.finish()
+
+    def snapshot(self,fixture):
+        return {str(path.relative_to(fixture.root)):(path.read_bytes(),path.stat().st_mode&0o777)
+                for path in fixture.root.rglob('*') if path.is_file()}
+
+    def test_rootful_preseed_all_three_transfers_and_explicit_mode(self):
+        fixture=self.fixture()
+        for phase in stage.PHASES:
+            result=self.exchange(fixture,phase.encode()+b'\nabc')
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual(json.loads(result.stdout)['phase'],phase)
+        self.assertIn(b' complete 3\n',(fixture.root/'state').read_bytes())
+        for args in ((),('unknown',),('rootful-kind-v1','extra')):
+            fixture=self.fixture();before=self.snapshot(fixture)
+            result=self.exchange(fixture,b'',args)
+            self.assertEqual((result.returncode,result.stdout,result.stderr),(1,b'',b'stage-receiver-refused\n'))
+            self.assertEqual(self.snapshot(fixture),before)
+
+    def test_reboot_before_each_cursor_refuses_before_inflight_header_or_payload(self):
+        for cursor in range(3):
+            fixture=self.fixture()
+            for phase in stage.PHASES[:cursor]: self.assertEqual(self.exchange(fixture,phase.encode()+b'\nabc').returncode,0)
+            (fixture.root/'boot').write_bytes(b'99999999-1111-2222-3333-444444444444\n')
+            before=self.snapshot(fixture)
+            result=self.exchange(fixture,stage.PHASES[cursor].encode()+b'\nabc')
+            self.assertEqual((result.returncode,result.stdout,result.stderr),(1,b'',b'stage-receiver-refused\n'))
+            self.assertEqual(self.snapshot(fixture),before)
+
+    def test_malformed_phase_claim_mode_and_cursor_preserve_original_records(self):
+        for name in ('rootful/state/phase','rootful/state/prerequisite-claimed','rootful/state/mode','state'):
+            for suffix in (b'\n',b'trailing',b'\x00',b'\x00\n',b'extra\n'):
+                with self.subTest(name=name,suffix=suffix):
+                    fixture=self.fixture();path=fixture.root/name;original=path.read_bytes();path.write_bytes(original+suffix)
+                    before=self.snapshot(fixture)
+                    result=self.exchange(fixture,b'stage-kind\nabc')
+                    self.assertEqual((result.returncode,result.stdout,result.stderr),(1,b'',b'stage-receiver-refused\n'))
+                    self.assertEqual(self.snapshot(fixture),before)
+                    self.assertEqual(path.read_bytes(),original+suffix)
+
+    def test_generated_guard_three_successes_zero_fuel_and_overrun_without_new_helper(self):
+        fixture=self.fixture();base=Path(stage.__file__).with_name('owned_guest_receiver.sh').read_bytes()
+        generated=stage.rootful_receiver(base).decode()
+        function=generated.split('record_guard_fuel=3\n',1)[1].split('readonly rootful=',1)[0]
+        self.assertIn('/usr/bin/cmp -s -- "$1" - <<< "$2"',function)
+        self.assertNotIn('<(',function)
+        path=fixture.root/'literal';path.write_bytes(b'literal-record\n')
+        for body,stdout in ((('rootful_record PATH literal-record\n'*3)+'printf "%s" "$record_guard_fuel"\nrootful_record PATH literal-record\n',b'0'),
+                             ('record_guard_fuel=0\nrootful_record PATH literal-record\n',b''),
+                             ('rootful_record PATH literal-record /usr/bin/true\n',b'')):
+            script=fixture.root/'guard-control'
+            script.write_text('set -Eeuo pipefail\nexec 3>&2\nfail() { printf guard-refused\\n >&3; exit 1; }\nrecord_guard_fuel=3\n'+function+body.replace('PATH',str(path)))
+            result=OwnedPipeChild(['/usr/bin/bash',str(script)],self.addCleanup).finish()
+            self.assertEqual(result.returncode,1)
+            self.assertEqual(result.stdout,stdout)
+            self.assertEqual(path.read_bytes(),b'literal-record\n')
+
+    def test_missing_both_partial_or_foreign_state_never_initializes(self):
+        for condition in ('both-missing','phase-missing','cursor-missing','phase-partial','cursor-partial','foreign'):
+            fixture=self.fixture();phase=fixture.root/'rootful/state/phase';cursor=fixture.root/'state'
+            if condition in ('both-missing','phase-missing'): phase.unlink()
+            if condition in ('both-missing','cursor-missing'): cursor.unlink()
+            if condition=='phase-partial': phase.write_bytes(b'partial')
+            if condition=='cursor-partial': cursor.write_bytes(b'partial')
+            if condition=='foreign': phase.write_bytes(phase.read_bytes().replace(b'a'*32,b'c'*32))
+            before=self.snapshot(fixture);result=self.exchange(fixture,b'stage-kind\nabc')
+            self.assertEqual((result.returncode,result.stdout,result.stderr),(1,b'',b'stage-receiver-refused\n'))
+            self.assertEqual(self.snapshot(fixture),before)
 
 
 if __name__ == "__main__":
