@@ -18,5 +18,73 @@
     ],
     "executable-docs": [["bash", "scripts/check-all.sh", "--check"]],
     "full": [["bash", "scripts/check-all.sh", "--check"]]
+  },
+  "tasks": {
+    "rust-quality": {
+      "timeout_seconds": 1800,
+      "commands": [
+        ["cargo", "fmt", "--all", "--", "--check"],
+        ["cargo", "ci-check"],
+        ["cargo", "ci-policy"],
+        ["cargo", "ci-clippy"],
+        ["cargo", "ci-test"],
+        ["cargo", "ci-doctest"],
+        ["env", "RUSTDOCFLAGS=-D warnings", "cargo", "ci-doc"],
+        ["cargo", "package", "--locked", "--allow-dirty"]
+      ]
+    },
+    "msrv": {
+      "timeout_seconds": 1800,
+      "commands": [
+        ["cargo", "ci-check"],
+        ["cargo", "ci-policy"]
+      ]
+    },
+    "dependency-policy": {
+      "timeout_seconds": 900,
+      "commands": [["cargo", "deny", "--all-features", "check"]]
+    },
+    "documentation": {
+      "timeout_seconds": 5400,
+      "commands": [
+        ["bash", "scripts/check-files.sh", "--check"],
+        ["git", "--no-pager", "diff", "--check"],
+        ["actionlint"],
+        ["zizmor", ".github/workflows"],
+        ["python3", "scripts/test-validation-plan.py"],
+        ["python3", "scripts/test-repository-policy.py"],
+        ["python3", "scripts/test-check-all.py"],
+        ["python3", "scripts/test-ci-tools.py"],
+        ["python3", "scripts/test-file-config.py"],
+        ["python3", "scripts/test-renovate-tool.py"],
+        ["python3", "scripts/compatibility-ledger.py"],
+        ["python3", "scripts/test-compatibility-ledger.py"],
+        ["node", "scripts/test-renovate.mjs"],
+        ["lychee", "--config", "lychee.toml", "--root-dir", ".", "--offline", "./**/*.md"]
+      ]
+    },
+    "python-check": {
+      "timeout_seconds": 300,
+      "commands": [
+        ["ruff", "check", "."],
+        ["ruff", "format", "--check", "."],
+        ["ty", "check"]
+      ]
+    },
+    "python-fix": {
+      "timeout_seconds": 300,
+      "commands": [
+        ["ruff", "check", "--fix", "."],
+        ["ruff", "format", "."],
+        ["ty", "check"]
+      ]
+    },
+    "documentation-prose": {
+      "timeout_seconds": 900,
+      "commands": [
+        ["bash", "scripts/check-files.sh", "--check"],
+        ["lychee", "--config", "lychee.toml", "--root-dir", ".", "--offline", "./**/*.md"]
+      ]
+    }
   }
 }

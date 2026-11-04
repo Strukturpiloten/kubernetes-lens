@@ -61,6 +61,43 @@
       "datasourceTemplate": "custom.fcos-qemu-x86_64-stable",
       "versioningTemplate": "regex:^(?<major>[0-9]+)\\.(?<minor>[0-9]+)\\.(?<patch>[0-9]+)\\.(?<build>[0-9]+)$",
       "autoReplaceStringTemplate": "{\n  \"schema\": \"kubernetes-lens-owned-vm-image-v1\",\n  \"release\": \"{{{newValue}}}\",\n  \"archive_sha256\": \"{{{newDigest}}}\"\n}"
+    },
+    {
+      "customType": "regex",
+      "depNameTemplate": "Strukturpiloten/boxferry",
+      "datasourceTemplate": "github-digest",
+      "currentValueTemplate": "automation-v1",
+      "description": [
+        "Update the consumer adoption manifest at the same immutable shared revision."
+      ],
+      "managerFilePatterns": ["/^\\.github/automation\\.json$/"],
+      "matchStrings": [
+        "(?<prefix>\"revision\"[ \\t]*:[ \\t]*\")(?<currentDigest>[a-f0-9]{40})(?<suffix>\")"
+      ]
+    },
+    {
+      "customType": "regex",
+      "depNameTemplate": "Strukturpiloten/boxferry",
+      "datasourceTemplate": "github-digest",
+      "currentValueTemplate": "automation-v1",
+      "description": ["Update explicit shared workflow revision inputs and environment pins."],
+      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
+      "matchStrings": [
+        "(?<prefix>(?:^|\\n)[ \\t]*(?:automation_sha|automation-sha|AUTOMATION_SHA):[ \\t]*[\"\\']?)(?<currentDigest>[a-f0-9]{40})(?<suffix>[\"\\']?)"
+      ]
+    },
+    {
+      "customType": "regex",
+      "depNameTemplate": "Strukturpiloten/boxferry",
+      "datasourceTemplate": "github-digest",
+      "currentValueTemplate": "automation-v1",
+      "description": [
+        "Update annotated shared-source checkout refs without claiming unrelated checkout inputs."
+      ],
+      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
+      "matchStrings": [
+        "(?<prefix># renovate: datasource=github-digest depName=Strukturpiloten/boxferry currentValue=automation-v1\\n[ \\t]*ref:[ \\t]*)(?<currentDigest>[a-f0-9]{40})"
+      ]
     }
   ],
   "packageRules": [
@@ -167,7 +204,7 @@
     },
     {
       "description": [
-        "Review owned VM image version/digest together after generic automerge; stream provides no publication timestamp so promotion remains manual"
+        "Keep the exact qualified conformance target fixed for this overhaul; ADR0101 coupling remains required."
       ],
       "matchManagers": ["custom.regex"],
       "matchDatasources": ["custom.fcos-qemu-x86_64-stable"],
@@ -175,7 +212,26 @@
       "groupName": "Owned kind VM image",
       "dependencyDashboardApproval": true,
       "automerge": false,
-      "minimumReleaseAgeBehaviour": "timestamp-required"
+      "minimumReleaseAgeBehaviour": "timestamp-required",
+      "enabled": false,
+      "matchFileNames": ["scripts/kind-vm-image.json"]
+    },
+    {
+      "description": [
+        "Bootstrap only: advance trusted tool checkout, service and authority manifest together; final preset adoption replaces temporary definitions."
+      ],
+      "matchManagers": ["github-actions", "custom.regex"],
+      "matchDatasources": ["github-digest"],
+      "matchPackageNames": ["Strukturpiloten/boxferry"],
+      "matchFileNames": [
+        ".github/workflows/dependency-eligibility.yml",
+        ".github/automation.json",
+        ".github/workflows/ci.yml"
+      ],
+      "groupName": "Shared BoxFerry automation",
+      "minimumReleaseAge": "0 days",
+      "dependencyDashboardApproval": false,
+      "automerge": true
     }
   ],
   "customDatasources": {
