@@ -18,7 +18,9 @@ default, and never silently discard configuration. Do not apply output or mutate
 unless a separate explicit task authorizes disposable conformance testing.
 
 Rust 2024, MSRV 1.98.1. Start repository-owned YAML with `---`. Pin Actions to full SHAs with exact
-release comments. Keep Cargo and npm locks, Renovate extraction/overlap/replacement and effective
+release comments. Initial canonical BoxFerry automation uses full immutable SHAs with the
+`automation-v1 interface v1` comment under ADR 0102 until infrastructure release tags exist.
+Keep Cargo and npm locks, Renovate extraction/overlap/replacement and effective
 rule-order tests current with every pin change. Preserve the existing license and unrelated work.
 Shared devcontainer tools and Kubernetes pins belong to BoxFerry; do not create duplicate inventories.
 
@@ -64,5 +66,6 @@ Compare local/PR/main/manual/release contracts together and record immutable bas
 all consumers in docs/bootstrap-parity.md. Equivalent definitions must align or have justified linked
 follow-ups. Preserve least privilege, exact-candidate evidence, failure propagation, budgets and cleanup.
 Renovate owns every operational pin exactly once; manual integrity rules come after generic automerge.
-Preserve historical fixtures and fixed compatibility anchors. A passing repository does not prove
+Preserve historical fixtures and fixed compatibility anchors. The qualified FCOS VM remains
+fixed for this overhaul; retain its exact update exclusion and ADR0101 safety coupling. A passing repository does not prove
 workspace rollout. Repository settings follow-up #16 remains visible until an administrator verifies it.

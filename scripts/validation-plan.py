@@ -65,7 +65,7 @@ def policy_at(root: Path) -> dict[str, Any]:
         "documentation_examples_manifest",
         "local_commands",
     }
-    if set(policy) != required or policy["schema"] != SCHEMA:
+    if not required <= policy.keys() or policy.keys() - required - {"tasks"} or policy["schema"] != SCHEMA:
         raise PlanError("validation policy has an unsupported schema or key set")
     jobs = policy["jobs"]
     profile_jobs = policy["profile_jobs"]
@@ -345,7 +345,7 @@ def make_plan(args: argparse.Namespace, policy: dict[str, Any]) -> dict[str, Any
                 profile, reason = profile_for_changes(root, base, head, records, policy, policy_root, local=False)
             except (OSError, ValueError, PlanError) as error:
                 profile, reason = "full", [f"PR classification unavailable: {error}"]
-    elif event in {"push", "workflow_dispatch", "workflow_call"}:
+    elif event in {"push", "workflow_dispatch", "workflow_call", "merge_group"}:
         base = head = tested
         profile, reason = "full", [f"{event} always requires complete validation"]
     else:

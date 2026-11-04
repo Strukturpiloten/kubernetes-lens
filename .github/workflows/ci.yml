@@ -6,6 +6,8 @@ on:
     branches:
       - main
   pull_request:
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
   workflow_call:
 
@@ -161,8 +163,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: Strukturpiloten/boxferry
-          # renovate: datasource=github-digest depName=Strukturpiloten/boxferry currentValue=main
-          ref: da5570e3af4e894aaeb5fed35d633538ef1fca33
+          # renovate: datasource=github-digest depName=Strukturpiloten/boxferry currentValue=automation-v1
+          ref: 322024da130587ba14ea9f7eb499e5f41a07e43d
           path: .shared-tools
           persist-credentials: false
       - name: Read Node runtime from the sole shared version inventory
@@ -190,17 +192,17 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Preserve the aggregate result outside pull requests
-        if: github.event_name != 'pull_request'
-        run: echo 'Lockfile release-age comparison applies to pull requests.'
+        if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
+        run: echo 'Lockfile release-age comparison applies to pull requests and merge-queue candidates.'
       - name: Check out the exact pull-request candidate and base history
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Check out the shared lockfile policy
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: Strukturpiloten/.github
@@ -209,10 +211,10 @@ jobs:
           path: .github/strukturpiloten-shared
           persist-credentials: false
       - name: Reject newly introduced dependencies younger than three days
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: >-
           python3 .github/strukturpiloten-shared/scripts/lockfile_release_age.py
           --repository-root "${GITHUB_WORKSPACE}"

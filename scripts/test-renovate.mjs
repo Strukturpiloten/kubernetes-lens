@@ -10,8 +10,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const renovateRoot = path.join(root, ".ci-tools/renovate");
 const require = createRequire(path.join(renovateRoot, "package.json"));
-const load = (name) =>
-  import(pathToFileURL(path.join(renovateRoot, "dist", name)));
+const load = (name) => import(pathToFileURL(path.join(renovateRoot, "dist", name)));
 const { parse } = require("yaml");
 const { GlobalConfig } = await load("config/global.js");
 GlobalConfig.set({ localDir: root });
@@ -23,30 +22,25 @@ const { matchRegexOrGlob } = await load("util/string-match.js");
 const { validateConfig } = await load("config/validation.js");
 const { applyPackageRules } = await load("util/package-rules/index.js");
 const { resolveConfigPresets } = await load("config/presets/index.js");
-const { doAutoReplace } = await load(
-  "workers/repository/update/branch/auto-replace.js",
-);
+const { doAutoReplace } = await load("workers/repository/update/branch/auto-replace.js");
 const custom = await load("modules/manager/custom/regex/index.js");
 const actions = await load("modules/manager/github-actions/extract.js");
 const rust = await load("modules/manager/rust-toolchain/extract.js");
 const cargo = await load("modules/manager/cargo/extract.js");
-const config = JSON.parse(
-  await fs.readFile(path.join(root, ".github/renovate.json"), "utf8"),
-);
+const config = JSON.parse(await fs.readFile(path.join(root, ".github/renovate.json"), "utf8"));
+const manifest = JSON.parse(await fs.readFile(path.join(root, ".github/automation.json"), "utf8"));
+assert.match(manifest.revision, /^[a-f0-9]{40}$/);
 const toolImage = JSON.parse(
   await fs.readFile(path.join(root, "scripts/renovate-tool.json"), "utf8"),
 ).image;
 const toolVersion = toolImage.split(":")[1].split("@")[0];
 assert.equal(
-  (
-    await fs.readFile(path.join(renovateRoot, "source-image.txt"), "utf8")
-  ).trim(),
+  (await fs.readFile(path.join(renovateRoot, "source-image.txt"), "utf8")).trim(),
   toolImage,
   "extracted runtime must record the same reviewed immutable OCI source",
 );
 assert.equal(
-  JSON.parse(await fs.readFile(path.join(renovateRoot, "package.json"), "utf8"))
-    .version,
+  JSON.parse(await fs.readFile(path.join(renovateRoot, "package.json"), "utf8")).version,
   toolVersion,
   "test runtime must match the exact declared Renovate pin",
 );
@@ -71,11 +65,7 @@ assert.deepEqual(
   [],
   "production config must pass the supported Renovate validator",
 );
-assert.deepEqual(
-  validated.warnings,
-  [],
-  "production config must have no validation warnings",
-);
+assert.deepEqual(validated.warnings, [], "production config must have no validation warnings");
 const { config: effectiveConfig, visitedPresets } = await resolveConfigPresets(
   structuredClone(config),
 );
@@ -83,10 +73,7 @@ assert(
   visitedPresets.merged.includes("config:best-practices"),
   "actual configured preset must participate",
 );
-assert(
-  !effectiveConfig.extends,
-  "all bundled production presets must be resolved",
-);
+assert(!effectiveConfig.extends, "all bundled production presets must be resolved");
 assert(
   effectiveConfig.packageRules.length > config.packageRules.length,
   "inherited generic preset rules must participate",
@@ -112,29 +99,19 @@ const files = new Map(
       "scripts/kind-vm-image.json",
       "rust-toolchain.toml",
       "Cargo.toml",
+      ".github/automation.json",
     ].map(async (f) => [f, await fs.readFile(path.join(root, f), "utf8")]),
   ),
 );
-const ignored = (file, cfg) =>
-  cfg.ignorePaths.some((pattern) => matchRegexOrGlob(file, pattern));
+const ignored = (file, cfg) => cfg.ignorePaths.some((pattern) => matchRegexOrGlob(file, pattern));
 const key = (file, dep) =>
-  JSON.stringify([
-    file,
-    dep.depName,
-    dep.currentValue,
-    dep.currentDigest ?? null,
-    dep.datasource,
-  ]);
+  JSON.stringify([file, dep.depName, dep.currentValue, dep.currentDigest ?? null, dep.datasource]);
 async function inventory(input = files, cfg = config) {
   const out = [];
   for (const [file, content] of input) {
     if (ignored(file, cfg)) continue;
     for (const [manager, implementation, applicable] of [
-      [
-        "github-actions",
-        actions,
-        /^\.github\/workflows\/.*\.ya?ml$/.test(file),
-      ],
+      ["github-actions", actions, /^\.github\/workflows\/.*\.ya?ml$/.test(file)],
       ["rust-toolchain", rust, file === "rust-toolchain.toml"],
       ["cargo", cargo, file === "Cargo.toml"],
     ]) {
@@ -143,10 +120,7 @@ async function inventory(input = files, cfg = config) {
       for (const dep of result?.deps ?? []) {
         if (dep.currentValue?.includes("${{")) {
           assert.equal(dep.depType, "uses-with");
-          assert.equal(
-            dep.currentValue,
-            "${{ steps.shared-node.outputs.version }}",
-          );
+          assert.equal(dep.currentValue, "${{ steps.shared-node.outputs.version }}");
           continue; // derived runtime has no second local version pin
         }
         out.push({ file, manager, dep, extraction: result });
@@ -154,15 +128,11 @@ async function inventory(input = files, cfg = config) {
     }
     if (cfg.enabledManagers.includes("custom.regex"))
       for (const definition of cfg.customManagers) {
-        if (
-          !definition.managerFilePatterns.some((pattern) =>
-            matchRegexOrGlob(file, pattern),
-          )
-        )
+        if (!definition.managerFilePatterns.some((pattern) => matchRegexOrGlob(file, pattern)))
           continue;
         const result = custom.extractPackageFile(content, file, definition);
         for (const dep of result?.deps ?? [])
-          out.push({ file, manager: "custom.regex", dep, extraction: result });
+          out.push({ file, manager: "custom.regex", dep, extraction: result, definition });
       }
   }
   return out;
@@ -174,14 +144,26 @@ function expected(input = files) {
       const workflow = parse(text);
       // Renovate owns each literal declaration once. YAML aliases share that source pin.
       for (const match of text.matchAll(
-        /uses:\s+([^@\s]+)@([a-f0-9]{40}) # (v[0-9.]+)/g,
+        /uses:\s+([^@\s]+)@([a-f0-9]{40}) # (v[0-9.]+|automation-v1)/g,
       )) {
         out.push(
           key(file, {
-            depName: match[1],
+            depName: match[3] === "automation-v1" ? "Strukturpiloten/boxferry" : match[1],
             currentDigest: match[2],
             currentValue: match[3],
-            datasource: "github-tags",
+            datasource: match[3] === "automation-v1" ? "github-digest" : "github-tags",
+          }),
+        );
+      }
+      for (const match of text.matchAll(
+        /^\s+(?:AUTOMATION_SHA|automation[-_]sha):\s*['"]?([a-f0-9]{40})/gm,
+      )) {
+        out.push(
+          key(file, {
+            depName: "Strukturpiloten/boxferry",
+            currentValue: "automation-v1",
+            currentDigest: match[1],
+            datasource: "github-digest",
           }),
         );
       }
@@ -201,7 +183,8 @@ function expected(input = files) {
             out.push(
               key(file, {
                 depName: step.with.repository,
-                currentValue: "main",
+                currentValue:
+                  step.with.repository === "Strukturpiloten/boxferry" ? "automation-v1" : "main",
                 currentDigest: step.with.ref,
                 datasource: "github-digest",
               }),
@@ -209,6 +192,15 @@ function expected(input = files) {
           }
         }
       }
+    } else if (file === ".github/automation.json") {
+      out.push(
+        key(file, {
+          depName: "Strukturpiloten/boxferry",
+          currentValue: "automation-v1",
+          currentDigest: JSON.parse(text).revision,
+          datasource: "github-digest",
+        }),
+      );
     } else if (file === "Cargo.toml") {
       // Independent finite Cargo declaration inventory, including exact inline-table pins.
       for (const section of text.matchAll(
@@ -218,13 +210,8 @@ function expected(input = files) {
           /^([A-Za-z0-9_-]+)\s*=\s*(?:"([^"]+)"|\{[^\n]*version\s*=\s*"([^"]+)")/gm,
         )) {
           const currentValue = match[2] ?? match[3];
-          assert(
-            /^=\d+\.\d+\.\d+$/.test(currentValue),
-            "product Cargo dependencies must be exact",
-          );
-          out.push(
-            key(file, { depName: match[1], currentValue, datasource: "crate" }),
-          );
+          assert(/^=\d+\.\d+\.\d+$/.test(currentValue), "product Cargo dependencies must be exact");
+          out.push(key(file, { depName: match[1], currentValue, datasource: "crate" }));
         }
       }
     } else if (file === "rust-toolchain.toml") {
@@ -254,10 +241,7 @@ function expected(input = files) {
       const match = image.match(
         /^(ghcr\.io\/renovatebot\/renovate):([0-9.]+)@(sha256:[a-f0-9]{64})$/,
       );
-      assert(
-        match,
-        "operational image must have one immutable version/digest pair",
-      );
+      assert(match, "operational image must have one immutable version/digest pair");
       out.push(
         key(file, {
           depName: match[1],
@@ -278,12 +262,9 @@ function ownership(actual, expectedPins = expected()) {
   );
   const owners = new Map();
   for (const row of actual) {
-    const id = key(row.file, row.dep);
+    const id = JSON.stringify([row.file, row.dep.replaceString ?? key(row.file, row.dep)]);
     const owner = owners.get(id);
-    assert(
-      !owner || owner === row.manager,
-      `native/custom manager overlap for ${id}`,
-    );
+    assert(!owner || owner === row.manager, `native/custom manager overlap for ${id}`);
     owners.set(id, row.manager);
   }
 }
@@ -298,11 +279,11 @@ const hostedAction = hostedRows.find((row) => row.dep.depType === "action");
 const hostedRunner = hostedRows.find((row) => row.dep.datasource === "github-runners");
 assert(hostedAction && hostedRunner, "actual native extraction must include both consumers");
 assert.equal(hostedAction.dep.depName, "actions/checkout");
-const canonicalCheckout = actual.find((row) =>
-  row.file === ".github/workflows/ci.yml" && row.dep.depName === "actions/checkout",
+const canonicalCheckout = actual.find(
+  (row) => row.file === ".github/workflows/ci.yml" && row.dep.depName === "actions/checkout",
 );
-const canonicalRunner = actual.find((row) =>
-  row.file === ".github/workflows/ci.yml" && row.dep.datasource === "github-runners",
+const canonicalRunner = actual.find(
+  (row) => row.file === ".github/workflows/ci.yml" && row.dep.datasource === "github-runners",
 );
 assert(canonicalCheckout && canonicalRunner);
 assert.equal(hostedAction.dep.currentDigest, canonicalCheckout.dep.currentDigest);
@@ -315,11 +296,7 @@ assert(
   "foundation parser Cargo dependencies must be owned",
 );
 const timezoneOwners = actual.filter((row) => row.dep.depName === "jiff-tzdb");
-assert.equal(
-  timezoneOwners.length,
-  1,
-  "bundled timezone pin has exactly one owner",
-);
+assert.equal(timezoneOwners.length, 1, "bundled timezone pin has exactly one owner");
 assert.equal(timezoneOwners[0].manager, "cargo");
 const binaryOwners = actual.filter((row) => row.dep.depName === "base64");
 assert.equal(binaryOwners.length, 1, "native binary pin has exactly one owner");
@@ -340,14 +317,10 @@ assert.throws(() => ownership(missingCargo));
 
 // Meaningful negative manager mutations: they must fail the same production inventory assertion.
 const withoutCustom = structuredClone(config);
-withoutCustom.enabledManagers = withoutCustom.enabledManagers.filter(
-  (m) => m !== "custom.regex",
-);
+withoutCustom.enabledManagers = withoutCustom.enabledManagers.filter((m) => m !== "custom.regex");
 const missingCustom = await inventory(files, withoutCustom);
 assert.throws(() => ownership(missingCustom));
-assert.throws(() =>
-  ownership([...actual, actual.find((r) => r.manager === "custom.regex")]),
-);
+assert.throws(() => ownership([...actual, actual.find((r) => r.manager === "custom.regex")]));
 assert.throws(() =>
   ownership([
     ...actual,
@@ -374,11 +347,7 @@ ownership(await inventory(movedFiles), expected(movedFiles));
 const noDatasource = structuredClone(config.customManagers[0]);
 delete noDatasource.datasourceTemplate;
 assert.equal(
-  custom.extractPackageFile(
-    movedContent,
-    ".github/workflows/ci.yml",
-    noDatasource,
-  ),
+  custom.extractPackageFile(movedContent, ".github/workflows/ci.yml", noDatasource),
   null,
   "missing required datasource must not extract a valid dependency",
 );
@@ -393,9 +362,7 @@ assert.deepEqual(
   "historical evidence and nested upstream pins must not auto-advance",
 );
 assert(
-  !config.customManagers.some((m) =>
-    m.matchStrings.some((s) => /1\\\.20|checksum|FROM /.test(s)),
-  ),
+  !config.customManagers.some((m) => m.matchStrings.some((s) => /1\\\.20|checksum|FROM /.test(s))),
   "future compatibility anchors and upstream checksums are not local custom-manager pins",
 );
 
@@ -409,10 +376,7 @@ broaderManager.customManagers[0].managerFilePatterns = [
   "/^(?:docs\\/compatibility|schemas\\/capabilities)\\/.*$/",
 ];
 for (const file of frozenFiles.keys())
-  assert(
-    ignored(file, config),
-    "frozen contract paths must be explicitly excluded",
-  );
+  assert(ignored(file, config), "frozen contract paths must be explicitly excluded");
 assert.deepEqual(
   await inventory(frozenFiles, broaderManager),
   [],
@@ -420,42 +384,28 @@ assert.deepEqual(
 );
 const missingExclusions = structuredClone(broaderManager);
 missingExclusions.ignorePaths = missingExclusions.ignorePaths.filter(
-  (pattern) =>
-    !["docs/compatibility/**", "schemas/capabilities/**"].includes(pattern),
+  (pattern) => !["docs/compatibility/**", "schemas/capabilities/**"].includes(pattern),
 );
 assert(
   (await inventory(frozenFiles, missingExclusions)).length > 0,
   "removing frozen exclusions must expose real dependency extraction",
 );
 const frozenLedger = JSON.parse(
-  await fs.readFile(
-    path.join(root, "schemas/capabilities/kubernetes-1.20-1.37.json"),
-    "utf8",
-  ),
+  await fs.readFile(path.join(root, "schemas/capabilities/kubernetes-1.20-1.37.json"), "utf8"),
 );
-const observerProfilePath =
-  "schemas/capabilities/native-wait-observer-profile.json";
-const observerProfileText = await fs.readFile(
-  path.join(root, observerProfilePath),
-  "utf8",
-);
+const observerProfilePath = "schemas/capabilities/native-wait-observer-profile.json";
+const observerProfileText = await fs.readFile(path.join(root, observerProfilePath), "utf8");
 const observerProfile = JSON.parse(observerProfileText);
 const observerConsumer = await fs.readFile(
   path.join(root, "src/renderer_broker/wait_observer.rs"),
   "utf8",
 );
 function assertObserverAnchor(profile, consumer) {
-  assert.equal(
-    profile.classification,
-    "immutable historical conformance profile",
-  );
+  assert.equal(profile.classification, "immutable historical conformance profile");
   assert.equal(profile.default_enabled, false);
   assert.equal(profile.pin_policy.canonical_definition, observerProfilePath);
   assert.equal(profile.pin_policy.operational_installer, null);
-  assert.equal(
-    profile.pin_policy.renovate_exclusion,
-    "schemas/capabilities/**",
-  );
+  assert.equal(profile.pin_policy.renovate_exclusion, "schemas/capabilities/**");
   assert(Array.isArray(profile.runtime_evidence));
   assert.match(profile.profile.executable_sha256, /^[a-f0-9]{64}$/);
   for (const [name, value] of [
@@ -463,32 +413,19 @@ function assertObserverAnchor(profile, consumer) {
     ["TOOL", profile.profile.executable],
     ["TOOL_SHA", profile.profile.executable_sha256],
   ]) {
-    const actual = consumer.match(
-      new RegExp(`const ${name}: &str = "([^"]+)";`),
-    );
+    const actual = consumer.match(new RegExp(`const ${name}: &str = "([^"]+)";`));
     assert(actual, `fixed observer consumer must expose ${name}`);
-    assert.equal(
-      actual[1],
-      value,
-      `fixed observer ${name} must match its anchor`,
-    );
+    assert.equal(actual[1], value, `fixed observer ${name} must match its anchor`);
   }
-  assert.equal(
-    profile.profile.name,
-    `strace-${profile.profile.version}-supervisor-wait-v1`,
-  );
+  assert.equal(profile.profile.name, `strace-${profile.profile.version}-supervisor-wait-v1`);
 }
 assertObserverAnchor(observerProfile, observerConsumer);
 const changedObserverAnchor = structuredClone(observerProfile);
 changedObserverAnchor.profile.executable_sha256 = "0".repeat(64);
-assert.throws(() =>
-  assertObserverAnchor(changedObserverAnchor, observerConsumer),
-);
+assert.throws(() => assertObserverAnchor(changedObserverAnchor, observerConsumer));
 const changedObserverVersion = structuredClone(observerProfile);
 changedObserverVersion.profile.version = "7.3";
-assert.throws(() =>
-  assertObserverAnchor(changedObserverVersion, observerConsumer),
-);
+assert.throws(() => assertObserverAnchor(changedObserverVersion, observerConsumer));
 assert.deepEqual(
   await inventory(new Map([[observerProfilePath, observerProfileText]])),
   [],
@@ -497,27 +434,21 @@ assert.deepEqual(
 const futureObserverManager = structuredClone(config);
 futureObserverManager.customManagers.push({
   customType: "regex",
-  managerFilePatterns: [
-    "/^schemas\\/capabilities\\/native-wait-observer-profile\\.json$/",
-  ],
+  managerFilePatterns: ["/^schemas\\/capabilities\\/native-wait-observer-profile\\.json$/"],
   matchStrings: ['"version":\\s*"(?<currentValue>[0-9]+\\.[0-9]+)"'],
   depNameTemplate: "strace/strace",
   datasourceTemplate: "github-tags",
   versioningTemplate: "loose",
 });
 assert.deepEqual(
-  await inventory(
-    new Map([[observerProfilePath, observerProfileText]]),
-    futureObserverManager,
-  ),
+  await inventory(new Map([[observerProfilePath, observerProfileText]]), futureObserverManager),
   [],
   "the real engine must exclude the observer anchor even with a future manager",
 );
 const unexcludedObserverManager = structuredClone(futureObserverManager);
-unexcludedObserverManager.ignorePaths =
-  unexcludedObserverManager.ignorePaths.filter(
-    (pattern) => pattern !== "schemas/capabilities/**",
-  );
+unexcludedObserverManager.ignorePaths = unexcludedObserverManager.ignorePaths.filter(
+  (pattern) => pattern !== "schemas/capabilities/**",
+);
 const exposedObserverPins = await inventory(
   new Map([[observerProfilePath, observerProfileText]]),
   unexcludedObserverManager,
@@ -533,23 +464,12 @@ assert.equal(
 );
 
 // Real replacement writes only to a disposable scratch tree, then re-extracts using production managers.
-const scratch = await fs.mkdtemp(
-  path.join(os.tmpdir(), "kubernetes-lens-renovate-"),
-);
+const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "kubernetes-lens-renovate-"));
 try {
   GlobalConfig.set({ localDir: scratch });
-  const sharedRows = actual.filter(
-    (row) => row.dep.datasource === "github-digest",
-  );
-  assert(
-    sharedRows.length >= 2,
-    "both shared tools and policy commits must have owners",
-  );
-  for (const row of [
-    sharedRows[0],
-    actual.find((r) => r.dep.depType === "action"),
-    hostedAction,
-  ]) {
+  const sharedRows = actual.filter((row) => row.dep.datasource === "github-digest");
+  assert(sharedRows.length >= 2, "both shared tools and policy commits must have owners");
+  for (const row of [sharedRows[0], actual.find((r) => r.dep.depType === "action"), hostedAction]) {
     const original = files.get(row.file);
     await fs.mkdir(path.join(scratch, path.dirname(row.file)), {
       recursive: true,
@@ -575,7 +495,7 @@ try {
     );
     const extraction =
       row.manager === "custom.regex"
-        ? custom.extractPackageFile(updated, row.file, config.customManagers[0])
+        ? custom.extractPackageFile(updated, row.file, row.definition)
         : await actions.extractPackageFile(updated, row.file, {});
     const dep = extraction.deps[upgrade.depIndex];
     assert.equal(dep.depName, row.dep.depName);
@@ -587,11 +507,7 @@ try {
     assert.equal(dep.currentDigest, newDigest);
     if (row.manager === "github-actions") {
       await fs.writeFile(path.join(scratch, row.file), original);
-      const bumped = await doAutoReplace(
-        { ...upgrade, newValue: "v7.0.2" },
-        original,
-        false,
-      );
+      const bumped = await doAutoReplace({ ...upgrade, newValue: "v7.0.2" }, original, false);
       const after = await actions.extractPackageFile(bumped, row.file, {});
       assert.equal(after.deps[upgrade.depIndex].currentValue, "v7.0.2");
       assert.equal(
@@ -612,24 +528,13 @@ try {
     depIndex: binaryRow.extraction.deps.indexOf(binaryRow.dep),
     newValue: "=0.22.2",
   };
-  const binaryUpdated = await doAutoReplace(
-    binaryUpgrade,
-    binaryOriginal,
-    false,
-  );
+  const binaryUpdated = await doAutoReplace(binaryUpgrade, binaryOriginal, false);
   assert(
     binaryUpdated && binaryUpdated !== binaryOriginal,
     "actual Cargo replacement advances the binary pin",
   );
-  const binaryAfter = await cargo.extractPackageFile(
-    binaryUpdated,
-    binaryRow.file,
-    {},
-  );
-  assert.equal(
-    binaryAfter.deps[binaryUpgrade.depIndex].currentValue,
-    "=0.22.2",
-  );
+  const binaryAfter = await cargo.extractPackageFile(binaryUpdated, binaryRow.file, {});
+  assert.equal(binaryAfter.deps[binaryUpgrade.depIndex].currentValue, "=0.22.2");
   assert(
     binaryUpdated.includes("default-features = false"),
     "replacement preserves disabled default features",
@@ -652,21 +557,10 @@ try {
     depIndex: rendererRow.extraction.deps.indexOf(rendererRow.dep),
     newValue: "=0.31.3",
   };
-  const rendererUpdated = await doAutoReplace(
-    rendererUpgrade,
-    rendererOriginal,
-    false,
-  );
+  const rendererUpdated = await doAutoReplace(rendererUpgrade, rendererOriginal, false);
   assert(rendererUpdated && rendererUpdated !== rendererOriginal);
-  const rendererAfter = await cargo.extractPackageFile(
-    rendererUpdated,
-    rendererRow.file,
-    {},
-  );
-  assert.equal(
-    rendererAfter.deps[rendererUpgrade.depIndex].currentValue,
-    "=0.31.3",
-  );
+  const rendererAfter = await cargo.extractPackageFile(rendererUpdated, rendererRow.file, {});
+  assert.equal(rendererAfter.deps[rendererUpgrade.depIndex].currentValue, "=0.31.3");
   assert(
     rendererUpdated.includes(
       'features = ["ptrace", "process", "signal", "user", "fs", "time"], optional = true',
@@ -674,10 +568,7 @@ try {
   );
   const absentRenderer = rendererOriginal.replace(/^nix =.*\n/m, "");
   await fs.writeFile(path.join(scratch, rendererRow.file), absentRenderer);
-  assert.equal(
-    await doAutoReplace(rendererUpgrade, absentRenderer, false),
-    absentRenderer,
-  );
+  assert.equal(await doAutoReplace(rendererUpgrade, absentRenderer, false), absentRenderer);
   const imageRow = actual.find((row) => row.dep.datasource === "docker");
   const originalImage = files.get(imageRow.file);
   await fs.mkdir(path.join(scratch, path.dirname(imageRow.file)), {
@@ -699,11 +590,7 @@ try {
       originalImage,
       false,
     );
-    const after = custom.extractPackageFile(
-      updated,
-      imageRow.file,
-      config.customManagers[1],
-    );
+    const after = custom.extractPackageFile(updated, imageRow.file, config.customManagers[1]);
     assert.equal(
       after.deps[0].currentValue,
       newValue,
@@ -718,6 +605,65 @@ try {
 } finally {
   GlobalConfig.set({ localDir: root });
   await fs.rm(scratch, { recursive: true, force: true });
+}
+
+// The seven public reusable-workflow pins and matching inputs have exclusive updater spans.
+const sharedInterfaceNames = [
+  "shared-rust-ci",
+  "shared-rust-dependencies",
+  "shared-rust-semver",
+  "shared-release-prepare",
+  "shared-release-validation",
+  "shared-dependency-eligibility",
+  "shared-dependency-wait",
+];
+const interfaceFile = ".github/workflows/dependency-eligibility.yml";
+let interfaceText =
+  "---\njobs:\n" +
+  sharedInterfaceNames
+    .map(
+      (name, index) =>
+        `  check${index}:\n    uses: Strukturpiloten/boxferry/.github/workflows/${name}.yml@${manifest.revision} # automation-v1 interface v1\n    with:\n      ${name === "shared-dependency-eligibility" ? "automation-sha" : "automation_sha"}: ${manifest.revision}\n`,
+    )
+    .join("");
+const interfaceFiles = new Map([[interfaceFile, interfaceText]]);
+const interfaceRows = await inventory(interfaceFiles);
+ownership(interfaceRows, expected(interfaceFiles));
+assert.equal(interfaceRows.filter((row) => row.manager === "github-actions").length, 7);
+assert.equal(interfaceRows.filter((row) => row.manager === "custom.regex").length, 7);
+const interfaceScratch = await fs.mkdtemp(
+  path.join(os.tmpdir(), "kubernetes-lens-shared-interface-"),
+);
+try {
+  GlobalConfig.set({ localDir: interfaceScratch });
+  await fs.mkdir(path.join(interfaceScratch, ".github/workflows"), { recursive: true });
+  for (const row of interfaceRows) {
+    await fs.writeFile(path.join(interfaceScratch, interfaceFile), interfaceText);
+    const updated = await doAutoReplace(
+      {
+        ...row.extraction,
+        ...row.dep,
+        manager: row.manager === "custom.regex" ? "regex" : row.manager,
+        packageFile: interfaceFile,
+        depIndex: row.extraction.deps.indexOf(row.dep),
+        newDigest: "d".repeat(40),
+        newValue: "automation-v1",
+      },
+      interfaceText,
+      false,
+    );
+    assert(updated, "native replacement must retain the complete workflow fixture");
+    interfaceText = updated;
+  }
+  const replaced = new Map([[interfaceFile, interfaceText]]);
+  const after = await inventory(replaced);
+  ownership(after, expected(replaced));
+  assert.equal(after.length, 14);
+  assert(after.every((row) => row.dep.currentDigest === "d".repeat(40)));
+  assert(after.every((row) => row.dep.currentValue === "automation-v1"));
+} finally {
+  GlobalConfig.set({ localDir: root });
+  await fs.rm(interfaceScratch, { recursive: true, force: true });
 }
 
 async function policy(dep, cfg = effectiveConfig) {
@@ -777,8 +723,10 @@ for (const updateType of ["minor", "patch", "pin", "digest", "pinDigest"]) {
   assert.equal(toolchain.groupName, "Rust toolchain");
   assert.equal(toolchain.automerge, false);
   assert.equal(toolchain.dependencyDashboardApproval, true);
-  for (const row of actual.filter((r) =>
-    ["github-digest", "github-runners", "docker"].includes(r.dep.datasource),
+  for (const row of actual.filter(
+    (r) =>
+      ["github-digest", "github-runners", "docker"].includes(r.dep.datasource) &&
+      !(r.dep.depName === "Strukturpiloten/boxferry" && r.dep.currentValue === "automation-v1"),
   )) {
     const effective = await policy({
       ...row.dep,
@@ -793,8 +741,7 @@ for (const updateType of ["minor", "patch", "pin", "digest", "pinDigest"]) {
     );
     assert.equal(effective.dependencyDashboardApproval, true);
     assert.equal(effective.minimumReleaseAge, "3 days");
-    if (row.dep.datasource === "docker")
-      assert.equal(effective.pinDigests, true);
+    if (row.dep.datasource === "docker") assert.equal(effective.pinDigests, true);
     assert.equal(
       effective.groupName,
       row.dep.datasource === "github-digest"
@@ -866,11 +813,7 @@ const major = await policy({
   depName: "serde",
   updateType: "major",
 });
-assert.notEqual(
-  major.automerge,
-  true,
-  "major updates cannot inherit non-major automerge",
-);
+assert.notEqual(major.automerge, true, "major updates cannot inherit non-major automerge");
 const reordered = structuredClone(effectiveConfig);
 const broad = reordered.packageRules.find(
   (r) => r.automerge === true && r.matchUpdateTypes.includes("digest"),
@@ -952,6 +895,87 @@ assert.throws(
   "negative generic-rule reorder must expose image digest automerge regression",
 );
 // Owned VM image: actual selected-engine projection, tuple update and age refusal.
+const eligibilityEventGuard =
+  "github.event_name == 'schedule' || " +
+  "(github.event_name == 'workflow_run' && " +
+  "(github.event.workflow_run.event == 'pull_request' || " +
+  "github.event.workflow_run.event == 'merge_group'))";
+function validateTrustedListener(content) {
+  const listener = parse(content);
+  assert.deepEqual(Object.keys(listener.on).sort(), ["schedule", "workflow_run"]);
+  assert.deepEqual(listener.on.workflow_run.workflows, ["CI"]);
+  assert.deepEqual(listener.on.workflow_run.types, ["requested", "completed"]);
+  assert.deepEqual(listener.permissions, {
+    contents: "read",
+    actions: "write",
+    "pull-requests": "read",
+    statuses: "write",
+  });
+  assert.deepEqual(Object.keys(listener.jobs), ["eligibility"]);
+  assert.deepEqual(Object.keys(listener.jobs.eligibility).sort(), ["if", "uses", "with"]);
+  assert.equal(listener.jobs.eligibility.if, eligibilityEventGuard);
+  assert.equal(
+    listener.jobs.eligibility.uses,
+    `Strukturpiloten/boxferry/.github/workflows/shared-dependency-eligibility.yml@${manifest.revision}`,
+  );
+  assert.deepEqual(listener.jobs.eligibility.with, { "automation-sha": manifest.revision });
+}
+const serviceFile = ".github/workflows/dependency-eligibility.yml";
+const serviceText = files.get(serviceFile);
+validateTrustedListener(serviceText);
+for (const mutation of [
+  serviceText.replace("  workflow_run:", "  pull_request_target:"),
+  serviceText.replace("  workflow_run:", "  pull_request:"),
+  serviceText.replace("  workflow_run:", "  merge_group:"),
+  serviceText.replace("@" + manifest.revision, "@main"),
+  serviceText.replace("automation-sha: " + manifest.revision, "automation-sha: " + "d".repeat(40)),
+  serviceText.replace("  contents: read", "  contents: write"),
+  serviceText.replace("    workflows: [CI]", "    workflows: [Renamed CI]"),
+  serviceText.replace(/^    if: >-\n(?:      .+\n)+/m, ""),
+  serviceText.replace("github.event_name == 'schedule' ||", "true ||"),
+  serviceText.replace(
+    "github.event_name == 'schedule' ||",
+    "github.event_name == 'schedule' &&",
+  ),
+  serviceText.replace("github.event.workflow_run.event == 'pull_request'", "true"),
+  serviceText.replace(
+    "github.event.workflow_run.event == 'merge_group'",
+    "github.event.workflow_run.event == 'push'",
+  ),
+  serviceText.replace("    uses:", "    continue-on-error: true\n    uses:"),
+  serviceText.replace("    uses:", "    steps: []\n    uses:"),
+])
+  assert.throws(() => validateTrustedListener(mutation));
+assert.deepEqual(Object.keys(manifest).sort(), [
+  "interface",
+  "policy",
+  "repository",
+  "revision",
+  "schema",
+]);
+assert.equal(manifest.schema, 1);
+assert.equal(manifest.interface, 1);
+assert.equal(manifest.repository, "Strukturpiloten/boxferry");
+assert.equal(manifest.policy, "scripts/validation-policy.json");
+const authorityRows = actual.filter(
+  (row) =>
+    row.dep.depName === "Strukturpiloten/boxferry" && row.dep.currentValue === "automation-v1",
+);
+assert.equal(authorityRows.length, 4);
+
+assert(authorityRows.every((row) => row.dep.currentDigest === manifest.revision));
+for (const row of authorityRows) {
+  const enabled = await policy({
+    ...row.dep,
+    manager: row.manager,
+    packageFile: row.file,
+    updateType: "digest",
+  });
+  assert.equal(enabled.groupName, "Shared BoxFerry automation");
+  assert.equal(enabled.automerge, true);
+  assert.equal(enabled.dependencyDashboardApproval, false);
+  assert(enabled.minimumReleaseAge === null || enabled.minimumReleaseAge === "0 days");
+}
 const vmFile = "scripts/kind-vm-image.json";
 const vmText = files.get(vmFile);
 const vmPin = JSON.parse(vmText);
@@ -967,12 +991,28 @@ assert.deepEqual(liveSchema.const, liveFacts);
 assert.equal(liveFacts.resource_profile, "owned-vm-live-v1");
 const { owner: liveImageOwner, ...liveImageAnchor } = liveFacts.canonical_image;
 assert.equal(liveImageOwner, vmFile);
-assert.deepEqual(liveImageAnchor, vmPin, "canonical FCOS changes require fresh compatibility review");
-assert.deepEqual(await inventory(new Map([[liveFactsFile, liveFactsText], [liveSchemaFile, liveSchemaText]])), []);
+assert.deepEqual(
+  liveImageAnchor,
+  vmPin,
+  "canonical FCOS changes require fresh compatibility review",
+);
+assert.deepEqual(
+  await inventory(
+    new Map([
+      [liveFactsFile, liveFactsText],
+      [liveSchemaFile, liveSchemaText],
+    ]),
+  ),
+  [],
+);
 for (const manager of config.customManagers)
-  assert(!manager.managerFilePatterns.some((pattern) =>
-    matchRegexOrGlob(liveFactsFile, pattern) || matchRegexOrGlob(liveSchemaFile, pattern)),
-    "compatibility anchors must not become duplicate operational pin owners");
+  assert(
+    !manager.managerFilePatterns.some(
+      (pattern) =>
+        matchRegexOrGlob(liveFactsFile, pattern) || matchRegexOrGlob(liveSchemaFile, pattern),
+    ),
+    "compatibility anchors must not become duplicate operational pin owners",
+  );
 assert.equal(BigInt(liveFacts.theorem.aggregate_upper), 2n ** 48n);
 assert(BigInt(liveFacts.theorem.aggregate_upper) < 32767n * 9999999999n);
 
@@ -985,13 +1025,19 @@ assert.equal(vmRows.length, 1);
 const vmRow = vmRows[0];
 assert.equal(vmRow.manager, "custom.regex");
 for (const manager of config.enabledManagers.filter((name) => name !== "custom.regex")) {
-  assert(["cargo", "github-actions", "rust-toolchain"].includes(manager),
-    "new enabled manager requires actual VM ownership review");
+  assert(
+    ["cargo", "github-actions", "rust-toolchain"].includes(manager),
+    "new enabled manager requires actual VM ownership review",
+  );
   const native = await load(`modules/manager/${manager}/index.js`);
-  const patterns = [...native.defaultConfig.managerFilePatterns,
-    ...(effectiveConfig[manager]?.managerFilePatterns ?? [])];
-  assert(!patterns.some((pattern) => matchRegexOrGlob(vmFile, pattern)),
-    `${manager} actual default/configured patterns must not overlap VM owner`);
+  const patterns = [
+    ...native.defaultConfig.managerFilePatterns,
+    ...(effectiveConfig[manager]?.managerFilePatterns ?? []),
+  ];
+  assert(
+    !patterns.some((pattern) => matchRegexOrGlob(vmFile, pattern)),
+    `${manager} actual default/configured patterns must not overlap VM owner`,
+  );
 }
 
 const vmDatasource = vmRow.dep.datasource;
@@ -1047,7 +1093,9 @@ const { checkMinimumReleaseAge } = await load("util/minimum-release-age.js");
 const { getConfig: renovateDefaults } = await load("config/defaults.js");
 assert.equal(renovateDefaults().internalChecksFilter, "strict");
 const { filterInternalChecks } = await load("workers/repository/process/lookup/filter-checks.js");
-const { resolveUpdateDigests, applyMinimumReleaseAgeToDigestUpdate } = await load("workers/repository/process/lookup/digest.js");
+const { resolveUpdateDigests, applyMinimumReleaseAgeToDigestUpdate } = await load(
+  "workers/repository/process/lookup/digest.js",
+);
 const vmVersioning = versioning(vmManager.versioningTemplate);
 for (const [older, newer] of [
   ["44.20260928.3.2", "44.20260928.3.10"],
@@ -1108,9 +1156,16 @@ async function projectVm(input, overrides = {}) {
   return { result, datasource };
 }
 const absentVmDatasource = new CustomDatasource();
-assert.equal(await absentVmDatasource.getReleases({ datasource: vmDatasource,
-  packageName: vmName, currentValue: vmPin.release, customDatasources: {} }), null,
-  "missing configured datasource must not offer releases");
+assert.equal(
+  await absentVmDatasource.getReleases({
+    datasource: vmDatasource,
+    packageName: vmName,
+    currentValue: vmPin.release,
+    customDatasources: {},
+  }),
+  null,
+  "missing configured datasource must not offer releases",
+);
 const projected = await projectVm(stream());
 assert.equal(projected.result.releases.length, 1);
 assert.equal(projected.result.releases[0].version, "44.20260928.3.10");
@@ -1184,11 +1239,18 @@ const vmEffective = await policy({
   updateType: "patch",
 });
 const digestAgeUpdate = { updateType: "digest" };
-await applyMinimumReleaseAgeToDigestUpdate(digestAgeUpdate,
+await applyMinimumReleaseAgeToDigestUpdate(
+  digestAgeUpdate,
   { ...vmEffective, internalChecksFilter: renovateDefaults().internalChecksFilter },
-  {}, true, undefined);
-assert.equal(digestAgeUpdate.pendingChecks, true,
-  "actual digest-only lookup also holds missing publication timestamps");
+  {},
+  true,
+  undefined,
+);
+assert.equal(
+  digestAgeUpdate.pendingChecks,
+  true,
+  "actual digest-only lookup also holds missing publication timestamps",
+);
 const resolved = { warnings: [], updates: [{ newValue: "44.20260928.3.10", updateType: "patch" }] };
 await resolveUpdateDigests(vmEffective, resolved, projected.result);
 assert.equal(
@@ -1247,6 +1309,47 @@ assert.equal(
   "moving manual rule before generic rule must expose regression",
 );
 
+const fixedTarget = effectiveConfig.packageRules.find(
+  (rule) => rule.groupName === "Owned kind VM image",
+);
+assert.equal(fixedTarget.enabled, false);
+assert.deepEqual(fixedTarget.matchFileNames, [vmFile]);
+for (const updateType of ["major", "minor", "patch", "pin", "digest", "pinDigest"]) {
+  const fixed = await policy({
+    ...vmRow.dep,
+    manager: vmRow.manager,
+    packageFile: vmFile,
+    updateType,
+  });
+  assert.equal(fixed.enabled, false);
+}
+for (const different of [
+  { packageFile: "scripts/other.json" },
+  { depName: "other-image" },
+  { manager: "cargo" },
+  { datasource: "docker" },
+]) {
+  const other = await policy({
+    ...vmRow.dep,
+    manager: vmRow.manager,
+    packageFile: vmFile,
+    updateType: "patch",
+    ...different,
+  });
+  assert.notEqual(other.enabled, false);
+}
+const unfreezing = structuredClone(effectiveConfig);
+unfreezing.packageRules.push({
+  matchManagers: ["custom.regex"],
+  matchPackageNames: [vmName],
+  matchFileNames: [vmFile],
+  enabled: true,
+});
+const unfrozen = await policy(
+  { ...vmRow.dep, manager: vmRow.manager, packageFile: vmFile, updateType: "patch" },
+  unfreezing,
+);
+assert.throws(() => assert.equal(unfrozen.enabled, false));
 console.log(
   `Renovate ${toolVersion}: RE2 available; ${actual.length} actual pins with exclusive owners; extraction, replacement, rule-order and mutation regressions passed.`,
 );
