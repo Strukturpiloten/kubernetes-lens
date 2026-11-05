@@ -53,8 +53,8 @@ yaml-rust2 = { version = "=0.13.0", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "=0.2.191"
-nix = { version = "=0.31.2", features = ["ptrace", "process", "signal", "user", "fs", "time"], optional = true }
-rustix = { version = "=1.1.5", features = ["process", "net", "fs", "pipe"], optional = true }
+nix = { version = "=0.31.3", features = ["ptrace", "process", "signal", "user", "fs", "time"], optional = true }
+rustix = { version = "=1.1.6", features = ["process", "net", "fs", "pipe"], optional = true }
 command-fds = { version = "=0.3.3", optional = true }
 close_fds = { version = "=0.3.2", optional = true }
-sha2 = { version = "=0.11.0", default-features = false, optional = true }
+sha2 = { version = "=0.11.1", default-features = false, optional = true }
