@@ -19,6 +19,17 @@ Main, manual,
 local pre-publication, and release validation retain the complete gate. The first adoption seeds
 the task policy while retaining existing Rust jobs until that policy is trusted on main.
 
+Complete and executable-documentation plans execute the full repository policy and fixture suite
+once through the unchanged all-target, all-feature Rust tests. Normal Rust and MSRV tasks retain
+`cargo ci-policy --no-run` to build and link the original default-feature policy target under each
+toolchain; MSRV also retains all-target, all-feature typechecking. The standalone policy alias and
+Python runner remain executable. Pure prose keeps its existing file/link-only profile. Every
+non-prose profile must require the Rust job, and the aggregate rejects its failure or skip.
+Trusted older task lists remain runnable and may repeat policy execution during adoption; the
+candidate never bypasses trusted-base commands. Distinct Rust and native source-contract suites,
+including the external kind-runtime self-test, remain unchanged. This changes execution ownership,
+not fixture cases, native qualification, resource budgets or publication authority.
+
 Dependency upgrades need automated integrity, compatibility, and admission checks rather than
 manual Dashboard approval. Ordinary third-party updates wait 72 hours. A verified first-party
 package-update PR is wholly exempt, including its necessary lockfile closure. A trusted service
@@ -38,6 +49,13 @@ Only the exact `scripts/kind-vm-image.json` dependency is excluded from routine 
 its extractor, checksum coupling, ADR 0101 safety premises, and historical evidence are retained.
 No automatic qualification pipeline is added. KubernetesLens remains unpublished: release automation is read-only validation,
 and software publication still requires separate maintainer approval.
+
+API baselines follow [BoxFerry ADR 0096](https://github.com/Strukturpiloten/boxferry/blob/main/docs/decisions/0096-development-and-published-api-baselines.md).
+The existing `rust` job wraps canonical Rust quality and API validation without changing trusted
+job selection. Ordinary development uses trusted Git history; release validation explicitly uses
+published purpose and requires its exact API candidate before exposing aggregate success.
+Canonical absence requires the unfiltered positive foundation suite, never absence alone.
+The package stays private and publication disabled.
 
 ## Consequences
 

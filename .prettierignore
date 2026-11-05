@@ -6,3 +6,6 @@
 /package-lock.json
 /LICENSE
 /.ci-tools/
+
+/_automation/
+/_policy/

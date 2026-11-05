@@ -31,20 +31,29 @@ policy suite. These tests do not establish API-server or runtime conformance.
 There is no native coverage ratchet or conformance gate yet; do not fabricate passing fixture,
 coverage, version or cluster evidence. Native suites and meaningful thresholds belong to #7.
 
-PR prose changes may select documentation and lockfile age checks only. Executable examples and all
-other changes select every job. Main, manual dispatch and release validation always select every
-job. Unknown paths, invalid comparison, changed policy, and first rollout fail full. Missing, failed,
-cancelled or unexpectedly skipped selected jobs make the PR gate fail. Test the inline bootstrap
-fallback as executed Python, not only as YAML strings.
+PR and merge-queue prose changes select file/link quality and dependency admission without Rust
+builds, native fixture suites, or Renovate OCI extraction. Executable examples and all other
+changes select every job. Main, manual dispatch and release validation always select every job.
+The shared planner compares actual changes under trusted base policy; unknown paths, invalid
+comparisons, and changed policy fail full. Missing, failed, cancelled, or unexpectedly skipped
+selected jobs make `Required CI` fail. Consumer tests verify immutable shared refs, preserved
+repository tasks, and trust boundaries; classifier/runner regressions live once in BoxFerry.
 
 At most one complete or heavy workspace gate may run at a time. Use worktree-local target storage;
 never reuse another checkout's fixture-path-sensitive artifacts. Native runtime evidence is future work.
 
-The documentation phase checks the [frozen compatibility specification](compatibility/README.md),
+The complete documentation phase checks the [frozen compatibility specification](compatibility/README.md),
 independent schema witnesses, concrete native-kind scenarios and exact gate/command evidence cells.
 Its regressions cover numeric version bounds, removed APIs, gate defaults/settings, template
 contexts, per-field/profile obligations and mutated source facts. All native outcomes remain pending.
 Compatibility documentation always selects the full validation plan.
+
+The complete local gate also runs the typed `api-development` task through the existing shared
+launcher. It selects `kubernetes-lens` explicitly and derives the verified automation revision from
+`.github/automation.json`. CI retains five trusted jobs; its `rust` wrapper requires both exact
+Rust quality and API success. Shell regressions cover failures, cancellation, skips, candidate
+mismatches and purpose-bound output. The `initial-api-contract` task runs the unfiltered existing
+foundation suite when canonical publication is absent; a missing baseline alone cannot pass.
 
 ## Offline foundation
 
@@ -90,11 +99,14 @@ repository policies and both fixture modules, or
 
 The policy runner discovers each fixture test once and requires the source-receipt and renderer
 expectation witness IDs from their respective modules. Missing modules, absent witness tests,
-discovery/import errors and assertion failures make policy validation fail. The existing Cargo
-`repository_policy` harness (`cargo ci-policy`, including MSRV) and documentation phase both
-invoke that runner, so the complete gate includes these tests without an optional fixture switch.
-Gate regressions execute the real policy hook with synthetic fixtures and fake build/tool commands;
-they prove independent assertion, missing-module and wrong-test-ID failures stop validation.
+discovery/import errors and assertion failures make policy validation fail. `cargo ci-test` runs
+the unchanged `repository_policy` harness once in the complete gate. Normal Rust and MSRV phases
+also build and link the default-feature policy target with `cargo ci-policy --no-run`; MSRV still
+checks every target with all features. The standalone `cargo ci-policy` alias continues to execute
+the full suite for focused work. Documentation-only phase feedback omits these semantic tests;
+executable documentation and complete plans require the Rust job. Gate regressions invoke the real
+policy runner with synthetic fixtures through fake Cargo commands and retain assertion, module,
+discovery and witness failure controls.
 
 These tests neither acquire official sources nor execute Helm/Kustomize, native corpus acceptance,
 API validation or runtime commands. Corpus bytes remain in caller-owned public caches and private

@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "repository": "Strukturpiloten/kubernetes-lens",
+  "packages": ["kubernetes-lens"],
+  "required_jobs": ["validate"],
+  "publication_enabled": false
+}

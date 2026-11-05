@@ -239,7 +239,7 @@ license/provenance requirements and diagnostic privacy. It is preparation eviden
 
 Both preparation and admission modules are required by
 [the repository policy runner](../../scripts/test-repository-policy.py), reached by the existing
-Cargo policy harness and documentation gate. Its single discovery pass includes all 97 fixture
+Cargo all-target test harness. Its single discovery pass includes all 97 fixture
 tests and requires the original source-receipt and renderer-expectation witness IDs. Missing
 modules, missing witnesses, import/discovery errors and assertions fail validation. Gate
 regressions independently exercise missing-module and fixture assertion failures with fake

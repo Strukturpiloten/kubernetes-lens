@@ -18,8 +18,13 @@ a new workflow container image or install host/guest packages. Hosted kind quali
 separate pending work in #62; ordinary CI, manual and release validation do not boot this guest.
 
 Prerequisites: the shared Rust/file-quality tools, Git, Python 3.11 or newer (standard-library tomllib),
-Node from the shared environment, and Docker or Podman to retrieve the operational test artifact.
-Run `./scripts/install-renovate-tool.sh` once (or set `KUBERNETES_LENS_CONTAINER_ENGINE=podman`).
+Node from the shared environment and Podman for local operational artifact extraction.
+Run `KUBERNETES_LENS_CONTAINER_ENGINE=podman ./scripts/install-renovate-tool.sh` once. Hosted
+GitHub extraction uses its explicit Docker backend; no runtime fallback is selected.
+The immutable shared bootstrap provisions checksum-verified uv and the locked project supplies
+its reviewed Python version and hashed Ruff/ty requirements. Six downloaded check binaries use
+the same canonical tool-artifacts inventory and installer; Zizmor retains its shared Cargo lock
+and Node tools use the shared npm lock. This repository declares no second tool-version inventory.
 It extracts the verified official OCI runtime into ignored `.ci-tools`, without starting Renovate or
 contacting a platform API. The actual-engine regression suite fails if RE2 is unavailable or if the
 contained package version/source image does not match the immutable pin. CI uses the same artifact.

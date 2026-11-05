@@ -21,7 +21,7 @@ if [[ ! "${cargo_jobs}" =~ ^[1-9][0-9]*$ ]]; then
 fi
 readonly cargo_jobs
 
-required_tools=(actionlint bash cargo git zizmor)
+required_tools=(actionlint bash cargo git python3 zizmor)
 missing_tools=()
 for tool in "${required_tools[@]}"; do
   if ! command -v "${tool}" > /dev/null 2>&1; then
@@ -36,7 +36,7 @@ if (("${#missing_tools[@]}" != 0)); then
 fi
 
 step=0
-readonly total_steps=7
+readonly total_steps=8
 started_at="${SECONDS}"
 
 run_step() {
@@ -75,6 +75,13 @@ run_step "Check unstaged whitespace errors" git --no-pager diff --check
 run_step "Check staged whitespace errors" git --no-pager diff --cached --check
 run_step "Lint GitHub Actions syntax" actionlint
 run_step "Lint GitHub Actions security" zizmor .github/workflows
+if [[ "${mode}" == "--check" ]]; then
+  run_step "Check shared Python formatting, lint and types" \
+    python3 scripts/shared-ci.py run --event local --task python-check
+else
+  run_step "Format, lint and type-check shared Python" \
+    python3 scripts/shared-ci.py run --event local --task python-fix
+fi
 run_step "Run Clippy without executing tests" \
   env CARGO_BUILD_JOBS="${cargo_jobs}" cargo ci-clippy
 

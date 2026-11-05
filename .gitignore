@@ -6,3 +6,5 @@
 *.pyc
 .codegraph/
 /.ci-tools
+/_automation/
+/_policy/

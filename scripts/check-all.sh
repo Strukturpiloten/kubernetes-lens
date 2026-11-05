@@ -42,4 +42,7 @@ for phase in rust msrv dependencies documentation; do
   printf '\nComplete validation phase: %s\n' "${phase}"
   bash scripts/run-checks.sh "${phase}"
 done
-printf '\nKubernetesLens complete validation passed. Native conformance and published API compatibility are unavailable in this unpublished foundation.\n'
+current_step='api-development'
+printf '\nComplete validation phase: %s\n' "${current_step}"
+python3 scripts/shared-ci.py run --event local --task api-development --report-json target/api-development-task.json
+printf '\nKubernetesLens complete validation passed. Native conformance remains unavailable in this unpublished foundation.\n'
