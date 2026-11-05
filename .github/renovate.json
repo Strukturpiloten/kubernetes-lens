@@ -1,12 +1,17 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:best-practices"],
-  "enabledManagers": ["cargo", "github-actions", "rust-toolchain", "custom.regex"],
-  "dependencyDashboard": true,
-  "minimumReleaseAge": "3 days",
-  "prConcurrentLimit": 5,
-  "prHourlyLimit": 2,
-  "timezone": "Europe/Berlin",
+  "extends": [
+    "github>Strukturpiloten/boxferry//renovate-presets/common#5b4deb3fa2e06a0eea1643bbbdecec34e18b1281",
+    "github>Strukturpiloten/boxferry//renovate-presets/rust#5b4deb3fa2e06a0eea1643bbbdecec34e18b1281"
+  ],
+  "enabledManagers": [
+    "cargo",
+    "github-actions",
+    "rust-toolchain",
+    "custom.regex",
+    "pep621",
+    "pyenv"
+  ],
   "ignorePaths": [
     "**/node_modules/**",
     "**/target/**",
@@ -16,25 +21,12 @@
     "**/.shared-tools/**",
     "**/.validation-base/**",
     "docs/compatibility/**",
-    "schemas/capabilities/**"
+    "schemas/capabilities/**",
+    "**/_automation/**",
+    "**/_policy/**",
+    "**/.ci-tools/**"
   ],
-  "lockFileMaintenance": {
-    "enabled": true
-  },
   "customManagers": [
-    {
-      "customType": "regex",
-      "description": [
-        "Track immutable shared tool and policy revisions; upstream owns its entire pin inventory"
-      ],
-      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
-      "matchStrings": [
-        "(?<indentation>[ \\t]*)# renovate: datasource=github-digest depName=(?<depName>Strukturpiloten/(?:boxferry|\\.github)) currentValue=(?<currentValue>main)\\n[ \\t]*ref:\\s*(?<currentDigest>[a-f0-9]{40})"
-      ],
-      "datasourceTemplate": "github-digest",
-      "versioningTemplate": "git",
-      "autoReplaceStringTemplate": "{{{indentation}}}# renovate: datasource=github-digest depName={{{depName}}} currentValue={{{newValue}}}\n{{{indentation}}}ref: {{{newDigest}}}"
-    },
     {
       "customType": "regex",
       "description": [
@@ -61,96 +53,13 @@
       "datasourceTemplate": "custom.fcos-qemu-x86_64-stable",
       "versioningTemplate": "regex:^(?<major>[0-9]+)\\.(?<minor>[0-9]+)\\.(?<patch>[0-9]+)\\.(?<build>[0-9]+)$",
       "autoReplaceStringTemplate": "{\n  \"schema\": \"kubernetes-lens-owned-vm-image-v1\",\n  \"release\": \"{{{newValue}}}\",\n  \"archive_sha256\": \"{{{newDigest}}}\"\n}"
-    },
-    {
-      "customType": "regex",
-      "depNameTemplate": "Strukturpiloten/boxferry",
-      "datasourceTemplate": "github-digest",
-      "currentValueTemplate": "automation-v1",
-      "description": [
-        "Update the consumer adoption manifest at the same immutable shared revision."
-      ],
-      "managerFilePatterns": ["/^\\.github/automation\\.json$/"],
-      "matchStrings": [
-        "(?<prefix>\"revision\"[ \\t]*:[ \\t]*\")(?<currentDigest>[a-f0-9]{40})(?<suffix>\")"
-      ]
-    },
-    {
-      "customType": "regex",
-      "depNameTemplate": "Strukturpiloten/boxferry",
-      "datasourceTemplate": "github-digest",
-      "currentValueTemplate": "automation-v1",
-      "description": ["Update explicit shared workflow revision inputs and environment pins."],
-      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
-      "matchStrings": [
-        "(?<prefix>(?:^|\\n)[ \\t]*(?:automation_sha|automation-sha|AUTOMATION_SHA):[ \\t]*[\"\\']?)(?<currentDigest>[a-f0-9]{40})(?<suffix>[\"\\']?)"
-      ]
-    },
-    {
-      "customType": "regex",
-      "depNameTemplate": "Strukturpiloten/boxferry",
-      "datasourceTemplate": "github-digest",
-      "currentValueTemplate": "automation-v1",
-      "description": [
-        "Update annotated shared-source checkout refs without claiming unrelated checkout inputs."
-      ],
-      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
-      "matchStrings": [
-        "(?<prefix># renovate: datasource=github-digest depName=Strukturpiloten/boxferry currentValue=automation-v1\\n[ \\t]*ref:[ \\t]*)(?<currentDigest>[a-f0-9]{40})"
-      ]
     }
   ],
   "packageRules": [
     {
-      "description": ["Group compatible Rust updates"],
-      "matchManagers": ["cargo"],
-      "matchUpdateTypes": ["minor", "patch", "pin", "digest", "pinDigest"],
-      "groupName": "Rust dependencies"
-    },
-    {
-      "description": ["Keep Actions immutable and grouped"],
-      "matchManagers": ["github-actions"],
-      "matchDepTypes": ["action", "workflow"],
-      "pinDigests": true,
-      "groupName": "GitHub Actions"
-    },
-    {
-      "description": ["Automerge tested compatible updates only after required CI"],
-      "matchUpdateTypes": ["minor", "patch", "pin", "digest", "pinDigest"],
-      "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": false
-    },
-    {
-      "description": ["Lock maintenance has no new release-age comparison"],
-      "matchUpdateTypes": ["lockFileMaintenance"],
-      "minimumReleaseAge": "0 days",
-      "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": false
-    },
-    {
-      "description": ["Review toolchain changes separately"],
-      "matchManagers": ["rust-toolchain"],
-      "groupName": "Rust toolchain",
-      "dependencyDashboardApproval": true,
-      "automerge": false
-    },
-    {
-      "description": [
-        "Review shared checksum/image/feature ownership and policy changes after generic rules"
-      ],
-      "matchDatasources": ["github-digest"],
-      "groupName": "Shared workspace tooling and policy",
-      "dependencyDashboardApproval": true,
-      "automerge": false
-    },
-    {
-      "description": ["Review hosted runner environment changes"],
+      "description": ["Keep hosted runner environment changes"],
       "matchDatasources": ["github-runners"],
-      "groupName": "GitHub-hosted runners",
-      "dependencyDashboardApproval": true,
-      "automerge": false
+      "groupName": "GitHub-hosted runners"
     },
     {
       "description": [
@@ -163,75 +72,47 @@
     },
     {
       "description": [
-        "Review operational tool-image tag/digest and actual-engine evidence after generic automerge rules"
+        "Keep operational tool-image tag/digest and actual-engine evidence with automated compatibility and integrity checks"
       ],
       "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/renovatebot/renovate"],
       "groupName": "Operational test tools",
-      "dependencyDashboardApproval": true,
-      "automerge": false,
       "pinDigests": true
     },
     {
       "description": [
-        "Review bundled native timezone data after generic automerge rules; recognition is versioned evidence"
+        "Keep bundled native timezone data with automated compatibility and integrity checks; recognition is versioned evidence"
       ],
       "matchManagers": ["cargo"],
       "matchPackageNames": ["jiff-tzdb"],
-      "groupName": "Native timezone data",
-      "dependencyDashboardApproval": true,
-      "automerge": false
+      "groupName": "Native timezone data"
     },
     {
       "description": [
-        "Review native binary codec integrity and padding semantics after generic automerge rules"
+        "Keep native binary codec integrity and padding semantics with automated compatibility and integrity checks"
       ],
       "matchManagers": ["cargo"],
       "matchPackageNames": ["base64"],
-      "groupName": "Native binary codecs",
-      "dependencyDashboardApproval": true,
-      "automerge": false
+      "groupName": "Native binary codecs"
     },
     {
       "description": [
-        "Review supervised renderer isolation, descriptor and digest dependencies after generic automerge rules"
+        "Keep supervised renderer isolation, descriptor and digest dependencies with automated compatibility and integrity checks"
       ],
       "matchManagers": ["cargo"],
       "matchPackageNames": ["nix", "rustix", "command-fds", "close_fds", "sha2"],
-      "groupName": "Supervised renderer dependencies",
-      "dependencyDashboardApproval": true,
-      "automerge": false
+      "groupName": "Supervised renderer dependencies"
     },
     {
       "description": [
-        "Keep the exact qualified conformance target fixed for this overhaul; ADR0101 coupling remains required."
+        "Keep the qualified FCOS VM as the fixed conformance target for this overhaul; ADR0101 qualification and exact image coupling remain unchanged."
       ],
       "matchManagers": ["custom.regex"],
       "matchDatasources": ["custom.fcos-qemu-x86_64-stable"],
       "matchPackageNames": ["fedora-coreos-qemu-x86_64-stable"],
       "groupName": "Owned kind VM image",
-      "dependencyDashboardApproval": true,
-      "automerge": false,
-      "minimumReleaseAgeBehaviour": "timestamp-required",
-      "enabled": false,
-      "matchFileNames": ["scripts/kind-vm-image.json"]
-    },
-    {
-      "description": [
-        "Bootstrap only: advance trusted tool checkout, service and authority manifest together; final preset adoption replaces temporary definitions."
-      ],
-      "matchManagers": ["github-actions", "custom.regex"],
-      "matchDatasources": ["github-digest"],
-      "matchPackageNames": ["Strukturpiloten/boxferry"],
-      "matchFileNames": [
-        ".github/workflows/dependency-eligibility.yml",
-        ".github/automation.json",
-        ".github/workflows/ci.yml"
-      ],
-      "groupName": "Shared BoxFerry automation",
-      "minimumReleaseAge": "0 days",
-      "dependencyDashboardApproval": false,
-      "automerge": true
+      "matchFileNames": ["scripts/kind-vm-image.json"],
+      "enabled": false
     }
   ],
   "customDatasources": {

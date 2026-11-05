@@ -15,3 +15,7 @@ tables-out-of-order = "error"
 [[schemas]]
 path = "docs/schemas/tombi-cargo-offline.schema.json"
 include = ["Cargo.toml", "**/Cargo.toml"]
+
+[[schemas]]
+path = "docs/schemas/tombi-python-tooling-offline.schema.json"
+include = ["pyproject.toml"]

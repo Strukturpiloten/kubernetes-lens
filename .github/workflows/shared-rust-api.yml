@@ -1,0 +1,88 @@
+---
+name: KubernetesLens Rust and API
+on:
+  workflow_call:
+    inputs:
+      candidate_sha:
+        description: Exact caller revision tested by both checks.
+        required: true
+        type: string
+      automation_sha:
+        description: Immutable BoxFerry revision matching both canonical workflow references.
+        required: true
+        type: string
+      policy_sha:
+        description: Trusted PR or merge queue base, otherwise exact candidate.
+        required: true
+        type: string
+      api_purpose:
+        description: Published release compatibility default; ordinary CI passes development.
+        default: published
+        type: string
+    outputs:
+      candidate_sha:
+        description: Exact candidate whose Rust quality and API checks succeeded.
+        value: ${{ jobs.result.outputs.candidate_sha }}
+      published_api_candidate_sha:
+        description: Exact published-purpose API candidate; empty for development.
+        value: ${{ jobs.result.outputs.published_api_candidate_sha }}
+permissions:
+  contents: read
+jobs:
+  quality:
+    uses: Strukturpiloten/boxferry/.github/workflows/shared-rust-ci.yml@5b4deb3fa2e06a0eea1643bbbdecec34e18b1281 # automation-v1 interface v1
+    with:
+      candidate_sha: ${{ inputs.candidate_sha }}
+      automation_sha: ${{ inputs.automation_sha }}
+      policy_sha: ${{ inputs.policy_sha }}
+      config_path: scripts/validation-policy.json
+      task: rust-quality
+  api:
+    uses: Strukturpiloten/boxferry/.github/workflows/shared-rust-semver.yml@5b4deb3fa2e06a0eea1643bbbdecec34e18b1281 # automation-v1 interface v1
+    with:
+      candidate_sha: ${{ inputs.candidate_sha }}
+      automation_sha: ${{ inputs.automation_sha }}
+      policy_sha: ${{ inputs.policy_sha }}
+      config_path: scripts/validation-policy.json
+      package: kubernetes-lens
+      api_purpose: ${{ inputs.api_purpose }}
+      initial_api_contract: true
+      release_type: ""
+  result:
+    name: Require Rust and purpose-bound API success
+    if: always()
+    needs: [quality, api]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      candidate_sha: ${{ steps.result.outputs.candidate_sha }}
+      published_api_candidate_sha: ${{ steps.result.outputs.published_api_candidate_sha }}
+    steps:
+      - name: Bind both successful checks to the exact candidate
+        id: result
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          API_PURPOSE: ${{ inputs.api_purpose }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          API_RESULT: ${{ needs.api.result }}
+          QUALITY_CANDIDATE_SHA: ${{ needs.quality.outputs.candidate_sha }}
+          API_CANDIDATE_SHA: ${{ needs.api.outputs.candidate_sha }}
+          PUBLISHED_API_CANDIDATE_SHA: ${{ needs.api.outputs.published_api_candidate_sha }}
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_SHA}" =~ ^[a-f0-9]{40}$ ]]
+          test "${CANDIDATE_SHA}" = "${GITHUB_SHA}"
+          test "${QUALITY_RESULT}" = success
+          test "${API_RESULT}" = success
+          test "${QUALITY_CANDIDATE_SHA}" = "${CANDIDATE_SHA}"
+          test "${API_CANDIDATE_SHA}" = "${CANDIDATE_SHA}"
+          case "${API_PURPOSE}" in
+            published)
+              test "${PUBLISHED_API_CANDIDATE_SHA}" = "${CANDIDATE_SHA}"
+              printf 'published_api_candidate_sha=%s\n' "${CANDIDATE_SHA}" >> "${GITHUB_OUTPUT}"
+              ;;
+            development) ;;
+            *) exit 1 ;;
+          esac
+          printf 'candidate_sha=%s\n' "${CANDIDATE_SHA}" >> "${GITHUB_OUTPUT}"

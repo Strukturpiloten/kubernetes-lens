@@ -5,6 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { createRequire } from "node:module";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -27,9 +28,7 @@ const custom = await load("modules/manager/custom/regex/index.js");
 const actions = await load("modules/manager/github-actions/extract.js");
 const rust = await load("modules/manager/rust-toolchain/extract.js");
 const cargo = await load("modules/manager/cargo/extract.js");
-const config = JSON.parse(await fs.readFile(path.join(root, ".github/renovate.json"), "utf8"));
-const manifest = JSON.parse(await fs.readFile(path.join(root, ".github/automation.json"), "utf8"));
-assert.match(manifest.revision, /^[a-f0-9]{40}$/);
+const rawConfig = JSON.parse(await fs.readFile(path.join(root, ".github/renovate.json"), "utf8"));
 const toolImage = JSON.parse(
   await fs.readFile(path.join(root, "scripts/renovate-tool.json"), "utf8"),
 ).image;
@@ -59,23 +58,64 @@ assert.throws(
   /regular expression|config-validation/,
   "RE2 must reject backreferences",
 );
-const validated = await validateConfig("repository", config);
+// Native preset resolution uses bytes from the exact verified shared commit.
+// Only transport is cached; inheritance and package rules remain Renovate's own.
+const { init: initPresetCache, set: cachePreset } = await load("util/cache/memory/index.js");
+initPresetCache();
+const presetCacheKeys = await load("util/cache/package/key.js");
+function presetCacheKey(reference) {
+  // 44.139 uses this literal key; later44.x exposes the engine's own key builder.
+  return typeof presetCacheKeys.buildCacheKey === "function"
+    ? presetCacheKeys.buildCacheKey("preset", reference)
+    : `preset:${reference}`;
+}
+const manifest = JSON.parse(await fs.readFile(path.join(root, ".github/automation.json"), "utf8"));
+assert.match(manifest.revision, /^[a-f0-9]{40}$/, "shared automation must be immutable");
+const prepared = spawnSync(
+  "python3",
+  [
+    "-c",
+    [
+      "from pathlib import Path",
+      "import runpy, sys",
+      "root = Path(sys.argv[1])",
+      "launcher = runpy.run_path(str(root / 'scripts/shared-ci.py'))",
+      "config = launcher['load_config'](root)",
+      "print(launcher['prepare_implementation'](root, config['revision']))",
+    ].join("\n"),
+    root,
+  ],
+  { encoding: "utf8", timeout: 180_000, maxBuffer: 1_048_576 },
+);
+assert.equal(prepared.status, 0, prepared.stderr || prepared.error?.message);
+const presetRoot = path.join(path.dirname(prepared.stdout.trim()), "renovate-presets");
+for (const reference of rawConfig.extends) {
+  const match = reference.match(
+    /^github>Strukturpiloten\/boxferry\/\/renovate-presets\/(common|rust)#([a-f0-9]{40})$/,
+  );
+  assert(match, "only reviewed immutable shared presets are accepted");
+  assert.equal(match[2], manifest.revision, "preset and implementation must advance together");
+  cachePreset(
+    `preset:${reference}`,
+    JSON.parse(await fs.readFile(path.join(presetRoot, `${match[1]}.json`), "utf8")),
+  );
+}
+const validated = await validateConfig("repository", rawConfig);
 assert.deepEqual(
   validated.errors,
   [],
   "production config must pass the supported Renovate validator",
 );
 assert.deepEqual(validated.warnings, [], "production config must have no validation warnings");
-const { config: effectiveConfig, visitedPresets } = await resolveConfigPresets(
-  structuredClone(config),
-);
+const { config, visitedPresets } = await resolveConfigPresets(structuredClone(rawConfig));
+const effectiveConfig = config;
 assert(
   visitedPresets.merged.includes("config:best-practices"),
   "actual configured preset must participate",
 );
 assert(!effectiveConfig.extends, "all bundled production presets must be resolved");
 assert(
-  effectiveConfig.packageRules.length > config.packageRules.length,
+  effectiveConfig.packageRules.length > rawConfig.packageRules.length,
   "inherited generic preset rules must participate",
 );
 assert(
@@ -84,10 +124,21 @@ assert(
 );
 for (const manager of config.customManagers) {
   for (const pattern of manager.matchStrings) regEx(pattern);
-  for (const pattern of manager.managerFilePatterns)
-    assert(pattern.startsWith("/") && pattern.endsWith("/"));
+  for (const pattern of manager.managerFilePatterns) {
+    assert.equal(typeof pattern, "string");
+    assert(pattern.length > 0);
+    if (pattern.startsWith("/") && pattern.endsWith("/")) regEx(pattern.slice(1, -1));
+    else matchRegexOrGlob("unmatched-fixture.txt", pattern);
+  }
 }
 
+const sharedManagerIndex = config.customManagers.findIndex((manager) =>
+  manager.matchStrings.some((pattern) => pattern.includes("currentValue=automation-v1")),
+);
+const toolManagerIndex = config.customManagers.findIndex(
+  (manager) => manager.datasourceTemplate === "docker",
+);
+assert(sharedManagerIndex >= 0 && toolManagerIndex >= 0, "shared and image owners must exist");
 const workflowFiles = (await fs.readdir(path.join(root, ".github/workflows")))
   .filter((f) => /\.ya?ml$/.test(f))
   .map((f) => `.github/workflows/${f}`);
@@ -100,6 +151,7 @@ const files = new Map(
       "rust-toolchain.toml",
       "Cargo.toml",
       ".github/automation.json",
+      ".github/renovate.json",
     ].map(async (f) => [f, await fs.readFile(path.join(root, f), "utf8")]),
   ),
 );
@@ -183,8 +235,7 @@ function expected(input = files) {
             out.push(
               key(file, {
                 depName: step.with.repository,
-                currentValue:
-                  step.with.repository === "Strukturpiloten/boxferry" ? "automation-v1" : "main",
+                currentValue: "automation-v1",
                 currentDigest: step.with.ref,
                 datasource: "github-digest",
               }),
@@ -201,6 +252,21 @@ function expected(input = files) {
           datasource: "github-digest",
         }),
       );
+    } else if (file === ".github/renovate.json") {
+      for (const reference of JSON.parse(text).extends) {
+        const match = reference.match(
+          /^github>Strukturpiloten\/boxferry\/\/renovate-presets\/(?:common|rust)#([a-f0-9]{40})$/,
+        );
+        assert(match);
+        out.push(
+          key(file, {
+            depName: "Strukturpiloten/boxferry",
+            currentValue: "automation-v1",
+            currentDigest: match[1],
+            datasource: "github-digest",
+          }),
+        );
+      }
     } else if (file === "Cargo.toml") {
       // Independent finite Cargo declaration inventory, including exact inline-table pins.
       for (const section of text.matchAll(
@@ -262,6 +328,8 @@ function ownership(actual, expectedPins = expected()) {
   );
   const owners = new Map();
   for (const row of actual) {
+    // One dependency may have native workflow pins and separate custom input pins.
+    // Exclusivity applies to each replacement span, not its shared source identity.
     const id = JSON.stringify([row.file, row.dep.replaceString ?? key(row.file, row.dep)]);
     const owner = owners.get(id);
     assert(!owner || owner === row.manager, `native/custom manager overlap for ${id}`);
@@ -270,6 +338,20 @@ function ownership(actual, expectedPins = expected()) {
 }
 const actual = await inventory();
 ownership(actual);
+const rustApiRows = actual.filter(
+  (row) =>
+    row.file === ".github/workflows/shared-rust-api.yml" && row.dep.datasource === "github-digest",
+);
+assert.equal(rustApiRows.length, 2, "both canonical Rust/API references must be owned once");
+assert(
+  rustApiRows.every(
+    (row) =>
+      row.manager === "github-actions" &&
+      row.dep.depName === "Strukturpiloten/boxferry" &&
+      row.dep.currentValue === "automation-v1" &&
+      row.dep.currentDigest === manifest.revision,
+  ),
+);
 // New manual observation is a consumer of existing native owners, never a custom inventory.
 const hostedFile = ".github/workflows/hosted-native-prerequisites.yml";
 const hostedRows = actual.filter((row) => row.file === hostedFile);
@@ -332,11 +414,11 @@ assert.throws(() =>
 );
 assert.throws(() => ownership(missingCustom));
 const duplicated = structuredClone(config);
-duplicated.customManagers.push(structuredClone(duplicated.customManagers[0]));
+duplicated.customManagers.push(structuredClone(duplicated.customManagers[sharedManagerIndex]));
 const duplicateExtraction = await inventory(files, duplicated);
 assert.throws(() => ownership(duplicateExtraction));
 const wrongPath = structuredClone(config);
-wrongPath.customManagers[0].managerFilePatterns = ["/^moved\/.*$/"];
+wrongPath.customManagers[sharedManagerIndex].managerFilePatterns = ["/^moved\/.*$/"];
 const missingExtraction = await inventory(files, wrongPath);
 assert.throws(() => ownership(missingExtraction));
 const movedFiles = new Map(files);
@@ -344,7 +426,7 @@ const movedContent = movedFiles.get(".github/workflows/ci.yml");
 movedFiles.delete(".github/workflows/ci.yml");
 movedFiles.set(".github/workflows/renamed.yml", movedContent);
 ownership(await inventory(movedFiles), expected(movedFiles));
-const noDatasource = structuredClone(config.customManagers[0]);
+const noDatasource = structuredClone(config.customManagers[sharedManagerIndex]);
 delete noDatasource.datasourceTemplate;
 assert.equal(
   custom.extractPackageFile(movedContent, ".github/workflows/ci.yml", noDatasource),
@@ -372,7 +454,7 @@ const frozenFiles = new Map([
   ["schemas/capabilities/kubernetes-1.20-1.37.json", movedContent],
 ]);
 const broaderManager = structuredClone(config);
-broaderManager.customManagers[0].managerFilePatterns = [
+broaderManager.customManagers[sharedManagerIndex].managerFilePatterns = [
   "/^(?:docs\\/compatibility|schemas\\/capabilities)\\/.*$/",
 ];
 for (const file of frozenFiles.keys())
@@ -590,7 +672,11 @@ try {
       originalImage,
       false,
     );
-    const after = custom.extractPackageFile(updated, imageRow.file, config.customManagers[1]);
+    const after = custom.extractPackageFile(
+      updated,
+      imageRow.file,
+      config.customManagers[toolManagerIndex],
+    );
     assert.equal(
       after.deps[0].currentValue,
       newValue,
@@ -617,7 +703,7 @@ const sharedInterfaceNames = [
   "shared-dependency-eligibility",
   "shared-dependency-wait",
 ];
-const interfaceFile = ".github/workflows/dependency-eligibility.yml";
+const interfaceFile = ".github/workflows/shared-interface-fixture.yml";
 let interfaceText =
   "---\njobs:\n" +
   sharedInterfaceNames
@@ -672,96 +758,97 @@ async function policy(dep, cfg = effectiveConfig) {
     "update",
   );
 }
-for (const updateType of ["minor", "patch", "pin", "digest", "pinDigest"]) {
+function assertNoAgeHold(value) {
+  assert(
+    value === null || value === "0 days",
+    "native explicit zero-age policy must not hold first-party updates",
+  );
+}
+function assertAutomatic(value) {
+  assert.equal(value.automerge, true, "required checks replace manual dependency review");
+  assert.equal(value.dependencyDashboardApproval, false, "no hidden Dashboard approval gate");
+}
+for (const updateType of ["major", "minor", "patch", "pin", "digest", "pinDigest"]) {
+  for (const [name, groupName] of [
+    ["jiff-tzdb", "Native timezone data"],
+    ["base64", "Native binary codecs"],
+    ...rendererPins.map((name) => [name, "Supervised renderer dependencies"]),
+  ]) {
+    const result = await policy({
+      manager: "cargo",
+      datasource: "crate",
+      depName: name,
+      updateType,
+    });
+    assertAutomatic(result);
+    assert.equal(result.groupName, groupName);
+    assert.equal(result.minimumReleaseAge, "3 days");
+  }
   const normal = await policy({
     manager: "cargo",
     datasource: "crate",
     depName: "serde",
     updateType,
   });
-  assert.equal(normal.groupName, "Rust dependencies");
-  assert.equal(normal.automerge, true);
+  assertAutomatic(normal);
   assert.equal(normal.minimumReleaseAge, "3 days");
-  const timezone = await policy({
-    manager: "cargo",
-    datasource: "crate",
-    depName: "jiff-tzdb",
-    updateType,
-  });
-  assert.equal(timezone.groupName, "Native timezone data");
-  assert.equal(timezone.automerge, false);
-  assert.equal(timezone.dependencyDashboardApproval, true);
-  assert.equal(timezone.minimumReleaseAge, "3 days");
-  const binary = await policy({
-    manager: "cargo",
-    datasource: "crate",
-    depName: "base64",
-    updateType,
-  });
-  assert.equal(binary.groupName, "Native binary codecs");
-  assert.equal(binary.automerge, false);
-  assert.equal(binary.dependencyDashboardApproval, true);
-  assert.equal(binary.minimumReleaseAge, "3 days");
-  for (const name of rendererPins) {
-    const renderer = await policy({
-      manager: "cargo",
-      datasource: "crate",
-      depName: name,
-      updateType,
-    });
-    assert.equal(renderer.groupName, "Supervised renderer dependencies");
-    assert.equal(renderer.automerge, false);
-    assert.equal(renderer.dependencyDashboardApproval, true);
-    assert.equal(renderer.minimumReleaseAge, "3 days");
-  }
-  const toolchain = await policy({
+  if (updateType !== "major") assert.equal(normal.groupName, "Rust dependencies");
+  const compiler = await policy({
     manager: "rust-toolchain",
     datasource: "rust-version",
     depName: "rust",
     updateType,
   });
-  assert.equal(toolchain.groupName, "Rust toolchain");
-  assert.equal(toolchain.automerge, false);
-  assert.equal(toolchain.dependencyDashboardApproval, true);
-  for (const row of actual.filter(
-    (r) =>
-      ["github-digest", "github-runners", "docker"].includes(r.dep.datasource) &&
-      !(r.dep.depName === "Strukturpiloten/boxferry" && r.dep.currentValue === "automation-v1"),
+  assertAutomatic(compiler);
+  assert.equal(compiler.groupName, "Rust toolchain");
+  for (const row of actual.filter((row) =>
+    ["github-digest", "github-runners", "docker"].includes(row.dep.datasource),
   )) {
-    const effective = await policy({
+    const result = await policy({
       ...row.dep,
       manager: row.manager,
       packageFile: row.file,
       updateType,
     });
+    assertAutomatic(result);
+    if (row.dep.datasource === "github-digest") assertNoAgeHold(result.minimumReleaseAge);
+    else assert.equal(result.minimumReleaseAge, "3 days");
     assert.equal(
-      effective.automerge,
-      false,
-      "later integrity rules must override broad non-major automerge",
-    );
-    assert.equal(effective.dependencyDashboardApproval, true);
-    assert.equal(effective.minimumReleaseAge, "3 days");
-    if (row.dep.datasource === "docker") assert.equal(effective.pinDigests, true);
-    assert.equal(
-      effective.groupName,
+      result.groupName,
       row.dep.datasource === "github-digest"
-        ? "Shared workspace tooling and policy"
+        ? "Shared BoxFerry automation"
         : row.dep.datasource === "docker"
           ? "Operational test tools"
           : "GitHub-hosted runners",
     );
+    if (row.dep.datasource === "docker") assert.equal(result.pinDigests, true);
   }
 }
-const toolPolicy = await policy({
-  manager: "custom.regex",
-  datasource: "docker",
-  depName: "ghcr.io/renovatebot/renovate",
+for (const name of [
+  "compose-lens",
+  "podman-lens",
+  "quadlet-lens",
+  "docker-lens",
+  "kubernetes-lens",
+  "boxferry",
+]) {
+  const firstParty = await policy({
+    manager: "cargo",
+    datasource: "crate",
+    depName: name,
+    updateType: "major",
+  });
+  assertAutomatic(firstParty);
+  assertNoAgeHold(firstParty.minimumReleaseAge);
+  assert.equal(firstParty.groupName, "First-party Rust releases");
+}
+const lookalike = await policy({
+  manager: "cargo",
+  datasource: "crate",
+  depName: "boxferry-lookalike",
   updateType: "patch",
 });
-assert.equal(toolPolicy.groupName, "Operational test tools");
-assert.equal(toolPolicy.automerge, false);
-assert.equal(toolPolicy.dependencyDashboardApproval, true);
-assert.equal(toolPolicy.pinDigests, true);
+assert.equal(lookalike.minimumReleaseAge, "3 days");
 const derivedNode = await policy({
   manager: "github-actions",
   datasource: "github-releases",
@@ -770,11 +857,7 @@ const derivedNode = await policy({
   depType: "uses-with",
   updateType: "patch",
 });
-assert.equal(
-  derivedNode.enabled,
-  false,
-  "derived shared Node input must not become a duplicate local pin",
-);
+assert.equal(derivedNode.enabled, false, "shared Node inventory retains sole ownership");
 const actionPolicy = await policy({
   manager: "github-actions",
   datasource: "github-tags",
@@ -782,119 +865,34 @@ const actionPolicy = await policy({
   depType: "action",
   updateType: "patch",
 });
+assertAutomatic(actionPolicy);
 assert.equal(actionPolicy.pinDigests, true);
 assert.equal(actionPolicy.groupName, "GitHub Actions");
-for (const row of hostedRows) {
-  const effective = await policy({
-    ...row.dep,
-    manager: row.manager,
-    packageFile: row.file,
-    updateType: "patch",
-  });
-  if (row === hostedRunner) {
-    assert.equal(effective.groupName, "GitHub-hosted runners");
-    assert.equal(effective.dependencyDashboardApproval, true);
-    assert.equal(effective.automerge, false);
-  } else {
-    assert.equal(effective.groupName, "GitHub Actions");
-    assert.equal(effective.pinDigests, true);
-    assert.equal(effective.automerge, true);
-  }
-}
 const lockPolicy = await policy({
   manager: "cargo",
   depName: "serde",
   updateType: "lockFileMaintenance",
 });
-assert.equal(lockPolicy.minimumReleaseAge, "0 days");
-assert.equal(lockPolicy.automerge, true);
-const major = await policy({
-  manager: "cargo",
-  depName: "serde",
-  updateType: "major",
+assertAutomatic(lockPolicy);
+assertNoAgeHold(lockPolicy.minimumReleaseAge);
+const manualRegression = structuredClone(effectiveConfig);
+manualRegression.packageRules.push({
+  matchManagers: ["cargo"],
+  dependencyDashboardApproval: true,
+  automerge: false,
 });
-assert.notEqual(major.automerge, true, "major updates cannot inherit non-major automerge");
-const reordered = structuredClone(effectiveConfig);
-const broad = reordered.packageRules.find(
-  (r) => r.automerge === true && r.matchUpdateTypes.includes("digest"),
+const regressed = await policy(
+  { manager: "cargo", datasource: "crate", depName: "base64", updateType: "patch" },
+  manualRegression,
 );
-reordered.packageRules.push(structuredClone(broad));
-const unsafePolicy = await policy(
-  {
-    manager: "custom.regex",
-    datasource: "github-digest",
-    depName: "Strukturpiloten/boxferry",
-    updateType: "digest",
-  },
-  reordered,
+assert.throws(() => assertAutomatic(regressed), "a late manual-review override must be caught");
+const ageRegression = structuredClone(effectiveConfig);
+ageRegression.packageRules.push({ matchManagers: ["cargo"], minimumReleaseAge: "0 days" });
+const prematurelyReleased = await policy(
+  { manager: "cargo", datasource: "crate", depName: "serde", updateType: "patch" },
+  ageRegression,
 );
-assert.equal(
-  unsafePolicy.automerge,
-  true,
-  "negative rule-order mutation must expose the dangerous override",
-);
-assert.throws(() => assert.equal(unsafePolicy.automerge, false));
-const unsafeBinary = await policy(
-  {
-    manager: "cargo",
-    datasource: "crate",
-    depName: "base64",
-    updateType: "patch",
-  },
-  reordered,
-);
-assert.equal(
-  unsafeBinary.automerge,
-  true,
-  "negative rule-order mutation exposes unsafe binary updates",
-);
-const unsafeTimezone = await policy(
-  {
-    manager: "cargo",
-    datasource: "crate",
-    depName: "jiff-tzdb",
-    updateType: "patch",
-  },
-  reordered,
-);
-assert.equal(
-  unsafeTimezone.automerge,
-  true,
-  "negative rule-order mutation exposes unsafe timezone updates",
-);
-assert.throws(() => assert.equal(unsafeTimezone.automerge, false));
-for (const name of rendererPins) {
-  const renderer = await policy(
-    {
-      manager: "cargo",
-      datasource: "crate",
-      depName: name,
-      updateType: "patch",
-    },
-    reordered,
-  );
-  assert.equal(
-    renderer.automerge,
-    true,
-    "negative rule-order mutation exposes unsafe renderer updates",
-  );
-  assert.throws(() => assert.equal(renderer.automerge, false));
-}
-const unsafeImage = await policy(
-  {
-    manager: "custom.regex",
-    datasource: "docker",
-    depName: "ghcr.io/renovatebot/renovate",
-    updateType: "digest",
-  },
-  reordered,
-);
-assert.equal(unsafeImage.automerge, true);
-assert.throws(
-  () => assert.equal(unsafeImage.automerge, false),
-  "negative generic-rule reorder must expose image digest automerge regression",
-);
-// Owned VM image: actual selected-engine projection, tuple update and age refusal.
+assert.throws(() => assert.equal(prematurelyReleased.minimumReleaseAge, "3 days"));
 const eligibilityEventGuard =
   "github.event_name == 'schedule' || " +
   "(github.event_name == 'workflow_run' && " +
@@ -912,7 +910,19 @@ function validateTrustedListener(content) {
     statuses: "write",
   });
   assert.deepEqual(Object.keys(listener.jobs), ["eligibility"]);
-  assert.deepEqual(Object.keys(listener.jobs.eligibility).sort(), ["if", "uses", "with"]);
+  assert.deepEqual(Object.keys(listener.jobs.eligibility).sort(), [
+    "if",
+    "permissions",
+    "uses",
+    "with",
+  ]);
+  assert.deepEqual(listener.jobs.eligibility.permissions, {
+    actions: "write",
+    checks: "read",
+    contents: "read",
+    "pull-requests": "write",
+    statuses: "write",
+  });
   assert.equal(listener.jobs.eligibility.if, eligibilityEventGuard);
   assert.equal(
     listener.jobs.eligibility.uses,
@@ -923,6 +933,27 @@ function validateTrustedListener(content) {
 const serviceFile = ".github/workflows/dependency-eligibility.yml";
 const serviceText = files.get(serviceFile);
 validateTrustedListener(serviceText);
+const service = parse(serviceText);
+const missingPermissions = structuredClone(service);
+delete missingPermissions.jobs.eligibility.permissions;
+assert.throws(() => validateTrustedListener(JSON.stringify(missingPermissions)));
+const extraPermission = structuredClone(service);
+extraPermission.jobs.eligibility.permissions.issues = "write";
+assert.throws(() => validateTrustedListener(JSON.stringify(extraPermission)));
+for (const [scope, level] of Object.entries(service.jobs.eligibility.permissions)) {
+  const missingScope = structuredClone(service);
+  delete missingScope.jobs.eligibility.permissions[scope];
+  assert.throws(
+    () => validateTrustedListener(JSON.stringify(missingScope)),
+    `missing listener job permission ${scope} must be rejected`,
+  );
+  const wrongLevel = structuredClone(service);
+  wrongLevel.jobs.eligibility.permissions[scope] = level === "read" ? "write" : "read";
+  assert.throws(
+    () => validateTrustedListener(JSON.stringify(wrongLevel)),
+    `wrong listener job permission ${scope} must be rejected`,
+  );
+}
 for (const mutation of [
   serviceText.replace("  workflow_run:", "  pull_request_target:"),
   serviceText.replace("  workflow_run:", "  pull_request:"),
@@ -933,10 +964,7 @@ for (const mutation of [
   serviceText.replace("    workflows: [CI]", "    workflows: [Renamed CI]"),
   serviceText.replace(/^    if: >-\n(?:      .+\n)+/m, ""),
   serviceText.replace("github.event_name == 'schedule' ||", "true ||"),
-  serviceText.replace(
-    "github.event_name == 'schedule' ||",
-    "github.event_name == 'schedule' &&",
-  ),
+  serviceText.replace("github.event_name == 'schedule' ||", "github.event_name == 'schedule' &&"),
   serviceText.replace("github.event.workflow_run.event == 'pull_request'", "true"),
   serviceText.replace(
     "github.event.workflow_run.event == 'merge_group'",
@@ -946,36 +974,8 @@ for (const mutation of [
   serviceText.replace("    uses:", "    steps: []\n    uses:"),
 ])
   assert.throws(() => validateTrustedListener(mutation));
-assert.deepEqual(Object.keys(manifest).sort(), [
-  "interface",
-  "policy",
-  "repository",
-  "revision",
-  "schema",
-]);
-assert.equal(manifest.schema, 1);
-assert.equal(manifest.interface, 1);
-assert.equal(manifest.repository, "Strukturpiloten/boxferry");
-assert.equal(manifest.policy, "scripts/validation-policy.json");
-const authorityRows = actual.filter(
-  (row) =>
-    row.dep.depName === "Strukturpiloten/boxferry" && row.dep.currentValue === "automation-v1",
-);
-assert.equal(authorityRows.length, 4);
 
-assert(authorityRows.every((row) => row.dep.currentDigest === manifest.revision));
-for (const row of authorityRows) {
-  const enabled = await policy({
-    ...row.dep,
-    manager: row.manager,
-    packageFile: row.file,
-    updateType: "digest",
-  });
-  assert.equal(enabled.groupName, "Shared BoxFerry automation");
-  assert.equal(enabled.automerge, true);
-  assert.equal(enabled.dependencyDashboardApproval, false);
-  assert(enabled.minimumReleaseAge === null || enabled.minimumReleaseAge === "0 days");
-}
+// Owned VM image: actual selected-engine projection, tuple update and age refusal.
 const vmFile = "scripts/kind-vm-image.json";
 const vmText = files.get(vmFile);
 const vmPin = JSON.parse(vmText);
@@ -1026,7 +1026,7 @@ const vmRow = vmRows[0];
 assert.equal(vmRow.manager, "custom.regex");
 for (const manager of config.enabledManagers.filter((name) => name !== "custom.regex")) {
   assert(
-    ["cargo", "github-actions", "rust-toolchain"].includes(manager),
+    ["cargo", "github-actions", "rust-toolchain", "pep621", "pyenv"].includes(manager),
     "new enabled manager requires actual VM ownership review",
   );
   const native = await load(`modules/manager/${manager}/index.js`);
@@ -1089,13 +1089,9 @@ delete vmNoDatasource.datasourceTemplate;
 assert.equal(custom.extractPackageFile(vmText, vmFile, vmNoDatasource), null);
 const { CustomDatasource } = await load("modules/datasource/custom/index.js");
 const { get: versioning } = await load("modules/versioning/index.js");
-const { checkMinimumReleaseAge } = await load("util/minimum-release-age.js");
 const { getConfig: renovateDefaults } = await load("config/defaults.js");
 assert.equal(renovateDefaults().internalChecksFilter, "strict");
-const { filterInternalChecks } = await load("workers/repository/process/lookup/filter-checks.js");
-const { resolveUpdateDigests, applyMinimumReleaseAgeToDigestUpdate } = await load(
-  "workers/repository/process/lookup/digest.js",
-);
+const { resolveUpdateDigests } = await load("workers/repository/process/lookup/digest.js");
 const vmVersioning = versioning(vmManager.versioningTemplate);
 for (const [older, newer] of [
   ["44.20260928.3.2", "44.20260928.3.10"],
@@ -1206,6 +1202,12 @@ for (const mutate of [
     "malformed/other-stream metadata must not offer an image",
   );
 }
+// This exact image is a qualified conformance target, not a routine upgrade candidate.
+const fixedVmRule = effectiveConfig.packageRules.find(
+  (rule) => rule.groupName === "Owned kind VM image",
+);
+assert.deepEqual(fixedVmRule.matchFileNames, [vmFile]);
+assert.equal(fixedVmRule.enabled, false);
 for (const updateType of ["major", "minor", "patch", "pin", "digest", "pinDigest"]) {
   const effective = await policy({
     ...vmRow.dep,
@@ -1214,22 +1216,31 @@ for (const updateType of ["major", "minor", "patch", "pin", "digest", "pinDigest
     currentVersion: vmPin.release,
     updateType,
   });
-  assert.equal(effective.groupName, "Owned kind VM image");
-  assert.equal(effective.dependencyDashboardApproval, true);
-  assert.equal(effective.automerge, false);
-  assert.equal(effective.minimumReleaseAge, "3 days");
-  assert.equal(effective.minimumReleaseAgeBehaviour, "timestamp-required");
-  const age = checkMinimumReleaseAge(effective, undefined);
-  assert.equal(age.hasTimestamp, false);
-  assert.equal(age.isPending, true);
-  assert.equal(age.minimumReleaseAgeMs, 3 * 24 * 60 * 60 * 1000);
-  const held = await filterInternalChecks(
-    { ...effective, internalChecksFilter: "strict" },
-    vmVersioning,
-    "latest",
-    structuredClone(projected.result.releases),
+  assert.equal(effective.enabled, false, "qualified FCOS target must stay fixed for this overhaul");
+  assert.equal(
+    effective.dependencyDashboardApproval,
+    false,
+    "a fixed target is not a manual PR approval gate",
   );
-  assert.equal(held.pendingChecks, true, "actual lookup holds timestamp-less releases");
+}
+for (const different of [
+  { packageFile: "scripts/another-vm-image.json" },
+  { depName: "another-qualified-image" },
+  { datasource: "docker" },
+  { manager: "cargo" },
+]) {
+  const unrelated = await policy({
+    ...vmRow.dep,
+    manager: vmRow.manager,
+    packageFile: vmFile,
+    updateType: "patch",
+    ...different,
+  });
+  assert.notEqual(
+    unrelated.enabled,
+    false,
+    "fixed-target exclusion must not spread to other software",
+  );
 }
 const vmEffective = await policy({
   ...vmRow.dep,
@@ -1238,19 +1249,7 @@ const vmEffective = await policy({
   currentVersion: vmPin.release,
   updateType: "patch",
 });
-const digestAgeUpdate = { updateType: "digest" };
-await applyMinimumReleaseAgeToDigestUpdate(
-  digestAgeUpdate,
-  { ...vmEffective, internalChecksFilter: renovateDefaults().internalChecksFilter },
-  {},
-  true,
-  undefined,
-);
-assert.equal(
-  digestAgeUpdate.pendingChecks,
-  true,
-  "actual digest-only lookup also holds missing publication timestamps",
-);
+// Retain atomic source/digest projection tests for a separately authorized future qualification.
 const resolved = { warnings: [], updates: [{ newValue: "44.20260928.3.10", updateType: "patch" }] };
 await resolveUpdateDigests(vmEffective, resolved, projected.result);
 assert.equal(
@@ -1293,51 +1292,6 @@ try {
   GlobalConfig.set({ localDir: root });
   await fs.rm(vmScratch, { recursive: true, force: true });
 }
-const reorderedVm = structuredClone(effectiveConfig);
-const vmRuleIndex = reorderedVm.packageRules.findIndex(
-  (r) => r.groupName === "Owned kind VM image",
-);
-const vmRule = reorderedVm.packageRules.splice(vmRuleIndex, 1)[0];
-reorderedVm.packageRules.unshift(vmRule);
-const unsafeVm = await policy(
-  { ...vmRow.dep, manager: vmRow.manager, updateType: "patch" },
-  reorderedVm,
-);
-assert.equal(
-  unsafeVm.automerge,
-  true,
-  "moving manual rule before generic rule must expose regression",
-);
-
-const fixedTarget = effectiveConfig.packageRules.find(
-  (rule) => rule.groupName === "Owned kind VM image",
-);
-assert.equal(fixedTarget.enabled, false);
-assert.deepEqual(fixedTarget.matchFileNames, [vmFile]);
-for (const updateType of ["major", "minor", "patch", "pin", "digest", "pinDigest"]) {
-  const fixed = await policy({
-    ...vmRow.dep,
-    manager: vmRow.manager,
-    packageFile: vmFile,
-    updateType,
-  });
-  assert.equal(fixed.enabled, false);
-}
-for (const different of [
-  { packageFile: "scripts/other.json" },
-  { depName: "other-image" },
-  { manager: "cargo" },
-  { datasource: "docker" },
-]) {
-  const other = await policy({
-    ...vmRow.dep,
-    manager: vmRow.manager,
-    packageFile: vmFile,
-    updateType: "patch",
-    ...different,
-  });
-  assert.notEqual(other.enabled, false);
-}
 const unfreezing = structuredClone(effectiveConfig);
 unfreezing.packageRules.push({
   matchManagers: ["custom.regex"],
@@ -1349,7 +1303,11 @@ const unfrozen = await policy(
   { ...vmRow.dep, manager: vmRow.manager, packageFile: vmFile, updateType: "patch" },
   unfreezing,
 );
-assert.throws(() => assert.equal(unfrozen.enabled, false));
+assert.throws(
+  () => assert.equal(unfrozen.enabled, false),
+  "a late rule cannot silently unfreeze the qualified conformance target",
+);
+
 console.log(
   `Renovate ${toolVersion}: RE2 available; ${actual.length} actual pins with exclusive owners; extraction, replacement, rule-order and mutation regressions passed.`,
 );

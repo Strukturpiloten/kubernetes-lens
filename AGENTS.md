@@ -18,7 +18,7 @@ default, and never silently discard configuration. Do not apply output or mutate
 unless a separate explicit task authorizes disposable conformance testing.
 
 Rust 2024, MSRV 1.98.1. Start repository-owned YAML with `---`. Pin Actions to full SHAs with exact
-release comments. Initial canonical BoxFerry automation uses full immutable SHAs with the
+release comments. Initial canonical BoxFerry automation refs use full SHAs with the honest
 `automation-v1 interface v1` comment under ADR 0102 until infrastructure release tags exist.
 Keep Cargo and npm locks, Renovate extraction/overlap/replacement and effective
 rule-order tests current with every pin change. Preserve the existing license and unrelated work.
@@ -65,7 +65,13 @@ independent expected behavior. The primary owns all cross-repository integration
 Compare local/PR/main/manual/release contracts together and record immutable baseline commits and
 all consumers in docs/bootstrap-parity.md. Equivalent definitions must align or have justified linked
 follow-ups. Preserve least privilege, exact-candidate evidence, failure propagation, budgets and cleanup.
-Renovate owns every operational pin exactly once; manual integrity rules come after generic automerge.
+Keep the interface-1 frontloader stable; tool setup belongs to the selected shared implementation.
+Test forwarding behavior rather than byte parity against the moving core bootstrap module.
+Dependency admission executes the implementation named by the exact trusted base manifest,
+including when the candidate proposes a newer shared automation revision.
+Renovate owns every operational pin exactly once. Shared automated integrity, compatibility and
+72-hour admission rules replace manual dependency-PR approvals; verified first-party update PRs
+are wholly age-exempt. Publication still requires separate maintainer approval.
 Preserve historical fixtures and fixed compatibility anchors. The qualified FCOS VM remains
-fixed for this overhaul; retain its exact update exclusion and ADR0101 safety coupling. A passing repository does not prove
+fixed for this overhaul: keep its exact routine-update exclusion and ADR 0101 safety coupling. A passing repository does not prove
 workspace rollout. Repository settings follow-up #16 remains visible until an administrator verifies it.

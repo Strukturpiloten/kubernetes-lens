@@ -3,16 +3,29 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
   merge_group:
     types: [checks_requested]
   workflow_dispatch:
   workflow_call:
+    inputs:
+      api_purpose:
+        description: Explicit API baseline purpose; release validation requires published.
+        type: string
+        default: published
+    outputs:
+      candidate_sha:
+        description: Exact candidate whose complete selected checks succeeded.
+        value: ${{ jobs.pr-gate.outputs.candidate_sha }}
+      published_api_candidate_sha:
+        description: Exact candidate with successful published-purpose API validation.
+        value: ${{ jobs.pr-gate.outputs.published_api_candidate_sha }}
 
 permissions:
   contents: read
+  actions: read
+  statuses: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -25,7 +38,7 @@ jobs:
   validation-plan:
     name: Validation plan
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     outputs:
       plan: ${{ steps.plan.outputs.plan }}
       profile: ${{ steps.plan.outputs.profile }}
@@ -35,121 +48,80 @@ jobs:
       select_documentation: ${{ steps.plan.outputs.select_documentation }}
       select_lockfile_release_age: ${{ steps.plan.outputs.select_lockfile_release_age }}
     steps:
-      - name: Check out exact tested revision and comparison history
+      - name: Check out exact tested candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Check out trusted PR base validation policy
-        if: github.event_name == 'pull_request'
+      - name: Check out trusted policy revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          path: .validation-base
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          path: _policy
           persist-credentials: false
-      - name: Select exact-revision validation plan
+      - name: Check out immutable shared automation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Strukturpiloten/boxferry
+          # renovate: datasource=github-digest depName=Strukturpiloten/boxferry currentValue=automation-v1
+          ref: 5b4deb3fa2e06a0eea1643bbbdecec34e18b1281
+          path: _automation
+          persist-credentials: false
+      - name: Verify immutable implementation identity
+        env:
+          AUTOMATION_SHA: 5b4deb3fa2e06a0eea1643bbbdecec34e18b1281
+        run: test "$(git -C _automation rev-parse HEAD)" = "${AUTOMATION_SHA}"
+      - name: Install locked shared Python tooling
+        uses: ./_automation/.github/actions/shared-python
+      - name: Select exact candidate checks from trusted base policy
         id: plan
-        shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          AUTOMATION_SHA: 5b4deb3fa2e06a0eea1643bbbdecec34e18b1281
         run: |
-          set -euo pipefail
-          if [[ "${EVENT_NAME}" == 'pull_request' ]]; then
-            if [[ -f .validation-base/scripts/validation-plan.py &&
-                  -f .validation-base/scripts/validation-policy.json ]]; then
-              python3 .validation-base/scripts/validation-plan.py plan \
-                --repository-root "${GITHUB_WORKSPACE}" \
-                --policy-root .validation-base \
-                --event pull_request --base-sha "${BASE_SHA}" --head-sha "${HEAD_SHA}" \
-                --tested-sha "${GITHUB_SHA}" --github-output "${GITHUB_OUTPUT}"
-            else
-              # First rollout: never execute a PR-head classifier without trusted base policy.
-              python3 - <<'PY'
-          import json
-          import os
-          import re
-
-          jobs = "rust msrv dependencies documentation lockfile-release-age".split()
-          base, head, tested = (os.environ[key] for key in ("BASE_SHA", "HEAD_SHA", "GITHUB_SHA"))
-          if any(not re.fullmatch(r"[0-9a-f]{40}", value) for value in (base, head, tested)):
-              raise SystemExit("first-rollout comparison has an invalid SHA")
-          plan = {"schema": 2, "repository": "Strukturpiloten/kubernetes-lens", "event": "pull_request",
-                  "base_sha": base, "head_sha": head, "tested_sha": tested, "profile": "full",
-                  "jobs": {job: True for job in jobs}, "reasons": ["trusted base has no classifier"],
-                  "local_fingerprint": None}
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write("plan=" + json.dumps(plan, sort_keys=True, separators=(",", ":")) + "\nprofile=full\n")
-              for job in jobs:
-                  output.write("select_" + job.replace("-", "_") + "=true\n")
-          PY
-            fi
-          else
-            python3 scripts/validation-plan.py plan --event "${EVENT_NAME}" \
-              --tested-sha "${GITHUB_SHA}" --github-output "${GITHUB_OUTPUT}"
-          fi
+          uv run --locked --project _automation/automation python -m boxferry_ci plan \
+            --repository-root . --config _policy/scripts/validation-policy.json \
+            --event "${EVENT_NAME}" --base-sha "${BASE_SHA}" --head-sha "${HEAD_SHA}" \
+            --tested-sha "${GITHUB_SHA}" --policy-sha "${POLICY_SHA}" \
+            --automation-sha "${AUTOMATION_SHA}" \
+            --github-output "${GITHUB_OUTPUT}"
 
   rust:
     name: Rust quality
-    runs-on: ubuntu-24.04
     needs: validation-plan
     if: needs.validation-plan.outputs.select_rust == 'true'
-    timeout-minutes: 30
-    steps:
-      - &checkout
-        name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install configured Rust toolchain
-        run: rustup show active-toolchain
-      - name: Run the shared Rust quality contract
-        run: bash scripts/run-checks.sh rust
-
+    uses: ./.github/workflows/shared-rust-api.yml
+    with:
+      candidate_sha: ${{ github.sha }}
+      automation_sha: 5b4deb3fa2e06a0eea1643bbbdecec34e18b1281
+      policy_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+      api_purpose: ${{ inputs.api_purpose || 'development' }}
   msrv:
-    name: MSRV
-    runs-on: ubuntu-24.04
+    name: Minimum supported Rust
     needs: validation-plan
     if: needs.validation-plan.outputs.select_msrv == 'true'
-    timeout-minutes: 20
-    steps:
-      - *checkout
-      - name: Read the workspace MSRV
-        id: metadata
-        shell: bash
-        run: |
-          msrv="$(
-            cargo metadata --locked --no-deps --format-version 1 |
-              jq -er '[.packages[].rust_version] | unique | if length == 1 and .[0] != null then .[0] else error("workspace packages must declare one common rust-version") end'
-          )"
-          printf 'msrv=%s\n' "$msrv" >> "$GITHUB_OUTPUT"
-      - name: Install minimum supported Rust
-        env:
-          RUST_MSRV: ${{ steps.metadata.outputs.msrv }}
-        run: rustup toolchain install "${RUST_MSRV}" --profile minimal
-      - name: Check all targets with the MSRV
-        env:
-          RUST_MSRV: ${{ steps.metadata.outputs.msrv }}
-        run: cargo "+${RUST_MSRV}" ci-check
-      - name: Check repository policies with the MSRV
-        env:
-          RUST_MSRV: ${{ steps.metadata.outputs.msrv }}
-        run: cargo "+${RUST_MSRV}" ci-policy
+    uses: Strukturpiloten/boxferry/.github/workflows/shared-rust-ci.yml@5b4deb3fa2e06a0eea1643bbbdecec34e18b1281 # automation-v1 interface v1
+    with:
+      candidate_sha: ${{ github.sha }}
+      automation_sha: 5b4deb3fa2e06a0eea1643bbbdecec34e18b1281
+      policy_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+      config_path: scripts/validation-policy.json
+      task: msrv
 
   dependencies:
     name: Dependency and license policy
-    runs-on: ubuntu-24.04
     needs: validation-plan
     if: needs.validation-plan.outputs.select_dependencies == 'true'
-    timeout-minutes: 15
-    steps:
-      - *checkout
-      - name: Audit dependencies, licenses, bans, and sources
-        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
-        with:
-          command: check
-          arguments: --all-features
+    uses: Strukturpiloten/boxferry/.github/workflows/shared-rust-dependencies.yml@5b4deb3fa2e06a0eea1643bbbdecec34e18b1281 # automation-v1 interface v1
+    with:
+      candidate_sha: ${{ github.sha }}
+      automation_sha: 5b4deb3fa2e06a0eea1643bbbdecec34e18b1281
+      policy_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+      config_path: scripts/validation-policy.json
 
   documentation:
     name: Repository files and documentation
@@ -158,19 +130,29 @@ jobs:
     if: needs.validation-plan.outputs.select_documentation == 'true'
     timeout-minutes: 90
     steps:
-      - *checkout
+      - name: Check out exact tested repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check out trusted documentation policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          path: _policy
+          persist-credentials: false
       - name: Check out canonical shared development tools
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: Strukturpiloten/boxferry
           # renovate: datasource=github-digest depName=Strukturpiloten/boxferry currentValue=automation-v1
-          ref: 322024da130587ba14ea9f7eb499e5f41a07e43d
-          path: .shared-tools
+          ref: 5b4deb3fa2e06a0eea1643bbbdecec34e18b1281
+          path: _automation
           persist-credentials: false
       - name: Read Node runtime from the sole shared version inventory
         id: shared-node
         run: |
-          version="$(sed -n 's/^FROM docker.io\/library\/node:\([0-9.]*\)-bookworm-slim@sha256:.*/\1/p' .shared-tools/.devcontainer/Dockerfile)"
+          version="$(sed -n 's/^FROM docker.io\/library\/node:\([0-9.]*\)-bookworm-slim@sha256:.*/\1/p' _automation/.devcontainer/Dockerfile)"
           [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           printf 'version=%s\n' "${version}" >> "${GITHUB_OUTPUT}"
       - name: Install the shared pinned Node runtime
@@ -178,114 +160,107 @@ jobs:
         with:
           node-version: ${{ steps.shared-node.outputs.version }}
       - name: Provision only repository-check tools from the shared immutable inventory
-        run: bash scripts/setup-ci-tools.sh .shared-tools
+        run: bash scripts/setup-ci-tools.sh _automation
+      - name: Install locked shared Python tooling
+        uses: ./_automation/.github/actions/shared-python
+      - name: Check Python formatting
+        run: uv run --locked --project _automation/automation ruff format --check .
+      - name: Lint Python automation
+        run: uv run --locked --project _automation/automation ruff check .
+      - name: Type-check Python automation
+        run: uv run --locked --project _automation/automation ty check
       - name: Extract the immutable official Renovate runtime with its actual RE2 engine
+        if: needs.validation-plan.outputs.profile != 'prose'
         run: bash scripts/install-renovate-tool.sh
-      - name: Run the shared repository/documentation contract
-        run: bash scripts/run-checks.sh documentation
+      - name: Run selected documentation checks from trusted policy
+        env:
+          TASK: ${{ needs.validation-plan.outputs.profile == 'prose' && 'documentation-prose' || 'documentation' }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          AUTOMATION_SHA: 5b4deb3fa2e06a0eea1643bbbdecec34e18b1281
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          uv run --locked --project _automation/automation python -m boxferry_ci run \
+            --repository-root . --config _policy/scripts/validation-policy.json \
+            --event "${EVENT_NAME}" --base-sha "${BASE_SHA}" --head-sha "${HEAD_SHA}" \
+            --tested-sha "${GITHUB_SHA}" --policy-sha "${POLICY_SHA}" \
+            --automation-sha "${AUTOMATION_SHA}" --task "${TASK}" \
+            --report-json .ci-tools/reports/documentation.json --summary "${GITHUB_STEP_SUMMARY}"
 
   lockfile-release-age:
-    name: Lockfile release age
-    runs-on: ubuntu-24.04
+    name: Dependency eligibility
     needs: validation-plan
     if: needs.validation-plan.outputs.select_lockfile_release_age == 'true'
-    timeout-minutes: 5
-    steps:
-      - name: Preserve the aggregate result outside pull requests
-        if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
-        run: echo 'Lockfile release-age comparison applies to pull requests and merge-queue candidates.'
-      - name: Check out the exact pull-request candidate and base history
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - name: Check out the shared lockfile policy
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: Strukturpiloten/.github
-          # renovate: datasource=github-digest depName=Strukturpiloten/.github currentValue=main
-          ref: e362e4564f8e3c1d9d113242e3bf34011f2d7cd7
-          path: .github/strukturpiloten-shared
-          persist-credentials: false
-      - name: Reject newly introduced dependencies younger than three days
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: >-
-          python3 .github/strukturpiloten-shared/scripts/lockfile_release_age.py
-          --repository-root "${GITHUB_WORKSPACE}"
-          --base "${BASE_SHA}"
-          --head "${HEAD_SHA}"
-          --minimum-age-hours 72
+    uses: Strukturpiloten/boxferry/.github/workflows/shared-dependency-wait.yml@5b4deb3fa2e06a0eea1643bbbdecec34e18b1281 # automation-v1 interface v1
+    with:
+      candidate_sha: ${{ github.sha }}
+      automation_sha: 5b4deb3fa2e06a0eea1643bbbdecec34e18b1281
+      policy_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
 
   pr-gate:
     name: Required CI
     if: always()
     needs: [validation-plan, rust, msrv, dependencies, documentation, lockfile-release-age]
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
+    outputs:
+      candidate_sha: ${{ steps.gate.outputs.candidate_sha }}
+      published_api_candidate_sha: ${{ steps.gate.outputs.published_api_candidate_sha }}
     steps:
-      - name: Check out candidate aggregate verifier
+      - name: Check out exact tested candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
-      - name: Check out trusted PR base aggregate verifier
-        if: github.event_name == 'pull_request'
+      - name: Check out trusted policy revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          path: .validation-base
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          path: _policy
           persist-credentials: false
-      - name: Require every selected job to succeed and every skip to be planned
-        shell: bash
+      - name: Check out immutable shared automation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Strukturpiloten/boxferry
+          # renovate: datasource=github-digest depName=Strukturpiloten/boxferry currentValue=automation-v1
+          ref: 5b4deb3fa2e06a0eea1643bbbdecec34e18b1281
+          path: _automation
+          persist-credentials: false
+      - name: Verify immutable implementation identity
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          AUTOMATION_SHA: 5b4deb3fa2e06a0eea1643bbbdecec34e18b1281
+        run: test "$(git -C _automation rev-parse HEAD)" = "${AUTOMATION_SHA}"
+      - name: Install locked shared Python tooling
+        uses: ./_automation/.github/actions/shared-python
+      - name: Require every selected check and only planned skips
+        id: gate
+        env:
           PLAN_JSON: ${{ needs.validation-plan.outputs.plan }}
           NEEDS_JSON: ${{ toJSON(needs) }}
+          API_PURPOSE: ${{ inputs.api_purpose || 'development' }}
+          PUBLISHED_API_CANDIDATE_SHA: ${{ needs.rust.outputs.published_api_candidate_sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          AUTOMATION_SHA: 5b4deb3fa2e06a0eea1643bbbdecec34e18b1281
         run: |
           set -euo pipefail
-          if [[ "${EVENT_NAME}" == 'pull_request' &&
-                ( ! -f .validation-base/scripts/validation-plan.py ||
-                  ! -f .validation-base/scripts/validation-policy.json ) ]]; then
-            # Bootstrap has no trusted verifier. Require the literal complete plan and all jobs.
-            python3 - <<'PY' | tee -a "${GITHUB_STEP_SUMMARY}"
-          import json
-          import os
-
-          jobs = "rust msrv dependencies documentation lockfile-release-age".split()
-          plan = json.loads(os.environ["PLAN_JSON"])
-          needs = json.loads(os.environ["NEEDS_JSON"])
-          if (set(plan) != {"schema", "repository", "event", "base_sha", "head_sha", "tested_sha",
-                            "profile", "jobs", "reasons", "local_fingerprint"}
-                  or plan["schema"] != 2 or plan["repository"] != "Strukturpiloten/kubernetes-lens"
-                  or plan["event"] != "pull_request" or plan["profile"] != "full"
-                  or plan["base_sha"] != os.environ["BASE_SHA"]
-                  or plan["head_sha"] != os.environ["HEAD_SHA"]
-                  or plan["tested_sha"] != os.environ["GITHUB_SHA"]
-                  or plan["jobs"] != {job: True for job in jobs}
-                  or set(needs) != {"validation-plan", *jobs}):
-              raise SystemExit("first-rollout complete validation contract is missing or inconsistent")
-          for job in ("validation-plan", *jobs):
-              if needs[job].get("result") != "success":
-                  raise SystemExit(f"first-rollout required job {job} did not succeed")
-          print("First-rollout complete validation: every required job succeeded")
-          PY
-          else
-            verifier=scripts/validation-plan.py
-            policy_root=.
-            if [[ "${EVENT_NAME}" == 'pull_request' ]]; then
-              verifier=.validation-base/scripts/validation-plan.py
-              policy_root=.validation-base
-            fi
-            python3 "${verifier}" gate --policy-root "${policy_root}" \
-              --event "${EVENT_NAME}" --base-sha "${BASE_SHA}" --head-sha "${HEAD_SHA}" \
-              --tested-sha "${GITHUB_SHA}" \
-              --plan-json "${PLAN_JSON}" --needs-json "${NEEDS_JSON}" |
-              tee -a "${GITHUB_STEP_SUMMARY}"
-          fi
+          uv run --locked --project _automation/automation python -m boxferry_ci gate \
+            --repository-root . --config _policy/scripts/validation-policy.json \
+            --event "${EVENT_NAME}" --base-sha "${BASE_SHA}" --head-sha "${HEAD_SHA}" \
+            --tested-sha "${GITHUB_SHA}" --policy-sha "${POLICY_SHA}" \
+            --automation-sha "${AUTOMATION_SHA}" \
+            --plan-json "${PLAN_JSON}" --needs-json "${NEEDS_JSON}"
+          case "${API_PURPOSE}" in
+            published)
+              test "${PUBLISHED_API_CANDIDATE_SHA}" = "${GITHUB_SHA}"
+              printf 'published_api_candidate_sha=%s\n' "${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
+              ;;
+            development) ;;
+            *) exit 1 ;;
+          esac
+          printf 'candidate_sha=%s\n' "${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"

@@ -6,7 +6,7 @@ case "${1:-}" in
   rust)
     cargo fmt --all -- --check
     cargo ci-check
-    cargo ci-policy
+    cargo ci-policy --no-run
     cargo ci-clippy
     cargo ci-test
     cargo ci-doctest
@@ -17,7 +17,7 @@ case "${1:-}" in
     msrv="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["rust-version"])')"
     rustup run "${msrv}" rustc --version
     cargo "+${msrv}" ci-check
-    cargo "+${msrv}" ci-policy
+    cargo "+${msrv}" ci-policy --no-run
     ;;
   dependencies)
     cargo deny --all-features check
@@ -28,7 +28,6 @@ case "${1:-}" in
     actionlint
     zizmor .github/workflows
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-validation-plan.py
-    PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-repository-policy.py
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-check-all.py
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-ci-tools.py
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-file-config.py

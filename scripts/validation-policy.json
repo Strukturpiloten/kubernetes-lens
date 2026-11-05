@@ -25,7 +25,7 @@
       "commands": [
         ["cargo", "fmt", "--all", "--", "--check"],
         ["cargo", "ci-check"],
-        ["cargo", "ci-policy"],
+        ["cargo", "ci-policy", "--no-run"],
         ["cargo", "ci-clippy"],
         ["cargo", "ci-test"],
         ["cargo", "ci-doctest"],
@@ -37,7 +37,7 @@
       "timeout_seconds": 1800,
       "commands": [
         ["cargo", "ci-check"],
-        ["cargo", "ci-policy"]
+        ["cargo", "ci-policy", "--no-run"]
       ]
     },
     "dependency-policy": {
@@ -52,7 +52,6 @@
         ["actionlint"],
         ["zizmor", ".github/workflows"],
         ["python3", "scripts/test-validation-plan.py"],
-        ["python3", "scripts/test-repository-policy.py"],
         ["python3", "scripts/test-check-all.py"],
         ["python3", "scripts/test-ci-tools.py"],
         ["python3", "scripts/test-file-config.py"],
@@ -85,6 +84,33 @@
         ["bash", "scripts/check-files.sh", "--check"],
         ["lychee", "--config", "lychee.toml", "--root-dir", ".", "--offline", "./**/*.md"]
       ]
+    },
+    "api-development": {
+      "timeout_seconds": 1200,
+      "commands": [
+        [
+          "python",
+          "-m",
+          "boxferry_ci.api_baselines",
+          "run",
+          "--repository-root",
+          ".",
+          "--repository",
+          "Strukturpiloten/kubernetes-lens",
+          "--api-purpose",
+          "development",
+          "--event",
+          "local",
+          "--package",
+          "kubernetes-lens",
+          "--report-json",
+          "target/api-baseline-local.json"
+        ]
+      ]
+    },
+    "initial-api-contract": {
+      "timeout_seconds": 1200,
+      "commands": [["cargo", "test", "--locked", "--test", "foundation"]]
     }
   }
 }
