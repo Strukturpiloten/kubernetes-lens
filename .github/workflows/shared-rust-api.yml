@@ -30,7 +30,7 @@ permissions:
   contents: read
 jobs:
   quality:
-    uses: Strukturpiloten/boxferry/.github/workflows/shared-rust-ci.yml@5b4deb3fa2e06a0eea1643bbbdecec34e18b1281 # automation-v1 interface v1
+    uses: Strukturpiloten/boxferry/.github/workflows/shared-rust-ci.yml@fba206d732ea7ed9373386ae58101e76e1e3c9fb # automation-v1 interface v1
     with:
       candidate_sha: ${{ inputs.candidate_sha }}
       automation_sha: ${{ inputs.automation_sha }}
@@ -38,7 +38,7 @@ jobs:
       config_path: scripts/validation-policy.json
       task: rust-quality
   api:
-    uses: Strukturpiloten/boxferry/.github/workflows/shared-rust-semver.yml@5b4deb3fa2e06a0eea1643bbbdecec34e18b1281 # automation-v1 interface v1
+    uses: Strukturpiloten/boxferry/.github/workflows/shared-rust-semver.yml@fba206d732ea7ed9373386ae58101e76e1e3c9fb # automation-v1 interface v1
     with:
       candidate_sha: ${{ inputs.candidate_sha }}
       automation_sha: ${{ inputs.automation_sha }}

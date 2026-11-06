@@ -27,10 +27,10 @@ jobs:
   release-gate:
     name: Complete exact-candidate release gate
     needs: validate
-    uses: Strukturpiloten/boxferry/.github/workflows/shared-release-validation.yml@5b4deb3fa2e06a0eea1643bbbdecec34e18b1281 # automation-v1 interface v1
+    uses: Strukturpiloten/boxferry/.github/workflows/shared-release-validation.yml@fba206d732ea7ed9373386ae58101e76e1e3c9fb # automation-v1 interface v1
     with:
       candidate_sha: ${{ github.sha }}
-      automation_sha: 5b4deb3fa2e06a0eea1643bbbdecec34e18b1281
+      automation_sha: fba206d732ea7ed9373386ae58101e76e1e3c9fb
       policy_sha: ${{ github.sha }}
       config_path: scripts/release-policy.json
       needs_json: ${{ toJSON(needs) }}
