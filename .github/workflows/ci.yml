@@ -37,7 +37,7 @@ env:
 jobs:
   validation-plan:
     name: Validation plan
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     outputs:
       plan: ${{ steps.plan.outputs.plan }}
@@ -143,7 +143,7 @@ jobs:
 
   documentation:
     name: Repository files and documentation
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: validation-plan
     if: needs.validation-plan.outputs.select_documentation == 'true'
     timeout-minutes: 90
@@ -221,7 +221,7 @@ jobs:
     name: Required CI
     if: always()
     needs: [validation-plan, rust, api, msrv, dependencies, documentation, lockfile-release-age]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     outputs:
       candidate_sha: ${{ steps.gate.outputs.candidate_sha }}
