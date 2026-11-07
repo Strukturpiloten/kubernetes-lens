@@ -340,9 +340,16 @@ const actual = await inventory();
 ownership(actual);
 const rustApiRows = actual.filter(
   (row) =>
-    row.file === ".github/workflows/shared-rust-api.yml" && row.dep.datasource === "github-digest",
+    row.file === ".github/workflows/ci.yml" &&
+    row.manager === "github-actions" &&
+    row.dep.datasource === "github-digest" &&
+    /shared-rust-(?:ci|semver)\.yml@/.test(row.dep.replaceString ?? ""),
 );
-assert.equal(rustApiRows.length, 2, "both canonical Rust/API references must be owned once");
+assert.equal(
+  rustApiRows.length,
+  3,
+  "quality, API and retained MSRV references have unique native owners",
+);
 assert(
   rustApiRows.every(
     (row) =>
@@ -912,10 +919,12 @@ function validateTrustedListener(content) {
   assert.deepEqual(Object.keys(listener.jobs), ["eligibility"]);
   assert.deepEqual(Object.keys(listener.jobs.eligibility).sort(), [
     "if",
+    "name",
     "permissions",
     "uses",
     "with",
   ]);
+  assert.equal(listener.jobs.eligibility.name, "Trusted dependency metadata");
   assert.deepEqual(listener.jobs.eligibility.permissions, {
     actions: "write",
     checks: "read",

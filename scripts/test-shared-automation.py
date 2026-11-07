@@ -13,13 +13,13 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-import textwrap
 import tomllib
 import unittest
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from types import FunctionType
-from typing import cast
+from typing import Any, ClassVar, cast
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -52,6 +52,7 @@ def validate_policy_execution_contract(
     ]
     assert set(policy["jobs"]) == {
         "rust",
+        "api",
         "msrv",
         "dependencies",
         "documentation",
@@ -85,9 +86,9 @@ def validate_policy_execution_contract(
 
 
 class SharedAutomationTests(unittest.TestCase):
-    def test_rust_api_wrapper_preserves_trusted_outer_inventory(self) -> None:
+    def test_direct_quality_api_calls_preserve_commands_and_exact_gate_contract(self) -> None:
         policy = json.loads((ROOT / "scripts/validation-policy.json").read_text())
-        jobs = ["rust", "msrv", "dependencies", "documentation", "lockfile-release-age"]
+        jobs = ["rust", "api", "msrv", "dependencies", "documentation", "lockfile-release-age"]
         self.assertEqual(policy["jobs"], jobs)
         self.assertEqual(
             policy["profile_jobs"],
@@ -97,161 +98,40 @@ class SharedAutomationTests(unittest.TestCase):
             },
         )
         ci = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertFalse((ROOT / ".github/workflows/shared-rust-api.yml").exists())
         self.assertEqual(
             re.findall(r"^  ([a-z][a-z-]*):$", ci.split("\njobs:\n", 1)[1], re.M),
             ["validation-plan", *jobs, "pr-gate"],
         )
-        rust = ci.split("\n  rust:\n", 1)[1].split("\n  msrv:\n", 1)[0]
-        self.assertIn("needs: validation-plan", rust)
-        self.assertIn("if: needs.validation-plan.outputs.select_rust == 'true'", rust)
-        self.assertIn("uses: ./.github/workflows/shared-rust-api.yml", rust)
-        self.assertIn("api_purpose: ${{ inputs.api_purpose || 'development' }}", rust)
-        self.assertIn("        default: published", ci)
+        rust = ci.split("\n  rust:\n", 1)[1].split("\n  api:\n", 1)[0]
+        api = ci.split("\n  api:\n", 1)[1].split("\n  msrv:\n", 1)[0]
+        self.assertIn("shared-rust-ci.yml@", rust)
+        self.assertIn("task: rust-quality", rust)
         self.assertIn(
-            "needs: [validation-plan, rust, msrv, dependencies, documentation, "
-            "lockfile-release-age]",
-            ci,
+            "select_api == 'true' || needs.validation-plan.outputs.select_rust == 'true'", api
         )
-        wrapper = (ROOT / ".github/workflows/shared-rust-api.yml").read_text()
-        self.assertEqual(wrapper.count("required: true"), 3)
-        self.assertIn("default: published", wrapper)
-        self.assertIn("if: always()\n    needs: [quality, api]", wrapper)
-        for literal in (
-            "task: rust-quality",
+        for declaration in (
+            "shared-rust-semver.yml@",
             "package: kubernetes-lens",
             "initial_api_contract: true",
             'release_type: ""',
+            "api_purpose: ${{ inputs.api_purpose || 'development' }}",
         ):
-            self.assertIn(literal, wrapper)
-        self.assertEqual(wrapper.count("config_path: scripts/validation-policy.json"), 2)
-        self.assertNotIn("continue-on-error", wrapper)
-        self.assertNotIn("concurrency:", wrapper)
-        self.assertIn("value: ${{ jobs.result.outputs.candidate_sha }}", wrapper)
-        self.assertIn("value: ${{ jobs.result.outputs.published_api_candidate_sha }}", wrapper)
+            self.assertIn(declaration, api)
+        self.assertIn(
+            "needs: [validation-plan, rust, api, msrv, dependencies, documentation, "
+            "lockfile-release-age]",
+            ci,
+        )
+        self.assertIn("timeout-minutes: 10", ci.split("\n  pr-gate:\n")[1])
+        self.assertIn("id: gate\n        timeout-minutes: 5", ci)
+        self.assertIn("python scripts/ci-api-transition.py", ci)
+        self.assertIn('--plan-json "${PLAN_JSON}" --needs-json "${NEEDS_JSON}"', ci)
         self.assertIn("value: ${{ jobs.pr-gate.outputs.published_api_candidate_sha }}", ci)
         release = (ROOT / ".github/workflows/release.yml").read_text()
         self.assertIn(
             "uses: ./.github/workflows/ci.yml\n    with:\n      api_purpose: published", release
         )
-
-    @staticmethod
-    def run_aggregate(workflow: str, **changes: str) -> tuple[int, str]:
-        # Execute the actual final workflow run block. Only the upstream canonical gate is stubbed.
-        script = textwrap.dedent(workflow.rsplit("        run: |\n", 1)[1])
-        candidate = "a" * 40
-        with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
-            output = directory / "outputs"
-            uv = directory / "uv"
-            uv.write_text('#!/bin/sh\nexit "${GATE_STATUS:-0}"\n')
-            uv.chmod(0o755)
-            environment = {
-                **os.environ,
-                "PATH": f"{directory}:/usr/bin:/bin",
-                "GITHUB_OUTPUT": str(output),
-                "GITHUB_SHA": candidate,
-                "CANDIDATE_SHA": candidate,
-                "API_PURPOSE": "published",
-                "QUALITY_RESULT": "success",
-                "API_RESULT": "success",
-                "QUALITY_CANDIDATE_SHA": candidate,
-                "API_CANDIDATE_SHA": candidate,
-                "PUBLISHED_API_CANDIDATE_SHA": candidate,
-                "EVENT_NAME": "workflow_dispatch",
-                "BASE_SHA": candidate,
-                "HEAD_SHA": candidate,
-                "POLICY_SHA": candidate,
-                "AUTOMATION_SHA": "b" * 40,
-                "PLAN_JSON": "{}",
-                "NEEDS_JSON": "{}",
-                **changes,
-            }
-            result = subprocess.run(
-                ["bash", "-euo", "pipefail", "-c", script],
-                env=environment,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            return result.returncode, output.read_text() if output.exists() else ""
-
-    def test_wrapper_requires_both_exact_successes_for_every_purpose(self) -> None:
-        workflow = (ROOT / ".github/workflows/shared-rust-api.yml").read_text()
-        candidate = "a" * 40
-        for purpose in ("development", "published"):
-            expected = f"candidate_sha={candidate}\n"
-            if purpose == "published":
-                expected = f"published_api_candidate_sha={candidate}\n" + expected
-            self.assertEqual(self.run_aggregate(workflow, API_PURPOSE=purpose), (0, expected))
-            for key in ("QUALITY_RESULT", "API_RESULT"):
-                for outcome in ("failure", "cancelled", "skipped", "", "unknown"):
-                    with self.subTest(purpose=purpose, key=key, outcome=outcome):
-                        status, output = self.run_aggregate(
-                            workflow,
-                            API_PURPOSE=purpose,
-                            **{key: outcome},
-                        )
-                        self.assertNotEqual(status, 0)
-                        self.assertEqual(output, "")
-            for key in (
-                "CANDIDATE_SHA",
-                "GITHUB_SHA",
-                "QUALITY_CANDIDATE_SHA",
-                "API_CANDIDATE_SHA",
-            ):
-                for wrong in ("", "b" * 40, "A" * 40, "bad"):
-                    with self.subTest(purpose=purpose, key=key, wrong=wrong):
-                        status, output = self.run_aggregate(
-                            workflow, API_PURPOSE=purpose, **{key: wrong}
-                        )
-                        self.assertNotEqual(status, 0)
-                        self.assertEqual(output, "")
-        for purpose in ("", "wrong", "Published"):
-            status, output = self.run_aggregate(workflow, API_PURPOSE=purpose)
-            self.assertNotEqual(status, 0)
-            self.assertEqual(output, "")
-        for published in ("", "b" * 40, "bad"):
-            status, output = self.run_aggregate(workflow, PUBLISHED_API_CANDIDATE_SHA=published)
-            self.assertNotEqual(status, 0)
-            self.assertEqual(output, "")
-            self.assertEqual(
-                self.run_aggregate(
-                    workflow, API_PURPOSE="development", PUBLISHED_API_CANDIDATE_SHA=published
-                ),
-                (0, f"candidate_sha={candidate}\n"),
-            )
-
-    def test_required_ci_emits_nothing_until_canonical_gate_and_published_binding_pass(
-        self,
-    ) -> None:
-        ci = (ROOT / ".github/workflows/ci.yml").read_text()
-        candidate = "a" * 40
-        for purpose in ("development", "published"):
-            for failure in ("1", "17"):
-                status, output = self.run_aggregate(ci, API_PURPOSE=purpose, GATE_STATUS=failure)
-                self.assertNotEqual(status, 0)
-                self.assertEqual(output, "")
-        for published in ("", "b" * 40):
-            status, output = self.run_aggregate(ci, PUBLISHED_API_CANDIDATE_SHA=published)
-            self.assertNotEqual(status, 0)
-            self.assertEqual(output, "")
-            # Trusted prose planning may skip rust in development; no published receipt is emitted.
-            self.assertEqual(
-                self.run_aggregate(
-                    ci, API_PURPOSE="development", PUBLISHED_API_CANDIDATE_SHA=published
-                ),
-                (0, f"candidate_sha={candidate}\n"),
-            )
-        self.assertEqual(
-            self.run_aggregate(ci),
-            (
-                0,
-                f"published_api_candidate_sha={candidate}\ncandidate_sha={candidate}\n",
-            ),
-        )
-        status, output = self.run_aggregate(ci, API_PURPOSE="unknown")
-        self.assertNotEqual(status, 0)
-        self.assertEqual(output, "")
 
     def test_api_tasks_use_central_identity_and_real_unfiltered_initial_contract(self) -> None:
         policy = json.loads((ROOT / "scripts/validation-policy.json").read_text())
@@ -658,6 +538,369 @@ class SharedAutomationTests(unittest.TestCase):
                 f"github>Strukturpiloten/boxferry//renovate-presets/{preset}#{revision}",
                 renovate["extends"],
             )
+
+
+@dataclass
+class TransitionCase:
+    root: Path
+    config: Path
+    base: str
+    tested: str
+    event: str
+    plan: str
+    needs: dict[str, Any]
+
+
+class ApiTransitionTests(unittest.TestCase):
+    project: ClassVar[Path]
+    source: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.source = str(LOAD_CONFIG(ROOT)["revision"])
+        prepare = cast(Callable[[Path, str], Path], BOOTSTRAP["prepare_implementation"])
+        cls.project = prepare(ROOT, cls.source)
+
+    def setUp(self) -> None:
+        self.bridge = runpy.run_path(str(ROOT / "scripts/ci-api-transition.py"))
+        self.proof = cast(FunctionType, self.bridge["joint_proof"])
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.directory = Path(self.temporary.name)
+
+    @staticmethod
+    def git(root: Path, *args: str) -> str:
+        return (
+            subprocess.check_output(
+                [
+                    "git",
+                    "-c",
+                    "core.hooksPath=/dev/null",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "-c",
+                    "user.name=Contract fixture",
+                    "-c",
+                    "user.email=fixture@example.invalid",
+                    "-C",
+                    str(root),
+                    *args,
+                ],
+                stderr=subprocess.DEVNULL,
+            )
+            .decode()
+            .strip()
+        )
+
+    def canonical(self, *args: str) -> subprocess.CompletedProcess[str]:
+        root = Path(args[args.index("--repository-root") + 1])
+        return subprocess.run(
+            [sys.executable, "-m", "boxferry_ci", *args],
+            env=self.environment(root),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=20,
+        )
+
+    def environment(self, root: Path) -> dict[str, str]:
+        project = root / "target/boxferry-automation" / self.source / "automation"
+        return {**os.environ, "PYTHONPATH": str(project / "src"), "PYTHONDONTWRITEBYTECODE": "1"}
+
+    def fixture(
+        self, *, legacy: bool, profile: str = "full", event: str = "pull_request"
+    ) -> TransitionCase:
+        root = self.directory / f"consumer-{len(list(self.directory.iterdir()))}"
+        (root / "scripts").mkdir(parents=True)
+        (root / ".github").mkdir()
+        shutil.copyfile(ROOT / ".github/automation.json", root / ".github/automation.json")
+        (root / "docs/public").mkdir(parents=True)
+        (root / "docs/public/page.md").write_text("# Page\n\nOriginal prose.\n")
+        current = (ROOT / "scripts/validation-policy.json").read_bytes()
+        old = (ROOT / "scripts/fixtures/ci-api-transition/p5-policy.json.txt").read_bytes()
+        policy = root / "scripts/validation-policy.json"
+        policy.write_bytes(old if legacy else current)
+        self.git(root, "init", "--quiet", "--template=")
+        self.git(root, "add", ".")
+        self.git(root, "commit", "--quiet", "-m", "trusted policy fixture")
+        base = self.git(root, "rev-parse", "HEAD")
+        if event in {"pull_request", "merge_group"}:
+            if profile == "prose":
+                (root / "docs/public/page.md").write_text("# Page\n\nChanged prose.\n")
+            else:
+                policy.write_bytes(current)
+                (root / "unknown-input").write_text("forces full validation\n")
+            self.git(root, "add", ".")
+            self.git(root, "commit", "--quiet", "-m", "exact candidate fixture")
+        tested = self.git(root, "rev-parse", "HEAD")
+        trusted = root / "_policy"
+        self.git(root, "clone", "--quiet", "--no-hardlinks", str(root), str(trusted))
+        self.git(trusted, "checkout", "--quiet", "--detach", base)
+        cache = root / "target/boxferry-automation"
+        cache.mkdir(parents=True)
+        shutil.copytree(
+            ROOT / "target/boxferry-automation" / (self.source + ".git"),
+            cache / (self.source + ".git"),
+        )
+        prepare = cast(Callable[[Path, str], Path], BOOTSTRAP["prepare_implementation"])
+        prepare(root, self.source)
+        case = TransitionCase(
+            root, trusted / "scripts/validation-policy.json", base, tested, event, "", {}
+        )
+        result = self.canonical("plan", *self.arguments(case))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        case.plan = result.stdout.strip()
+        plan = json.loads(case.plan)
+        jobs = plan["jobs"]
+        outputs = {
+            "plan": case.plan,
+            "profile": plan["profile"],
+            **{
+                "select_" + name.replace("-", "_"): str(selected).lower()
+                for name, selected in jobs.items()
+            },
+        }
+        case.needs = {"validation-plan": {"result": "success", "outputs": outputs}}
+        for name in self.bridge["JOBS"]:
+            selected = jobs.get(name, jobs["rust"])
+            child = {"candidate_sha": tested} if selected and name in {"rust", "api"} else {}
+            case.needs[name] = {"result": "success" if selected else "skipped", "outputs": child}
+        return case
+
+    def arguments(self, case: TransitionCase) -> list[str]:
+        return [
+            "--repository-root",
+            str(case.root),
+            "--config",
+            str(case.config),
+            "--event",
+            case.event,
+            "--base-sha",
+            case.base,
+            "--head-sha",
+            case.tested,
+            "--tested-sha",
+            case.tested,
+            "--policy-sha",
+            case.base,
+            "--automation-sha",
+            self.source,
+        ]
+
+    def execute(self, case: TransitionCase, purpose: str = "development") -> tuple[int, str]:
+        output = self.directory / "gate-output"
+        output.unlink(missing_ok=True)
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts/ci-api-transition.py"),
+                *self.arguments(case),
+                "--plan-json",
+                case.plan,
+                "--needs-json",
+                json.dumps(case.needs),
+                "--api-purpose",
+                purpose,
+                "--github-output",
+                str(output),
+            ],
+            env={**self.environment(case.root), "GITHUB_SHA": case.tested},
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+        return result.returncode, output.read_text() if output.exists() else ""
+
+    def test_actual_old_and_new_canonical_plan_gate_paths_and_release_outputs(self) -> None:
+        for legacy in (True, False):
+            for event in ("pull_request", "merge_group"):
+                for profile in ("full", "prose"):
+                    with self.subTest(legacy=legacy, event=event, profile=profile):
+                        case = self.fixture(legacy=legacy, profile=profile, event=event)
+                        plan = json.loads(case.plan)
+                        self.assertEqual(plan["profile"], profile)
+                        self.assertEqual(len(plan["jobs"]), 5 if legacy else 6)
+                        self.assertEqual(self.execute(case), (0, f"candidate_sha={case.tested}\n"))
+                        if profile == "full":
+                            case.needs["api"]["outputs"]["published_api_candidate_sha"] = (
+                                case.tested
+                            )
+                            self.assertEqual(
+                                self.execute(case, "published"),
+                                (
+                                    0,
+                                    f"candidate_sha={case.tested}\npublished_api_candidate_sha={case.tested}\n",
+                                ),
+                            )
+                            del case.needs["api"]["outputs"]["published_api_candidate_sha"]
+                        projected, published = self.proof(
+                            case.plan,
+                            json.dumps(case.needs),
+                            case.tested,
+                            "development",
+                            legacy=legacy,
+                        )
+                        self.assertFalse(published)
+                        expected = {
+                            name: outcome
+                            for name, outcome in case.needs.items()
+                            if not legacy or name != "api"
+                        }
+                        self.assertEqual(json.loads(projected), expected)
+                        if not legacy:
+                            self.assertEqual(projected, json.dumps(case.needs))
+        for event in ("push", "workflow_dispatch", "workflow_call"):
+            case = self.fixture(legacy=False, event=event)
+            case.needs["api"]["outputs"]["published_api_candidate_sha"] = case.tested
+            self.assertEqual(
+                self.execute(case, "published"),
+                (0, f"candidate_sha={case.tested}\npublished_api_candidate_sha={case.tested}\n"),
+            )
+
+    def test_every_child_failure_missing_or_mixed_proof_refuses_before_canonical_gate(self) -> None:
+        for legacy in (True, False):
+            case = self.fixture(legacy=legacy)
+            baseline = copy.deepcopy(case.needs)
+            for name in ("rust", "api"):
+                for result in ("failure", "cancelled", "skipped", "unknown", None):
+                    case.needs = copy.deepcopy(baseline)
+                    case.needs[name]["result"] = result
+                    with self.assertRaises(ValueError):
+                        self.proof(
+                            case.plan,
+                            json.dumps(case.needs),
+                            case.tested,
+                            "development",
+                            legacy=legacy,
+                        )
+                for receipt in ("", "b" * 40, None, True):
+                    case.needs = copy.deepcopy(baseline)
+                    case.needs[name]["outputs"]["candidate_sha"] = receipt
+                    with self.assertRaises(ValueError):
+                        self.proof(
+                            case.plan,
+                            json.dumps(case.needs),
+                            case.tested,
+                            "development",
+                            legacy=legacy,
+                        )
+            case.needs = copy.deepcopy(baseline)
+            self.assertNotEqual(self.execute(case, "published")[0], 0)
+            self.assertEqual(self.execute(case, "unknown")[1], "")
+
+    def test_original_plan_bytes_reach_actual_gate_and_invalid_api_never_reaches_it(self) -> None:
+        case = self.fixture(legacy=True)
+        case.plan = " \n" + case.plan + "\n "
+        case.needs["validation-plan"]["outputs"]["plan"] = case.plan
+        output = self.directory / "delegated-output"
+        arguments = [
+            *self.arguments(case),
+            "--plan-json",
+            case.plan,
+            "--needs-json",
+            json.dumps(case.needs),
+            "--api-purpose",
+            "development",
+            "--github-output",
+            str(output),
+        ]
+        entrypoint = cast(FunctionType, self.bridge["main"])
+        original_run = subprocess.run
+        with (
+            patch.dict(os.environ, {**self.environment(case.root), "GITHUB_SHA": case.tested}),
+            patch.object(subprocess, "run", wraps=original_run) as executed,
+        ):
+            self.assertEqual(entrypoint(arguments), 0)
+        calls = [
+            call.args[0]
+            for call in executed.call_args_list
+            if call.args[0][:4] == [sys.executable, "-m", "boxferry_ci", "gate"]
+        ]
+        self.assertEqual(len(calls), 1)
+        command = calls[0]
+        self.assertEqual(command[command.index("--plan-json") + 1], case.plan)
+        self.assertEqual(
+            json.loads(command[command.index("--needs-json") + 1]),
+            {name: value for name, value in case.needs.items() if name != "api"},
+        )
+        output.unlink()
+        case.needs["api"]["result"] = "cancelled"
+        arguments[arguments.index("--needs-json") + 1] = json.dumps(case.needs)
+        with (
+            patch.dict(os.environ, {**self.environment(case.root), "GITHUB_SHA": case.tested}),
+            patch.object(subprocess, "run", wraps=original_run) as refused,
+        ):
+            self.assertEqual(entrypoint(arguments), 1)
+        self.assertFalse(output.exists())
+        self.assertFalse(
+            any(
+                call.args[0][:4] == [sys.executable, "-m", "boxferry_ci", "gate"]
+                for call in refused.call_args_list
+            )
+        )
+
+    def test_raw_inventory_plan_identity_selections_and_serialization_are_closed(self) -> None:
+        case = self.fixture(legacy=True)
+        baseline = copy.deepcopy(case.needs)
+        for missing in baseline:
+            needs = {name: value for name, value in baseline.items() if name != missing}
+            with self.assertRaises(ValueError):
+                self.proof(case.plan, json.dumps(needs), case.tested, "development", legacy=True)
+        needs = {**baseline, "unexpected": {"result": "success", "outputs": {}}}
+        with self.assertRaises(ValueError):
+            self.proof(case.plan, json.dumps(needs), case.tested, "development", legacy=True)
+        for key, value in (
+            ("tested_sha", "b" * 40),
+            ("repository", "attacker/repo"),
+            ("jobs", {"rust": True}),
+            ("jobs", {**json.loads(case.plan)["jobs"], "rust": 1}),
+        ):
+            with self.assertRaises(ValueError):
+                self.proof(
+                    json.dumps({**json.loads(case.plan), key: value}),
+                    json.dumps(baseline),
+                    case.tested,
+                    "development",
+                    legacy=True,
+                )
+        # Same parsed plan but different original bytes cannot silently replace the plan output.
+        with self.assertRaises(ValueError):
+            self.proof(
+                " " + case.plan, json.dumps(baseline), case.tested, "development", legacy=True
+            )
+        case.needs["documentation"]["result"] = "failure"
+        self.assertEqual(self.execute(case)[1], "")  # Real canonical gate refuses after API proof.
+
+    def test_trusted_blob_hash_custody_and_initial_contract_cannot_be_substituted(self) -> None:
+        case = self.fixture(legacy=True)
+        old = case.config.read_bytes()
+        case.config.write_bytes((ROOT / "scripts/validation-policy.json").read_bytes())
+        self.assertEqual(
+            self.execute(case)[1], ""
+        )  # Known P6 in P5 worktree is still not B's blob.
+        case.config.write_bytes(old + b"\n")
+        self.assertNotEqual(self.execute(case)[0], 0)
+        for mutation in ("filtered", "missing-quality", "wrong-repository", "wrong-schema"):
+            root = self.directory / ("bad-policy-" + mutation)
+            (root / "scripts").mkdir(parents=True)
+            policy = json.loads(old)
+            if mutation == "filtered":
+                policy["tasks"]["initial-api-contract"]["commands"][0].append("one_test")
+            elif mutation == "missing-quality":
+                policy["tasks"]["rust-quality"]["commands"].pop()
+            elif mutation == "wrong-repository":
+                policy["repository"] = "attacker/repo"
+            else:
+                policy["schema"] = 3
+            path = root / "scripts/validation-policy.json"
+            path.write_text(json.dumps(policy))
+            self.git(root, "init", "--quiet", "--template=")
+            self.git(root, "add", ".")
+            self.git(root, "commit", "--quiet", "-m", "unsupported policy fixture")
+            verify = cast(FunctionType, self.bridge["trusted_policy"])
+            with self.assertRaises(ValueError):
+                verify(path, self.git(root, "rev-parse", "HEAD"))
 
 
 if __name__ == "__main__":

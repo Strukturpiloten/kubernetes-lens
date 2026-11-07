@@ -46,3 +46,11 @@ integrity, and historical evidence remain intact; no automatic qualification pip
 
 [Historical parity and provenance](evidence/bootstrap-parity-before-shared.md) preserves the
 original immutable baselines, licensing, extraction evidence, and native limitations.
+
+Direct quality and API calls replace the local reusable wrapper under
+[ADR 0103](decisions/0103-direct-api-jobs-and-trusted-policy-transition.md). The exact trusted
+old five-job policy retains its serialized plan and original six aggregate outcomes;
+the separately validated API outcome alone is projected out. The six-job policy
+uses all seven raw outcomes normally. Both paths require real joint candidate/API
+proof before the unchanged canonical gate and aggregate outputs. Ordinary read-only
+permissions, initial foundation proof, publication refusal and fixed FCOS evidence remain.

@@ -26,8 +26,8 @@ def snapshot() -> dict[str, str]:
         "CHANGELOG.md",
         ".codex/config.toml",
         "scripts/validation-policy.json",
+        "scripts/ci-api-transition.py",
         ".github/workflows/ci.yml",
-        ".github/workflows/shared-rust-api.yml",
         ".github/workflows/release.yml",
         ".github/workflows/dependency-eligibility.yml",
         ".github/automation.json",
@@ -127,7 +127,6 @@ def validate(files: dict[str, str]) -> None:
     )
     for name in (
         ".github/workflows/ci.yml",
-        ".github/workflows/shared-rust-api.yml",
         ".github/workflows/release.yml",
     ):
         workflow = files[name]
@@ -310,7 +309,7 @@ class RepositoryPolicyTests(unittest.TestCase):
     def test_aggregate_dependency_cannot_disappear_while_job_still_exists(self) -> None:
         self.rejected(
             ".github/workflows/ci.yml",
-            "[validation-plan, rust, msrv, dependencies, documentation, lockfile-release-age]",
+            "[validation-plan, rust, api, msrv, dependencies, documentation, lockfile-release-age]",
             "[validation-plan, msrv, dependencies, documentation, lockfile-release-age]",
         )
 
