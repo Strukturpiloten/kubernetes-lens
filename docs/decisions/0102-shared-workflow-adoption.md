@@ -2,6 +2,9 @@
 
 Status: Accepted; amends ADRs 0001 and 0028 for automation ownership and dependency updates.
 
+The wrapper topology below is amended by [ADR 0103](0103-direct-api-jobs-and-trusted-policy-transition.md);
+its accepted adoption history is retained.
+
 ## Decision
 
 BoxFerry owns the shared workflow implementation, Python tooling, and Renovate presets.
