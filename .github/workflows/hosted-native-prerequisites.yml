@@ -15,7 +15,7 @@ permissions:
 jobs:
   observe:
     name: Observe hosted prerequisites (never native admission)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - name: Refuse any candidate other than the exact reviewed main revision
