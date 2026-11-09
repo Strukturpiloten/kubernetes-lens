@@ -484,14 +484,94 @@ class SharedAutomationTests(unittest.TestCase):
             ):
                 validate_policy_execution_contract(policy, aliases, wrapper, candidate)
 
+    def assert_kind_runtime_failure_contract(self, probe: str, timing_helper: str) -> None:
+        declaration = "fn external_kind_runtime_pure_contracts_are_part_of_the_gate()"
+        self.assertIn(declaration, probe)
+        body = probe.split(declaration, 1)[1].split("\n}", 1)[0]
+        for fragment in (
+            "selftest_timings::run(",
+            'std::process::Command::new("/usr/bin/python3")',
+            '.arg(concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/fixtures/kind_runtime.py"))',
+            '.arg("--self-test")',
+            ".env_clear()",
+            '.env("LANG", "C")',
+            '.env("LC_ALL", "C")',
+            '.env("TZ", "UTC")',
+            '.env("PYTHONDONTWRITEBYTECODE", "1")',
+            '.current_dir(env!("CARGO_MANIFEST_DIR"))',
+        ):
+            self.assertEqual(body.count(fragment), 1, fragment)
+        self.assertRegex(body, r"\)\?;\s*Ok\(\(\)\)\s*$")
+        self.assertIn('#[path = "support/selftest_timings.rs"]\nmod selftest_timings;', probe)
+        helper = timing_helper.split("pub(super) fn run(", 1)[1].split("\n}", 1)[0]
+        self.assertIn('.env("KUBERNETES_LENS_SELFTEST_TIMINGS", &transport.path)', helper)
+        self.assertEqual(helper.count(".output()?"), 1)
+        self.assertRegex(
+            helper,
+            r"if !outcome\.status\.success\(\) \{\s*"
+            r'return Err\(io::Error::other\("external kind runtime pure contracts failed"\)\);',
+        )
+
     def test_distinct_kind_runtime_contract_remains_in_the_all_target_suite(self) -> None:
         probe = (ROOT / "tests/official_native_probe.rs").read_text()
-        self.assertIn("fn external_kind_runtime_pure_contracts_are_part_of_the_gate()", probe)
-        body = probe.split("fn external_kind_runtime_pure_contracts_are_part_of_the_gate()", 1)[1]
-        self.assertIn('/scripts/fixtures/kind_runtime.py"', body)
-        self.assertIn('.arg("--self-test")', body)
-        self.assertIn("if !output.status.success()", body)
+        helper = (ROOT / "tests/support/selftest_timings.rs").read_text()
+        self.assert_kind_runtime_failure_contract(probe, helper)
+        self.assertIn("fn original_python_driver_pure_contracts_are_part_of_the_gate()", probe)
+        self.assertIn(
+            '#[cfg(target_os = "linux")]\n#[test]\n'
+            "fn external_kind_runtime_pure_contracts_are_part_of_the_gate()",
+            probe,
+        )
+        driver = " ".join((ROOT / "scripts/fixtures/kind_runtime.py").read_text().split())
+        self.assertIn(
+            "for module in (test_kind_runtime, test_owned_qemu, test_owned_host_view, "
+            "test_owned_guest_stage, test_owned_guest_receiver, test_owned_guest_rootful)",
+            driver,
+        )
+        self.assertIn('require(len(sys.argv) == 2, "self-test-isolation")', driver)
+        self.assertEqual(driver.count("return selftest_timings.run_suite(suite)"), 1)
+        self.assertLess(
+            driver.index("return selftest_timings.run_suite(suite)"),
+            driver.index('required = ["phase"'),
+        )
         validate_policy_execution_contract(*self.policy_contract_inputs())
+
+    def test_kind_runtime_failure_delegation_and_propagation_cannot_be_removed(self) -> None:
+        probe = (ROOT / "tests/official_native_probe.rs").read_text()
+        helper = (ROOT / "tests/support/selftest_timings.rs").read_text()
+        for label, changed_probe, changed_helper in (
+            (
+                "missing-delegate",
+                probe.replace("selftest_timings::run(", "unrelated::run(", 1),
+                helper,
+            ),
+            (
+                "swallowed-helper-error",
+                probe.replace("    )?;\n    Ok(())", "    );\n    Ok(())", 1),
+                helper,
+            ),
+            (
+                "missing-status-refusal",
+                probe,
+                helper.replace("if !outcome.status.success()", "if false", 1),
+            ),
+            (
+                "inverted-status",
+                probe,
+                helper.replace("if !outcome.status.success()", "if outcome.status.success()", 1),
+            ),
+            (
+                "successful-failure-return",
+                probe,
+                helper.replace(
+                    'return Err(io::Error::other("external kind runtime pure contracts failed"));',
+                    "return Ok(());",
+                    1,
+                ),
+            ),
+        ):
+            with self.subTest(mutation=label), self.assertRaises(AssertionError):
+                self.assert_kind_runtime_failure_contract(changed_probe, changed_helper)
 
     def test_pure_prose_avoids_native_controls_and_rust_builds(self) -> None:
         policy = json.loads((ROOT / "scripts/validation-policy.json").read_text())

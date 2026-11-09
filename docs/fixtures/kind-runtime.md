@@ -198,6 +198,11 @@ Pure controls remain isolated from Podman and clusters:
 /usr/bin/python3 -B scripts/fixtures/kind_runtime.py --self-test
 ```
 
+The Cargo self-test gate relays bounded, validated timing rows for these six Python modules
+and their ordinary cases; raw child output stays private. Module totals are sums of case
+durations, separate from overall suite wall time. Skipped/omitted timings are explicit; this passive
+Python 3.11-compatible observation changes no test, native deadline or qualification claim.
+
 Runtime phases now require two explicit invocations of this same script. External operator
 preparation must place both under one already bounded, uniquely owned outer task slice:
 
