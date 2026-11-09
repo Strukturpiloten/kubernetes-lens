@@ -2035,5 +2035,251 @@ class PostStatDisappearanceControls(unittest.TestCase):
             self.assertEqual((io.start, io.end, io.original["output_bytes"]), (10, 610, 8388608))
 
 
+
+
+class SelftestTimingControls(unittest.TestCase):
+    """Independent tiny suites; never execute the actual process/VM controls here."""
+
+    def synthetic(self, module, name="test_case", body=None):
+        def test_case(case):
+            if body is not None:
+                body(case)
+        case = type("Example", (unittest.TestCase,), {name: test_case, "__module__": module})
+        return case(name)
+
+    def run_timed(self, cases, ticks):
+        import contextlib
+        import io
+        import selftest_timings as timing
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "timing.json"
+            target.touch(mode=0o600)
+            with patch.dict(os.environ, {timing.ENVIRONMENT: str(target)}), \
+                 patch.object(timing, "_counter", side_effect=ticks), \
+                 contextlib.redirect_stderr(io.StringIO()):
+                status = timing.run_suite(unittest.TestSuite(cases))
+            return status, json.loads(target.read_text())
+
+    def test_authored_six_module_case_sums_and_single_execution(self):
+        import selftest_timings as timing
+        calls = []
+        cases = [self.synthetic(module, body=lambda case, marker=module:
+                                (calls.append(marker), case.addCleanup(calls.append, "cleaned")))
+                 for module in timing.MODULES]
+        original_clock = time.monotonic
+        status, payload = self.run_timed(cases, [0, 1, 1.25, 2, 2.5, 3, 3.75,
+                                               4, 5, 6, 7.25, 8, 9.5, 10])
+        self.assertEqual(status, 0)
+        self.assertEqual(calls, [item for module in timing.MODULES for item in (module, "cleaned")])
+        self.assertEqual([row[1] for row in payload["cases"]], [0.25, 0.5, 0.75, 1, 1.25, 1.5])
+        self.assertEqual([row["seconds"] for row in payload["modules"]], [0.25, 0.5, 0.75, 1, 1.25, 1.5])
+        self.assertEqual([row["cases"] for row in payload["modules"]], [1] * 6)
+        self.assertEqual(payload["elapsed"], 10)
+        self.assertTrue(payload["complete"])
+        self.assertIs(time.monotonic, original_clock)
+
+    def test_module_class_setup_teardown_and_cleanup_semantics_are_unchanged(self):
+        from types import ModuleType
+        import sys
+        calls = []
+        module = ModuleType("test_kind_runtime")
+        module.setUpModule = lambda: calls.append("module setup")
+        module.tearDownModule = lambda: calls.append("module teardown")
+        case = self.synthetic("test_kind_runtime", body=lambda case: calls.append("body"))
+        def setup(case):
+            calls.append("setup")
+            case.addCleanup(calls.append, "cleanup")
+        type(case).setUp = setup
+        type(case).tearDown = lambda case: calls.append("teardown")
+        type(case).setUpClass = classmethod(lambda cls: calls.append("class setup"))
+        type(case).tearDownClass = classmethod(lambda cls: calls.append("class teardown"))
+        with patch.dict(sys.modules, {"test_kind_runtime": module}):
+            status, payload = self.run_timed([case], [0, 1, 2, 3])
+        self.assertEqual(status, 0)
+        self.assertEqual(calls, ["module setup", "class setup", "setup", "body", "teardown",
+                                 "cleanup", "class teardown", "module teardown"])
+        self.assertEqual(payload["cases"][0][1], 1)
+        self.assertEqual(payload["elapsed"], 3)
+
+    def test_fixture_skip_is_incomplete_without_changing_original_success(self):
+        import sys
+        from types import ModuleType
+        module = ModuleType("test_kind_runtime")
+        def skip_fixture():
+            raise unittest.SkipTest("private fixture skip")
+        module.setUpModule = skip_fixture
+        with patch.dict(sys.modules, {"test_kind_runtime": module}):
+            status, payload = self.run_timed([self.synthetic("test_kind_runtime")], [0, 1])
+        self.assertEqual(status, 0)
+        self.assertEqual((payload["seen"], payload["expected"]), (0, 1))
+        self.assertFalse(payload["complete"])
+        self.assertNotIn("private", json.dumps(payload))
+
+    def test_failure_skip_and_cleanup_keep_original_outcome(self):
+        cleaned = []
+        def fail(case):
+            case.addCleanup(cleaned.append, "done")
+            case.fail("private raw failure")
+        failed = self.synthetic("test_kind_runtime", "test_failure", fail)
+        skipped = self.synthetic("test_kind_runtime", "test_skip")
+        setattr(type(skipped), "test_skip", unittest.skip("private reason")(type(skipped).test_skip))
+        status, payload = self.run_timed([failed, skipped], [0, 1, 2, 3, 4])
+        self.assertEqual(status, 1)
+        self.assertEqual(cleaned, ["done"])
+        self.assertEqual(payload["seen"], 2)
+        self.assertEqual(payload["untimed"], 1)
+        self.assertIsNone(payload["cases"][1][1])
+        self.assertNotIn("private", json.dumps(payload))
+
+    def test_skipped_subtest_does_not_erase_parent_case_timing_or_expose_values(self):
+        def body(case):
+            with case.subTest(value="private-subtest-marker"):
+                case.skipTest("private skip reason")
+            case.assertTrue(True)
+        status, payload = self.run_timed([self.synthetic("test_kind_runtime", body=body)], [0, 1, 2, 3])
+        self.assertEqual(status, 0)
+        self.assertEqual(payload["untimed"], 0)
+        self.assertEqual(payload["cases"][0][1], 1)
+        self.assertNotIn("private", json.dumps(payload))
+
+    def test_case_overflow_finishes_remaining_cases_and_cleanups(self):
+        import selftest_timings as timing
+        cleaned = []
+        cases = [self.synthetic("test_kind_runtime", "test_" + str(index),
+                                lambda case: case.addCleanup(cleaned.append, "done"))
+                 for index in range(5)]
+        with patch.object(timing, "MAX_CASES", 2):
+            status, payload = self.run_timed(cases, list(range(12)))
+        self.assertEqual(status, 2)
+        self.assertEqual(len(cleaned), 5)
+        self.assertEqual((payload["seen"], payload["omitted"]), (5, 3))
+        self.assertEqual(payload["modules"][0]["cases"], 5)
+        self.assertFalse(payload["complete"])
+
+    def test_unsafe_identity_and_nonfinite_clock_are_explicitly_incomplete(self):
+        unsafe = self.synthetic("test_kind_runtime")
+        type(unsafe).__qualname__ = "Unsafe::error::private"
+        status, payload = self.run_timed([unsafe], [0, 1, 2, 3])
+        self.assertEqual(status, 0)
+        self.assertEqual(payload["omitted"], 1)
+        self.assertNotIn("private", json.dumps(payload))
+        status, payload = self.run_timed([self.synthetic("test_kind_runtime")], [0, 1, float("nan"), 3])
+        self.assertEqual(status, 2)
+        self.assertEqual(payload["clock_errors"], 1)
+        self.assertIsNone(payload["cases"][0][1])
+
+    def test_unsupported_metadata_preserves_following_cases_cleanups_and_original_success(self):
+        import io
+        for kind in ("surrogate", "module-none"):
+            with self.subTest(kind=kind):
+                def fresh(calls):
+                    def first_body(case):
+                        calls.append("first")
+                        case.addCleanup(calls.append, "first-cleanup")
+                    def later_body(case):
+                        calls.append("later")
+                        case.addCleanup(calls.append, "later-cleanup")
+                    first = self.synthetic("test_kind_runtime", "test_first", first_body)
+                    later = self.synthetic("test_kind_runtime", "test_later", later_body)
+                    if kind == "surrogate":
+                        type(first).__qualname__ = "Unsafe\ud800"
+                    else:
+                        type(first).__module__ = None
+                    return [first, later]
+                baseline_calls = []
+                baseline = unittest.TextTestRunner(stream=io.StringIO(), verbosity=1).run(
+                    unittest.TestSuite(fresh(baseline_calls)))
+                self.assertTrue(baseline.wasSuccessful())
+                observed_calls = []
+                status, payload = self.run_timed(fresh(observed_calls), [0, 1, 2, 3, 4, 5])
+                self.assertEqual(status, 0)
+                self.assertEqual(observed_calls, ["first", "first-cleanup", "later", "later-cleanup"])
+                self.assertEqual(observed_calls, baseline_calls)
+                self.assertEqual((payload["seen"], payload["expected"], payload["omitted"]), (2, 2, 1))
+                self.assertEqual(payload["cases"], [["test_kind_runtime.Example.test_later", 1]])
+                self.assertFalse(payload["complete"])
+                self.assertNotIn("Unsafe", json.dumps(payload))
+                self.assertEqual(2 - sum(row["cases"] for row in payload["modules"]),
+                                 1 if kind == "module-none" else 0)
+
+    def test_unattributed_skipped_case_keeps_following_cleanup_and_success(self):
+        calls = []
+        first = self.synthetic("test_kind_runtime", "test_first")
+        type(first).__module__ = None
+        type(first).test_first = unittest.skip("private skipped metadata")(type(first).test_first)
+        def later_body(case):
+            calls.append("later")
+            case.addCleanup(calls.append, "later-cleanup")
+        later = self.synthetic("test_kind_runtime", "test_later", later_body)
+        status, payload = self.run_timed([first, later], [0, 1, 2, 3, 4])
+        self.assertEqual(status, 0)
+        self.assertEqual(calls, ["later", "later-cleanup"])
+        self.assertEqual((payload["seen"], payload["omitted"], payload["untimed"]), (2, 1, 1))
+        self.assertEqual(payload["modules"][0]["cases"], 1)
+        self.assertEqual(payload["modules"][0]["timed"], 1)
+        self.assertNotIn("private", json.dumps(payload))
+
+    def test_fixture_skip_composes_with_omitted_metadata_and_following_cleanup(self):
+        import io
+        import sys
+        from types import ModuleType
+        module = ModuleType("test_kind_runtime")
+        def skip_fixture():
+            raise unittest.SkipTest("private module fixture reason")
+        module.setUpModule = skip_fixture
+        def fresh(calls):
+            skipped = self.synthetic("test_kind_runtime", "test_skipped")
+            def body(case):
+                calls.append("following")
+                case.addCleanup(calls.append, "cleanup")
+            following = self.synthetic("test_kind_runtime", "test_following", body)
+            type(following).__module__ = None
+            return [skipped, following]
+        with patch.dict(sys.modules, {"test_kind_runtime": module}):
+            baseline_calls = []
+            baseline = unittest.TextTestRunner(stream=io.StringIO(), verbosity=1).run(
+                unittest.TestSuite(fresh(baseline_calls)))
+            self.assertTrue(baseline.wasSuccessful())
+            observed_calls = []
+            status, payload = self.run_timed(fresh(observed_calls), [0, 1, 2, 3])
+        self.assertEqual(status, 0)
+        self.assertEqual(observed_calls, ["following", "cleanup"])
+        self.assertEqual(observed_calls, baseline_calls)
+        self.assertEqual((payload["seen"], payload["expected"], payload["omitted"]), (1, 2, 1))
+        self.assertFalse(payload["complete"])
+        self.assertEqual(payload["cases"], [])
+        self.assertNotIn("private", json.dumps(payload))
+
+    def test_private_transport_rejects_symlink_permissions_and_byte_overflow(self):
+        import selftest_timings as timing
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "target"
+            target.write_text("unchanged")
+            target.chmod(0o644)
+            with self.assertRaises(ValueError):
+                timing.write_payload({}, target)
+            self.assertEqual(target.read_text(), "unchanged")
+            link = Path(directory) / "link"
+            link.symlink_to(target)
+            with self.assertRaises(OSError):
+                timing.write_payload({}, link)
+            target.chmod(0o600)
+            with patch.object(timing, "MAX_BYTES", 2), self.assertRaises(ValueError):
+                timing.write_payload({"oversized": True}, target)
+            self.assertEqual(target.read_text(), "unchanged")
+
+    def test_actual_self_test_keeps_exact_six_module_selection_and_early_return(self):
+        import selftest_timings as timing
+        with patch.object(runtime.sys, "argv", ["kind_runtime.py", "--self-test"]), \
+             patch.object(runtime.unittest.defaultTestLoader, "loadTestsFromModule", return_value=unittest.TestSuite()) as load, \
+             patch.object(timing, "run_suite", return_value=17) as run, \
+             patch.object(runtime, "make_policy", side_effect=AssertionError("native work")):
+            self.assertEqual(runtime.main(), 17)
+        self.assertEqual([call.args[0].__name__ for call in load.call_args_list], [
+            "test_kind_runtime", "test_owned_qemu", "test_owned_host_view",
+            "test_owned_guest_stage", "test_owned_guest_receiver", "test_owned_guest_rootful"])
+        run.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
