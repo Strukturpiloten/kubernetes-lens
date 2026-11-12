@@ -637,6 +637,8 @@ try {
   );
   const rendererRow = actual.find((row) => row.dep.depName === "nix");
   const rendererOriginal = files.get(rendererRow.file);
+  // This synthetic target stays in the scratch manifest and always differs from the source pin.
+  const rendererTestTarget = `${rendererRow.dep.currentValue}-renovate-test`;
   await fs.writeFile(path.join(scratch, rendererRow.file), rendererOriginal);
   const rendererUpgrade = {
     ...rendererRow.extraction,
@@ -644,12 +646,12 @@ try {
     manager: "cargo",
     packageFile: rendererRow.file,
     depIndex: rendererRow.extraction.deps.indexOf(rendererRow.dep),
-    newValue: "=0.31.3",
+    newValue: rendererTestTarget,
   };
   const rendererUpdated = await doAutoReplace(rendererUpgrade, rendererOriginal, false);
   assert(rendererUpdated && rendererUpdated !== rendererOriginal);
   const rendererAfter = await cargo.extractPackageFile(rendererUpdated, rendererRow.file, {});
-  assert.equal(rendererAfter.deps[rendererUpgrade.depIndex].currentValue, "=0.31.3");
+  assert.equal(rendererAfter.deps[rendererUpgrade.depIndex].currentValue, rendererTestTarget);
   assert(
     rendererUpdated.includes(
       'features = ["ptrace", "process", "signal", "user", "fs", "time"], optional = true',
