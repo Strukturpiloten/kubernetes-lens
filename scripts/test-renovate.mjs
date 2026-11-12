@@ -340,9 +340,16 @@ const actual = await inventory();
 ownership(actual);
 const rustApiRows = actual.filter(
   (row) =>
-    row.file === ".github/workflows/shared-rust-api.yml" && row.dep.datasource === "github-digest",
+    row.file === ".github/workflows/ci.yml" &&
+    row.manager === "github-actions" &&
+    row.dep.datasource === "github-digest" &&
+    /shared-rust-(?:ci|semver)\.yml@/.test(row.dep.replaceString ?? ""),
 );
-assert.equal(rustApiRows.length, 2, "both canonical Rust/API references must be owned once");
+assert.equal(
+  rustApiRows.length,
+  3,
+  "quality, API and retained MSRV references have unique native owners",
+);
 assert(
   rustApiRows.every(
     (row) =>
@@ -630,6 +637,8 @@ try {
   );
   const rendererRow = actual.find((row) => row.dep.depName === "nix");
   const rendererOriginal = files.get(rendererRow.file);
+  // This synthetic target stays in the scratch manifest and always differs from the source pin.
+  const rendererTestTarget = `${rendererRow.dep.currentValue}-renovate-test`;
   await fs.writeFile(path.join(scratch, rendererRow.file), rendererOriginal);
   const rendererUpgrade = {
     ...rendererRow.extraction,
@@ -637,12 +646,12 @@ try {
     manager: "cargo",
     packageFile: rendererRow.file,
     depIndex: rendererRow.extraction.deps.indexOf(rendererRow.dep),
-    newValue: "=0.31.3",
+    newValue: rendererTestTarget,
   };
   const rendererUpdated = await doAutoReplace(rendererUpgrade, rendererOriginal, false);
   assert(rendererUpdated && rendererUpdated !== rendererOriginal);
   const rendererAfter = await cargo.extractPackageFile(rendererUpdated, rendererRow.file, {});
-  assert.equal(rendererAfter.deps[rendererUpgrade.depIndex].currentValue, "=0.31.3");
+  assert.equal(rendererAfter.deps[rendererUpgrade.depIndex].currentValue, rendererTestTarget);
   assert(
     rendererUpdated.includes(
       'features = ["ptrace", "process", "signal", "user", "fs", "time"], optional = true',
@@ -912,10 +921,12 @@ function validateTrustedListener(content) {
   assert.deepEqual(Object.keys(listener.jobs), ["eligibility"]);
   assert.deepEqual(Object.keys(listener.jobs.eligibility).sort(), [
     "if",
+    "name",
     "permissions",
     "uses",
     "with",
   ]);
+  assert.equal(listener.jobs.eligibility.name, "Trusted dependency metadata");
   assert.deepEqual(listener.jobs.eligibility.permissions, {
     actions: "write",
     checks: "read",

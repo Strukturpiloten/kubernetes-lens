@@ -5,6 +5,7 @@ line-length = 100
 include = [
   "scripts/shared-ci.py",
   "scripts/validation-plan.py",
+  "scripts/ci-api-transition.py",
   "scripts/test-validation-plan.py",
   "scripts/test-shared-automation.py",
   "scripts/test-repository-policy.py",
@@ -22,6 +23,7 @@ python-version = "3.13"
 include = [
   "scripts/shared-ci.py",
   "scripts/validation-plan.py",
+  "scripts/ci-api-transition.py",
   "scripts/test-validation-plan.py",
   "scripts/test-shared-automation.py",
   "scripts/test-repository-policy.py",

@@ -1,6 +1,9 @@
 //! Independent positive/refusal contracts for the bounded official-source driver.
 #[path = "../examples/official_native_probe.rs"]
 mod probe;
+#[cfg(target_os = "linux")]
+#[path = "support/selftest_timings.rs"]
+mod selftest_timings;
 use serde_json::{Value, json};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -235,18 +238,16 @@ fn original_python_driver_pure_contracts_are_part_of_the_gate() -> TestResult {
 #[cfg(target_os = "linux")]
 #[test]
 fn external_kind_runtime_pure_contracts_are_part_of_the_gate() -> TestResult {
-    let output = std::process::Command::new("/usr/bin/python3")
-        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/fixtures/kind_runtime.py"))
-        .arg("--self-test")
-        .env_clear()
-        .env("LANG", "C")
-        .env("LC_ALL", "C")
-        .env("TZ", "UTC")
-        .env("PYTHONDONTWRITEBYTECODE", "1")
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()?;
-    if !output.status.success() {
-        return Err(std::io::Error::other("external kind runtime pure contracts failed").into());
-    }
+    selftest_timings::run(
+        std::process::Command::new("/usr/bin/python3")
+            .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/fixtures/kind_runtime.py"))
+            .arg("--self-test")
+            .env_clear()
+            .env("LANG", "C")
+            .env("LC_ALL", "C")
+            .env("TZ", "UTC")
+            .env("PYTHONDONTWRITEBYTECODE", "1")
+            .current_dir(env!("CARGO_MANIFEST_DIR")),
+    )?;
     Ok(())
 }

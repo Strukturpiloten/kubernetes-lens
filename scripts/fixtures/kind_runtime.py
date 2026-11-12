@@ -2441,7 +2441,8 @@ def main():
         import test_owned_guest_rootful
         suite = unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromModule(module)
                                    for module in (test_kind_runtime, test_owned_qemu, test_owned_host_view, test_owned_guest_stage, test_owned_guest_receiver, test_owned_guest_rootful))
-        return 0 if unittest.TextTestRunner(verbosity=1).run(suite).wasSuccessful() else 1
+        import selftest_timings
+        return selftest_timings.run_suite(suite)
     required = ["phase", "profile", "kind", "kubectl", "podman", "podman_sha256", "helper_manifest", "helper_manifest_sha256", "cgroup", "store", "seconds", "cleanup_seconds", "cpus", "memory_bytes", "pids", "nodes", "store_bytes", "output_bytes", "commands", "retirement_contract", "retirement_contract_sha256", "controller_output_bytes", "controller_store_bytes", "retirement_original_start", "retirement_original_end"]
     if any(getattr(args, name) is None for name in required) or (args.phase == "run" and (not args.prepared_policy_sha256 or not args.execute_owned_cluster)):
         parser.error("explicit phase, tool paths/digests, resource limits and run consent/prepared-policy are required")

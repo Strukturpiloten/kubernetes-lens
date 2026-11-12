@@ -184,3 +184,5 @@ conformance remain separate.
 
 [ADR 0102](0102-shared-workflow-adoption.md) selects BoxFerry-owned shared automation, trusted
 merge-queue planning, and automated dependency admission while preserving unpublished releases.
+
+- [ADR 0103](0103-direct-api-jobs-and-trusted-policy-transition.md): Direct API jobs and exact trusted-policy transition.

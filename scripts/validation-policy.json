@@ -1,10 +1,17 @@
 {
   "schema": 2,
   "repository": "Strukturpiloten/kubernetes-lens",
-  "jobs": ["rust", "msrv", "dependencies", "documentation", "lockfile-release-age"],
+  "jobs": ["rust", "api", "msrv", "dependencies", "documentation", "lockfile-release-age"],
   "profile_jobs": {
     "prose": ["documentation", "lockfile-release-age"],
-    "executable-docs": ["rust", "msrv", "dependencies", "documentation", "lockfile-release-age"]
+    "executable-docs": [
+      "rust",
+      "api",
+      "msrv",
+      "dependencies",
+      "documentation",
+      "lockfile-release-age"
+    ]
   },
   "public_documentation_root": "docs/public/",
   "full_documentation_roots": ["docs/compatibility/"],

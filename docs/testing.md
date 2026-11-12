@@ -50,9 +50,11 @@ Compatibility documentation always selects the full validation plan.
 
 The complete local gate also runs the typed `api-development` task through the existing shared
 launcher. It selects `kubernetes-lens` explicitly and derives the verified automation revision from
-`.github/automation.json`. CI retains five trusted jobs; its `rust` wrapper requires both exact
-Rust quality and API success. Shell regressions cover failures, cancellation, skips, candidate
-mismatches and purpose-bound output. The `initial-api-contract` task runs the unfiltered existing
+`.github/automation.json`. CI selects six genuine jobs, with direct canonical Rust quality
+and API checks. The consumer gate validates their exact candidate and purpose proofs before
+the unchanged canonical aggregate. An exact old five-job policy uses only the bounded
+[ADR 0103](decisions/0103-direct-api-jobs-and-trusted-policy-transition.md) projection. Regressions
+exercise the actual canonical planner/gate, failures, cancellation, planned skips and output binding. The `initial-api-contract` task runs the unfiltered existing
 foundation suite when canonical publication is absent; a missing baseline alone cannot pass.
 
 ## Offline foundation
