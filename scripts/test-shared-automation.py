@@ -46,6 +46,8 @@ def validate_policy_execution_contract(
         ["env", "RUSTDOCFLAGS=-D warnings", "cargo", "ci-doc"],
         ["cargo", "package", "--locked", "--allow-dirty"],
     ]
+    assert policy["tasks"]["rust-quality"]["timeout_seconds"] == 1800
+    assert policy["tasks"]["msrv"]["timeout_seconds"] == 1800
     assert policy["tasks"]["msrv"]["commands"] == [
         ["cargo", "ci-check"],
         ["cargo", "ci-policy", "--no-run"],
@@ -83,6 +85,25 @@ def validate_policy_execution_contract(
     assert 'Command::new("python3")' in wrapper
     assert '"/scripts/test-repository-policy.py"' in wrapper
     assert ".status()?" in wrapper and "status.success()" in wrapper
+
+
+def validate_strict_rust_callers(ci: str, revision: str) -> None:
+    for job, task in (("rust", "rust-quality"), ("msrv", "msrv")):
+        match = re.search(rf"(?ms)^  {job}:\n(.*?)(?=^  [a-z][a-z-]*:\n|\Z)", ci)
+        assert match is not None, f"missing configured Rust job {job}"
+        block = match[1]
+        assert re.findall(r"(?m)^      require_configured_task: (.*)$", block) == ["true"]
+        assert re.findall(r"(?m)^      task: (.*)$", block) == [task]
+        assert f"shared-rust-ci.yml@{revision} # automation-v1 interface v1" in block
+        assert f"automation_sha: {revision}" in block
+        assert "candidate_sha: ${{ github.sha }}" in block
+        assert (
+            "policy_sha: ${{ github.event.pull_request.base.sha || "
+            "github.event.merge_group.base_sha || github.sha }}" in block
+        )
+        assert "config_path: scripts/validation-policy.json" in block
+        assert "needs: validation-plan" in block
+        assert f"if: needs.validation-plan.outputs.select_{job} == 'true'" in block
 
 
 class SharedAutomationTests(unittest.TestCase):
@@ -189,6 +210,20 @@ class SharedAutomationTests(unittest.TestCase):
             "--report-json target/api-development-task.json",
             gate,
         )
+
+    def test_strict_rust_callers_reject_missing_or_false_opt_in(self) -> None:
+        ci = (ROOT / ".github/workflows/ci.yml").read_text()
+        revision = str(LOAD_CONFIG(ROOT)["revision"])
+        validate_strict_rust_callers(ci, revision)
+        for job in ("rust", "msrv"):
+            match = re.search(rf"(?ms)^  {job}:\n.*?(?=^  [a-z][a-z-]*:\n|\Z)", ci)
+            assert match is not None
+            for replacement in ("", "      require_configured_task: false\n"):
+                with self.subTest(job=job, replacement=replacement):
+                    changed = match[0].replace("      require_configured_task: true\n", replacement)
+                    self.assertNotEqual(changed, match[0])
+                    with self.assertRaises(AssertionError):
+                        validate_strict_rust_callers(ci.replace(match[0], changed), revision)
 
     def test_manifest_uses_immutable_boxferry_implementation(self) -> None:
         config = LOAD_CONFIG(ROOT)
@@ -791,6 +826,151 @@ class ApiTransitionTests(unittest.TestCase):
             timeout=30,
         )
         return result.returncode, output.read_text() if output.exists() else ""
+
+    def test_selected_producer_strict_tasks_preserve_policy_and_reject_absence(self) -> None:
+        script = """
+import argparse
+from dataclasses import replace
+from pathlib import Path
+import sys
+from boxferry_ci.__main__ import _task
+from boxferry_ci.contracts import ContractError
+from boxferry_ci.policy import load_policy
+policy = load_policy(Path(sys.argv[1]))
+for name in ("rust-quality", "msrv"):
+    configured = policy.tasks[name]
+    assert configured.timeout_seconds == 1800
+    for mode in ("run", "check-task"):
+        args = argparse.Namespace(task=name, command=mode, require_configured_task=mode == "run")
+        assert _task(args, policy) == configured
+        remaining = {key: value for key, value in policy.tasks.items() if key != name}
+        missing = replace(policy, tasks=remaining)
+        try:
+            _task(args, missing)
+        except ContractError:
+            pass
+        else:
+            raise AssertionError(f"missing explicit {name} accepted by {mode}")
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(ROOT / "scripts/validation-policy.json")],
+            cwd=ROOT,
+            env=self.environment(ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def configured_task(
+        self, case: TransitionCase, task: str, mode: str
+    ) -> subprocess.CompletedProcess[str]:
+        tools = case.root / "task-tools"
+        tools.mkdir(exist_ok=True)
+        cargo = tools / "cargo"
+        cargo.write_text(
+            f"#!{sys.executable}\n"
+            "import json, os, pathlib, sys\n"
+            "with pathlib.Path('task-commands.jsonl').open('a') as stream:\n"
+            "    stream.write(json.dumps({'argv': sys.argv[1:], "
+            "'rustdocflags': os.environ.get('RUSTDOCFLAGS')}) + '\\n')\n"
+        )
+        cargo.chmod(0o755)
+        return subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "boxferry_ci",
+                mode,
+                *self.arguments(case),
+                "--task",
+                task,
+                *(["--require-configured-task"] if mode == "run" else []),
+                "--report-json",
+                str(case.root / "task-report.json"),
+            ],
+            cwd=case.root,
+            env={
+                **self.environment(case.root),
+                "PATH": str(tools) + os.pathsep + os.environ["PATH"],
+                "CARGO_TARGET_DIR": str(case.root / "target"),
+                "RUSTDOCFLAGS": "",
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=20,
+        )
+
+    def test_selected_producer_executes_exact_configured_rust_tasks(self) -> None:
+        policy = json.loads((ROOT / "scripts/validation-policy.json").read_text())
+        for task in ("rust-quality", "msrv"):
+            with self.subTest(task=task):
+                case = self.fixture(legacy=False, event="workflow_dispatch")
+                marker = case.root / "task-commands.jsonl"
+                # A candidate's different task must never replace trusted-base commands.
+                candidate = json.loads((case.root / "scripts/validation-policy.json").read_text())
+                candidate["tasks"][task]["commands"] = [["cargo", "candidate-only"]]
+                (case.root / "scripts/validation-policy.json").write_text(json.dumps(candidate))
+                self.git(case.root, "add", "scripts/validation-policy.json")
+                self.git(case.root, "commit", "--quiet", "-m", "different candidate task")
+                case.tested = self.git(case.root, "rev-parse", "HEAD")
+                for mode in ("check-task", "run"):
+                    result = self.configured_task(case, task, mode)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    if mode == "check-task":
+                        self.assertFalse(marker.exists(), "preflight must never execute a command")
+                expected = [
+                    {
+                        "argv": call[3:] if call[0] == "env" else call[1:],
+                        "rustdocflags": "-D warnings" if call[0] == "env" else "",
+                    }
+                    for call in policy["tasks"][task]["commands"]
+                ]
+                self.assertEqual(
+                    [json.loads(line) for line in marker.read_text().splitlines()], expected
+                )
+                report = json.loads((case.root / "task-report.json").read_text())
+                self.assertEqual(report["status"], "success")
+                self.assertEqual(len(report["results"]), len(expected))
+                self.assertTrue(all(item["returncode"] == 0 for item in report["results"]))
+
+    def test_selected_producer_refuses_invalid_trusted_tasks_before_execution(self) -> None:
+        policy = json.loads((ROOT / "scripts/validation-policy.json").read_text())
+        for task in ("rust-quality", "msrv"):
+            case = self.fixture(legacy=False, event="workflow_dispatch")
+            valid = policy["tasks"][task]
+            mutations = {
+                "missing": None,
+                "empty-commands": {**valid, "commands": []},
+                "malformed-later-command": {**valid, "commands": [["cargo", "must-not-run"], []]},
+                "missing-commands": {"timeout_seconds": 1800},
+                "unknown-key": {**valid, "unexpected": True},
+                "boolean-timeout": {**valid, "timeout_seconds": True},
+                "zero-timeout": {**valid, "timeout_seconds": 0},
+                "excess-timeout": {**valid, "timeout_seconds": 7201},
+            }
+            for label, value in mutations.items():
+                trusted = copy.deepcopy(policy)
+                if value is None:
+                    del trusted["tasks"][task]
+                else:
+                    trusted["tasks"][task] = value
+                case.config.write_text(json.dumps(trusted))
+                self.git(case.config.parent, "add", "validation-policy.json")
+                self.git(case.config.parent, "commit", "--quiet", "-m", label)
+                case.base = self.git(case.config.parent, "rev-parse", "HEAD")
+                for mode in ("check-task", "run"):
+                    with self.subTest(task=task, mutation=label, mode=mode):
+                        result = self.configured_task(case, task, mode)
+                        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                        report = json.loads((case.root / "task-report.json").read_text())
+                        self.assertEqual(report["status"], "infrastructure")
+                        self.assertIn(task, report["cause"])
+                        if label == "missing":
+                            self.assertIn("not explicitly configured", report["cause"])
+                        self.assertFalse((case.root / "task-commands.jsonl").exists())
 
     def test_actual_old_and_new_canonical_plan_gate_paths_and_release_outputs(self) -> None:
         for legacy in (True, False):

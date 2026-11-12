@@ -54,3 +54,20 @@ the separately validated API outcome alone is projected out. The six-job policy
 uses all seven raw outcomes normally. Both paths require real joint candidate/API
 proof before the unchanged canonical gate and aggregate outputs. Ordinary read-only
 permissions, initial foundation proof, publication refusal and fixed FCOS evidence remain.
+
+The issue #92 draft began at consumer baseline `4c3fb5723f207417e661a69e0de9670bd9bee98d`.
+Final adoption uses trusted baseline `c4d0b455edf41c5904bd0b7dd58e333153e79ac1` after
+[PR #83](https://github.com/Strukturpiloten/kubernetes-lens/pull/83) admitted the dependency
+security update and version-independent Renovate replacement test. It selects shared source
+`7b9ce867e0de8b05ee5d084581cad7de54d06459`, admitted by
+[producer main CI](https://github.com/Strukturpiloten/boxferry/actions/runs/42633773417) and
+[verified distribution](https://github.com/Strukturpiloten/boxferry/actions/runs/42635876331).
+Both shared presets, every reusable workflow, explicit source input and automation checkout
+advance with the manifest. The source's common/Rust presets retain the previous revision's
+rules without changes. Rust quality and MSRV now require explicitly configured trusted-base
+tasks; that baseline already contains their exact command lists and 1800-second task budgets.
+MSRV retains `cargo ci-check` followed by `cargo ci-policy --no-run`. Consumer regressions run
+the selected producer's real preflight and command runner, including missing/malformed trusted
+task refusals before execution and ordered configured-command success. Candidate task changes
+cannot replace trusted commands. Local, PR, queue, main/manual and release prerequisites,
+Required CI, API purposes, native suites and deferred qualification remain unchanged.
