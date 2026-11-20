@@ -53,12 +53,18 @@ Start a new trusted project session to load changed role definitions; editing TO
 already running agents.
 
 The maintainer explicitly selects the primary `gpt-6.1-sol` with `xhigh` reasoning for this repository.
-Implementation/specification/review use `gpt-6.1-sol` with `high`; bounded read-only exploration and
-check-only verification use `gpt-6-luna` with `high`. Define task, repository, checkout and file
-ownership before delegation. At most eight subagents plus primary (nine total); no nested agents to
-evade the limit and no two writers in one checkout. Workers respect hard write boundaries and report
-files, behavior, focused tests, and unresolved risks. Reviewers assess original requirements and
-independent expected behavior. The primary owns all cross-repository integration and writes.
+The default subagent and the implementation, specification research, and review roles use
+`gpt-6.2-sol` with `high` reasoning. Bounded read-only exploration and check-only verification
+use `gpt-6-luna` with `high` reasoning. Task-specific subagents may use `gpt-6.2-sol`,
+`gpt-6.1-terra`, `gpt-6-luna`, or `gpt-6.2-astra` with `medium`, `high`, or `xhigh` reasoning.
+Reserve `gpt-6.2-astra` for very hard tasks and select it through the generic subagent's model and
+reasoning overrides.
+
+Define the task, repository, checkout, and file ownership before delegation. Keep delegation within
+eight subagents plus the primary (nine total) and assign one writer per checkout. Do not use nested
+agents to evade the limit. Workers respect hard write boundaries and report files, behavior,
+focused tests, and unresolved risks. Reviewers assess original requirements and independent
+expected behavior. The primary owns all cross-repository integration and writes.
 
 ## Infrastructure changes
 

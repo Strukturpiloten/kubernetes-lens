@@ -100,6 +100,8 @@ def validate(files: dict[str, str]) -> None:
     agent = tomllib.loads(files[".codex/config.toml"])
     assert agent["model"] == "gpt-6.1-sol" and agent["model_reasoning_effort"] == "xhigh"
     assert agent["agents"]["max_concurrent_threads_per_session"] == 8
+    assert agent["agents"]["default_subagent_model"] == "gpt-6.2-sol"
+    assert agent["agents"]["default_subagent_reasoning_effort"] == "high"
     policy = json.loads(files["scripts/validation-policy.json"])
     ci = files[".github/workflows/ci.yml"]
     jobs = set(re.findall(r"^  ([a-z][a-z-]*):$", ci.split("\njobs:\n", 1)[1], re.M))
@@ -226,9 +228,9 @@ class RepositoryPolicyTests(unittest.TestCase):
 
     def test_agent_role_files_match_supported_standalone_schema(self) -> None:
         for role, model, effort, sandbox in (
-            ("implementation-worker", "gpt-6.1-sol", "high", "workspace-write"),
-            ("specification-researcher", "gpt-6.1-sol", "high", "read-only"),
-            ("reviewer", "gpt-6.1-sol", "high", "read-only"),
+            ("implementation-worker", "gpt-6.2-sol", "high", "workspace-write"),
+            ("specification-researcher", "gpt-6.2-sol", "high", "read-only"),
+            ("reviewer", "gpt-6.2-sol", "high", "read-only"),
             ("presentation-worker", "gpt-6.1-terra", "medium", "workspace-write"),
             ("verifier", "gpt-6-luna", "high", "workspace-write"),
         ):
@@ -266,6 +268,18 @@ class RepositoryPolicyTests(unittest.TestCase):
         self.rejected("LICENSE", "Mozilla Public License", "Other License")
         self.rejected("Cargo.toml", 'rust-version = "1.98.1"', 'rust-version = "1.85.0"')
         self.rejected(".codex/config.toml", 'model = "gpt-6.1-sol"', 'model = "gpt-6-sol"')
+
+    def test_default_subagent_selection_drift_fails(self) -> None:
+        self.rejected(
+            ".codex/config.toml",
+            'default_subagent_model = "gpt-6.2-sol"',
+            'default_subagent_model = "gpt-6.1-sol"',
+        )
+        self.rejected(
+            ".codex/config.toml",
+            'default_subagent_reasoning_effort = "high"',
+            'default_subagent_reasoning_effort = "medium"',
+        )
 
     def test_rust_minimum_and_normal_toolchain_drift_fail(self) -> None:
         for old_minimum in ("1.85.0", "1.98.0"):
