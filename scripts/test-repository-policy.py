@@ -185,6 +185,9 @@ def validate(files: dict[str, str]) -> None:
     )
     service = files[".github/workflows/dependency-eligibility.yml"]
     assert service.startswith("---\n")
+    assert re.findall(r"^[ \t]*cache-mode:[^\n]*$", service, re.M) == ["cache-mode: none"], (
+        "the eligibility cache ceiling must be at workflow scope for exact skipped-job recovery"
+    )
     triggers = re.split(r"\non:[^\n]*\n", service, maxsplit=1)[1].split("\npermissions:", 1)[0]
     assert "  schedule:" in triggers
     assert "  workflow_run:" in triggers
@@ -412,6 +415,19 @@ class RepositoryPolicyTests(unittest.TestCase):
                     f"  {event}:",
                 )
         self.rejected(".github/workflows/ci.yml", "name: CI", "name: Renamed CI")
+
+    def test_privileged_service_requires_workflow_scoped_cache_ceiling(self) -> None:
+        path = ".github/workflows/dependency-eligibility.yml"
+        for replacement in ("", "cache-mode: read\n\n"):
+            self.rejected(path, "cache-mode: none\n\n", replacement)
+        moved = snapshot()
+        moved[path] = (
+            moved[path]
+            .replace("cache-mode: none\n\n", "")
+            .replace("    uses:", "    cache-mode: none\n    uses:", 1)
+        )
+        with self.assertRaisesRegex(AssertionError, "must be at workflow scope"):
+            validate(moved)
 
     def test_privileged_service_rejects_every_mutable_or_invalid_pin(self) -> None:
         revision = json.loads(snapshot()[".github/automation.json"])["revision"]
