@@ -71,3 +71,14 @@ the selected producer's real preflight and command runner, including missing/mal
 task refusals before execution and ordered configured-command success. Candidate task changes
 cannot replace trusted commands. Local, PR, queue, main/manual and release prerequisites,
 Required CI, API purposes, native suites and deferred qualification remain unchanged.
+
+The eligibility listener repair starts from KubernetesLens main
+`b12340439ffd46d19419e59713583860c7822fba` and advances the existing manifest,
+CI and Release validation inputs, listener and Renovate presets together to the
+[admitted BoxFerry revision](https://github.com/Strukturpiloten/boxferry/commit/527ec4a4c6c2761256e903dfe69513211be87370).
+The listener denies Actions cache access at workflow scope so the shared recovery
+reader can still verify the exact skipped eligibility job. Local and hosted lint
+use the shared tool inventory. Native qualification and repository administration
+retain their separate evidence requirements. DockerLens adopted the same listener
+boundary in [#216](https://github.com/Strukturpiloten/docker-lens/pull/216).
+Track the remaining callers in [BoxFerry #552](https://github.com/Strukturpiloten/boxferry/issues/552).
