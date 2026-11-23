@@ -751,13 +751,14 @@ try {
   await fs.rm(scratch, { recursive: true, force: true });
 }
 
-// The seven public reusable-workflow pins and matching inputs have exclusive updater spans.
+// The shared reusable-workflow pins and matching inputs have exclusive updater spans.
 const sharedInterfaceNames = [
   "shared-rust-ci",
   "shared-rust-dependencies",
   "shared-rust-semver",
   "shared-release-prepare",
   "shared-release-validation",
+  "shared-release-inventory",
   "shared-dependency-eligibility",
   "shared-dependency-wait",
 ];
@@ -773,8 +774,14 @@ let interfaceText =
 const interfaceFiles = new Map([[interfaceFile, interfaceText]]);
 const interfaceRows = await inventory(interfaceFiles);
 ownership(interfaceRows, expected(interfaceFiles));
-assert.equal(interfaceRows.filter((row) => row.manager === "github-actions").length, 7);
-assert.equal(interfaceRows.filter((row) => row.manager === "custom.regex").length, 7);
+assert.equal(
+  interfaceRows.filter((row) => row.manager === "github-actions").length,
+  sharedInterfaceNames.length,
+);
+assert.equal(
+  interfaceRows.filter((row) => row.manager === "custom.regex").length,
+  sharedInterfaceNames.length,
+);
 const interfaceScratch = await fs.mkdtemp(
   path.join(os.tmpdir(), "kubernetes-lens-shared-interface-"),
 );
@@ -802,7 +809,7 @@ try {
   const replaced = new Map([[interfaceFile, interfaceText]]);
   const after = await inventory(replaced);
   ownership(after, expected(replaced));
-  assert.equal(after.length, 14);
+  assert.equal(after.length, 2 * sharedInterfaceNames.length);
   assert(after.every((row) => row.dep.currentDigest === "d".repeat(40)));
   assert(after.every((row) => row.dep.currentValue === "automation-v1"));
 } finally {
