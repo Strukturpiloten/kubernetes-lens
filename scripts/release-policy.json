@@ -3,5 +3,6 @@
   "repository": "Strukturpiloten/kubernetes-lens",
   "packages": ["kubernetes-lens"],
   "required_jobs": ["validate"],
-  "publication_enabled": false
+  "publication_enabled": true,
+  "bootstrap_version": "0.1.0"
 }

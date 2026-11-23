@@ -23,6 +23,9 @@
 
 Add a new numbered ADR when an accepted decision changes; preserve and supersede historical decisions.
 
+[ADR 0105](0105-explicit-shared-crate-publisher.md) amends unpublished automation restrictions
+with credential-free package proof and an explicit environment-approved shared publisher.
+
 [ADR 0062](0062-owned-qemu-prerequisite.md) adds the explicitly selected external owned-VM
 prerequisite for rootful conformance. Its source contract and pure controls do not establish VM,
 kind, API or controller qualification; the existing rootless refusals remain intact.

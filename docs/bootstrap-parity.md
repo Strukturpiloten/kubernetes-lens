@@ -15,7 +15,7 @@ it. See [ADR 0102](decisions/0102-shared-workflow-adoption.md) and the
 | Python automation                          | Shared uv, Ruff, ty and lockfile    | Local pyproject config covers automation entrypoints; native fixture controls retain independent source tests  |
 | Development tools and Kubernetes inventory | BoxFerry development container      | Six check tools use canonical integrity records; no second tool inventory or Kubernetes installer              |
 | Renovate                                   | Shared common and Rust presets      | Exact local OCI/FCOS extractors and native dependency groups remain                                            |
-| Release validation                         | Shared exact-candidate release gate | Unpublished package; publication stays disabled                                                                |
+| Release validation                         | Shared exact-candidate release gate | Unpublished package; explicit protected publication follows ADR 0105                                           |
 | Native qualification                       | KubernetesLens fixture/VM contracts | No cluster, VM, or conformance execution in ordinary CI                                                        |
 
 Pure prose runs file/link checks and dependency admission without Rust builds, native fixture
@@ -107,3 +107,13 @@ workflow refs and inputs, eligibility listener and Renovate presets together. Us
 verified pin-only base for [#108](https://github.com/Strukturpiloten/kubernetes-lens/issues/108)
 when the distributed revision also contains its coverage prerequisites. Verify the listener on
 main before introducing the coverage tool version file.
+
+The issue #15 publisher adoption starts at `ef970435de3b149723854ef20af04bc850fbb8cc`
+and retains distributed producer `cf3578f47416e1b27b770fe4a81918844fb2d58b` as-is.
+Local and PR/main quality, API, coverage and native source controls are unchanged. Manual/default
+release validation adds credential-free packaging and proof after the existing distinct API and
+generic candidate receipts and one-crate inventory. Only explicit non-validation dispatch on the
+default branch reaches the protected publisher; see ADR 0105. Release-plz stays disabled. These
+consumers share one Renovate owner group for workflow refs, checkouts and automation-sha inputs.
+External review protections, credentials/Trusted Publisher registration, complete native acceptance
+and the exact-main validation-only hosted run remain pending; #16 and BoxFerry #555 track them.
