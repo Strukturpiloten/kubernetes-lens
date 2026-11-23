@@ -97,3 +97,13 @@ every matching automation reference, including the dependency eligibility listen
 admitted SHA on main. Verify that revision on main before rebasing #108 to add
 `scripts/cargo-llvm-cov.version` and enable coverage. The previous trusted-base reader cannot
 evaluate a version file introduced by the same PR that advances the automation pin.
+
+KubernetesLens [#109](https://github.com/Strukturpiloten/kubernetes-lens/issues/109) starts from
+`a23a199e787a6ff972e870aabab2850125cab234`. It adds the shared read-only inventory after the
+exact-candidate release gate. The inventory consumes the gate's actual result and its two
+candidate receipts. Adopt a single distributed BoxFerry revision that includes the common
+ten-minute inventory budget and explicit private workspace support. Advance the manifest,
+workflow refs and inputs, eligibility listener and Renovate presets together. Use the same
+verified pin-only base for [#108](https://github.com/Strukturpiloten/kubernetes-lens/issues/108)
+when the distributed revision also contains its coverage prerequisites. Verify the listener on
+main before introducing the coverage tool version file.

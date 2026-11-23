@@ -34,3 +34,18 @@ jobs:
       policy_sha: ${{ github.sha }}
       config_path: scripts/release-policy.json
       needs_json: ${{ toJSON(needs) }}
+
+  inventory:
+    name: Validate private crate inventory
+    needs: release-gate
+    uses: Strukturpiloten/boxferry/.github/workflows/shared-release-inventory.yml@cf3578f47416e1b27b770fe4a81918844fb2d58b # automation-v1 interface v1
+    permissions:
+      contents: read
+    with:
+      candidate_sha: ${{ github.sha }}
+      automation_sha: cf3578f47416e1b27b770fe4a81918844fb2d58b
+      policy_sha: ${{ github.sha }}
+      config_path: scripts/release-policy.json
+      validation_sha: ${{ needs.release-gate.outputs.candidate_sha }}
+      validation_result: ${{ needs.release-gate.result }}
+      published_api_candidate_sha: ${{ needs.release-gate.outputs.published_api_candidate_sha }}

@@ -38,6 +38,52 @@ def snapshot() -> dict[str, str]:
     return {name: (ROOT / name).read_text() for name in paths}
 
 
+def workflow_fields(source: str, indent: int) -> dict[str, str]:
+    """Read direct entries in the workflow's block-mapping style."""
+    rows = re.findall(rf"(?m)^ {{{indent}}}([^ :\n]+):[ \t]*([^\n]*)$", source)
+    fields = dict(rows)
+    assert len(fields) == len(rows), "duplicate workflow field"
+    return fields
+
+
+def workflow_block(source: str, name: str, indent: int) -> str:
+    assert workflow_fields(source, indent).get(name) == "", f"missing {name} block"
+    pattern = rf"(?m)^ {{{indent}}}{re.escape(name)}:\n((?:^ {{{indent + 1},}}[^\n]*\n)+)"
+    blocks = re.findall(pattern, source)
+    assert len(blocks) == 1, f"missing or ambiguous {name} body"
+    return blocks[0]
+
+
+def validate_release_inventory(workflow: str, revision: str) -> None:
+    uncommented = re.sub(r"(?m)(?<!\S)#.*$", "", workflow)
+    source = "\n".join(line.rstrip() for line in uncommented.splitlines() if line.strip()) + "\n"
+    jobs = workflow_block(source, "jobs", 0)
+    gate = workflow_block(jobs, "release-gate", 2)
+    gate_inputs = workflow_fields(workflow_block(gate, "with", 4), 6)
+    assert gate_inputs.get("needs_json") == "${{ toJSON(needs) }}", (
+        "release gate needs actual results"
+    )
+
+    inventory = workflow_block(jobs, "inventory", 2)
+    fields = workflow_fields(inventory, 4)
+    assert fields.keys() - {"name"} == {"needs", "uses", "permissions", "with"}
+    assert re.fullmatch(r"release-gate|\[\s*release-gate\s*\]", fields["needs"])
+    assert fields["uses"] == (
+        "Strukturpiloten/boxferry/.github/workflows/shared-release-inventory.yml@" + revision
+    )
+    assert workflow_fields(workflow_block(inventory, "permissions", 4), 6) == {"contents": "read"}
+    published_receipt = "${{ needs.release-gate.outputs.published_api_candidate_sha }}"
+    assert workflow_fields(workflow_block(inventory, "with", 4), 6) == {
+        "candidate_sha": "${{ github.sha }}",
+        "automation_sha": revision,
+        "policy_sha": "${{ github.sha }}",
+        "config_path": "scripts/release-policy.json",
+        "validation_sha": "${{ needs.release-gate.outputs.candidate_sha }}",
+        "validation_result": "${{ needs.release-gate.result }}",
+        "published_api_candidate_sha": published_receipt,
+    }
+
+
 def validate(files: dict[str, str]) -> None:
     manifest = tomllib.loads(files["Cargo.toml"])
     package = manifest["package"]
@@ -150,6 +196,7 @@ def validate(files: dict[str, str]) -> None:
                 "Strukturpiloten/boxferry/.github/workflows/shared-rust-semver.yml",
                 "Strukturpiloten/boxferry/.github/workflows/shared-rust-dependencies.yml",
                 "Strukturpiloten/boxferry/.github/workflows/shared-release-validation.yml",
+                "Strukturpiloten/boxferry/.github/workflows/shared-release-inventory.yml",
                 "Strukturpiloten/boxferry/.github/workflows/shared-dependency-wait.yml",
             }
             if action in shared:
@@ -176,8 +223,7 @@ def validate(files: dict[str, str]) -> None:
         "required_jobs": ["validate"],
         "publication_enabled": False,
     }, "unpublished release validation cannot authorize publication"
-    assert "config_path: scripts/release-policy.json" in files[".github/workflows/release.yml"]
-    assert "needs_json: ${{ toJSON(needs) }}" in files[".github/workflows/release.yml"]
+    validate_release_inventory(files[".github/workflows/release.yml"], automation["revision"])
     assert "candidate_sha: ${{ steps.gate.outputs.candidate_sha }}" in ci
     automation = json.loads(files[".github/automation.json"])
     assert automation["repository"] == "Strukturpiloten/boxferry" and automation["interface"] == 1
@@ -217,6 +263,28 @@ def validate(files: dict[str, str]) -> None:
     assert re.fullmatch(
         r"ghcr\.io/renovatebot/renovate:[0-9]+\.[0-9]+\.[0-9]+@sha256:[a-f0-9]{64}", tool["image"]
     )
+
+
+INVENTORY_FIXTURE_REVISION = "1" * 40
+INVENTORY_FIXTURE = """jobs:
+  release-gate:
+    with:
+      needs_json: ${{ toJSON(needs) }}
+  inventory:
+    name: Inspect fixture inventory
+    uses: Strukturpiloten/boxferry/.github/workflows/shared-release-inventory.yml@REVISION
+    needs: release-gate
+    permissions:
+      contents: read
+    with:
+      candidate_sha: ${{ github.sha }}
+      automation_sha: REVISION
+      policy_sha: ${{ github.sha }}
+      config_path: scripts/release-policy.json
+      validation_sha: ${{ needs.release-gate.outputs.candidate_sha }}
+      validation_result: ${{ needs.release-gate.result }}
+      published_api_candidate_sha: ${{ needs.release-gate.outputs.published_api_candidate_sha }}
+""".replace("REVISION", INVENTORY_FIXTURE_REVISION)
 
 
 class RepositoryPolicyTests(unittest.TestCase):
@@ -402,8 +470,56 @@ class RepositoryPolicyTests(unittest.TestCase):
             "candidate_sha: arbitrary",
         )
         self.rejected(
-            ".github/workflows/release.yml", "needs_json: ${{ toJSON(needs) }}", 'needs_json: "{}"'
+            ".github/workflows/release.yml",
+            "needs_json: ${{ toJSON(needs) }}",
+            'needs_json: "{}"\n      # needs_json: ${{ toJSON(needs) }}',
         )
+
+    def test_release_inventory_allows_display_name_order_and_comments(self) -> None:
+        policy_input = "      config_path: scripts/release-policy.json\n"
+        gate_input = "      validation_sha: ${{ needs.release-gate.outputs.candidate_sha }}\n"
+        for expected, altered in (
+            ("name: Inspect fixture inventory", "name: Read private package metadata"),
+            (policy_input + gate_input, gate_input + policy_input),
+            ("  inventory:\n", "  inventory: # Read-only job\n# Inventory inputs follow\n"),
+            (gate_input, gate_input.rstrip() + " # Actual release gate output\n"),
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, INVENTORY_FIXTURE)
+                validate_release_inventory(
+                    INVENTORY_FIXTURE.replace(expected, altered), INVENTORY_FIXTURE_REVISION
+                )
+
+    def test_release_inventory_requires_actual_gate_result_and_distinct_proofs(self) -> None:
+        for expected, altered in (
+            ("needs: release-gate", "needs: validate"),
+            ("shared-release-inventory.yml@", "shared-release-validation.yml@"),
+            ("validation_result: ${{ needs.release-gate.result }}", "validation_result: success"),
+            (
+                "validation_sha: ${{ needs.release-gate.outputs.candidate_sha }}",
+                "validation_sha: ${{ github.sha }}",
+            ),
+            (
+                "published_api_candidate_sha: "
+                "${{ needs.release-gate.outputs.published_api_candidate_sha }}",
+                "published_api_candidate_sha: ${{ needs.release-gate.outputs.candidate_sha }}",
+            ),
+            ("      validation_sha: ${{ needs.release-gate.outputs.candidate_sha }}\n", ""),
+            (
+                f"shared-release-inventory.yml@{INVENTORY_FIXTURE_REVISION}",
+                f"shared-release-inventory.yml@{'f' * 40}",
+            ),
+            (
+                "    permissions:\n      contents: read\n    with:\n",
+                "    permissions:\n      contents: read\n      discussions: write\n    with:\n",
+            ),
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, INVENTORY_FIXTURE)
+                with self.assertRaises(AssertionError):
+                    validate_release_inventory(
+                        INVENTORY_FIXTURE.replace(expected, altered), INVENTORY_FIXTURE_REVISION
+                    )
 
     def test_privileged_eligibility_service_never_runs_candidate_events(self) -> None:
         for event in ("pull_request", "pull_request_target", "merge_group"):
