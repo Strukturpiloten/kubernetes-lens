@@ -27,13 +27,13 @@ with conflicting workspace configurations and fail-closed owning-config controls
 Rust check, Clippy, test, doctest, Rustdoc, MSRV, cargo-deny, and local package validation run against
 the locked package. Offline native unit/integration tests and doctests verify the delivered
 foundation and typed resource cohorts. A separate Cargo integration harness executes the Python
-policy suite. These tests do not establish API-server or runtime conformance.
-There is no native coverage ratchet or conformance gate yet; do not fabricate passing fixture,
-coverage, version or cluster evidence. Native suites and meaningful thresholds belong to #7.
+policy suite. These tests establish offline Rust behavior. API-server, cluster and runtime
+conformance evidence belongs to [#7](https://github.com/Strukturpiloten/kubernetes-lens/issues/7).
 
 PR and merge-queue prose changes select file/link quality and dependency admission without Rust
 builds, native fixture suites, or Renovate OCI extraction. Executable examples and all other
-changes select every job. Main, manual dispatch and release validation always select every job.
+changes select every job in the trusted policy. Main, manual dispatch and release validation
+always select every job.
 The shared planner compares actual changes under trusted base policy; unknown paths, invalid
 comparisons, and changed policy fail full. Missing, failed, cancelled, or unexpectedly skipped
 selected jobs make `Required CI` fail. Consumer tests verify immutable shared refs, preserved
@@ -50,12 +50,44 @@ Compatibility documentation always selects the full validation plan.
 
 The complete local gate also runs the typed `api-development` task through the existing shared
 launcher. It selects `kubernetes-lens` explicitly and derives the verified automation revision from
-`.github/automation.json`. CI selects six genuine jobs, with direct canonical Rust quality
+`.github/automation.json`. Complete CI selects seven jobs, with direct canonical Rust quality, coverage
 and API checks. The consumer gate validates their exact candidate and purpose proofs before
 the unchanged canonical aggregate. An exact old five-job policy uses only the bounded
 [ADR 0103](decisions/0103-direct-api-jobs-and-trusted-policy-transition.md) projection. Regressions
 exercise the actual canonical planner/gate, failures, cancellation, planned skips and output binding. The `initial-api-contract` task runs the unfiltered existing
 foundation suite when canonical publication is absent; a missing baseline alone cannot pass.
+
+## Rust source coverage
+
+The complete local gate verifies Cargo dispatch of the exact coverage tool and runs the shared
+`coverage` task. The trusted policy cleans prior instrumentation data before measuring the
+locked workspace with all features and targets, including the `supervised-renderer` feature
+and its existing Rust tests. Coverage skips the two exact Rust test entry points that only
+launch the Python kind and repository-policy suites. Rust quality runs both entry points
+and doctests.
+
+The initial Linux x86-64 measurement used Rust 1.98.1, LLVM 22.1.8, and cargo-llvm-cov 0.9.0
+against the Rust source at `c2954c5aefb0518aa41c95b2b4b25d84897dfdc2`. The clean run used
+`--locked --no-clean --workspace --all-features --all-targets --summary-only` and passed
+682 Rust tests.
+
+| Metric    | Covered / total  | Measured | Minimum |
+| --------- | ---------------- | -------- | ------- |
+| Regions   | 83,994 / 103,806 | 80.91%   | 80%     |
+| Functions | 2,913 / 3,772    | 77.23%   | 76%     |
+| Lines     | 56,833 / 66,013  | 86.09%   | 85%     |
+
+Like ComposeLens and QuadletLens, the task checks three whole-number minimums against a clean
+all-feature report. The starting floor for each metric rounds down after reserving half a
+percentage point for run-to-run variation. The two Python-only entry points consumed nearly
+28 minutes of the measurement. They invoke no package code and their Rust files are outside
+the tool's default source report. The exact filters keep every product Rust test in the timed
+coverage task during CI.
+
+Ordinary PRs and merge groups use the real trusted-base plan. The two exact pre-coverage
+policies require a planned coverage skip. The adopted policy selects coverage for executable
+and full plans. A selected coverage job must succeed and report the tested SHA for
+`Required CI` to pass. See [ADR 0104](decisions/0104-shared-rust-coverage.md).
 
 ## Offline foundation
 
@@ -101,8 +133,8 @@ repository policies and both fixture modules, or
 
 The policy runner discovers each fixture test once and requires the source-receipt and renderer
 expectation witness IDs from their respective modules. Missing modules, absent witness tests,
-discovery/import errors and assertion failures make policy validation fail. `cargo ci-test` runs
-the unchanged `repository_policy` harness once in the complete gate. Normal Rust and MSRV phases
+discovery/import errors and assertion failures make policy validation fail. Rust quality executes
+the `repository_policy` harness. Normal Rust and MSRV phases
 also build and link the default-feature policy target with `cargo ci-policy --no-run`; MSRV still
 checks every target with all features. The standalone `cargo ci-policy` alias continues to execute
 the full suite for focused work. Documentation-only phase feedback omits these semantic tests;

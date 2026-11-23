@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -11,6 +12,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+AUTOMATION_SHA = json.loads((ROOT / ".github/automation.json").read_text())["revision"]
 TOOLS = (
     "actionlint bash cargo cargo-deny git lychee markdownlint-cli2 node prettier "
     "python3 realpath rustup shellcheck shfmt tombi zizmor"
@@ -23,6 +25,10 @@ if [ -n "${GATE_TEST_FAILURE:-}" ]; then
   case "$line" in *"$GATE_TEST_FAILURE"*) exit 17 ;; esac
 fi
 case "$line" in
+  python3\ scripts/shared-ci.py\ cargo-tools\ verify*)
+    printf '%s\n' '{"rust_channel":"1.98.1"}' ;;
+  python3\ -c*rust_channel*|python3\ -c*automation.json*)
+    exec /usr/bin/python3 "$@" ;;
   python3\ -c*)
     if [ "${GATE_TEST_REAL_MSRV:-}" = 1 ]; then exec /usr/bin/python3 "$@"; fi
     printf '1.98.1\n' ;;
@@ -40,6 +46,8 @@ case "$line" in
       printf '%s\n' 'policy-discovery scripts/test-repository-policy.py' >> "$GATE_TEST_LOG"
       exec /usr/bin/python3 -B "$@"
     fi ;;
+  python3\ scripts/shared-ci.py\ run*--task\ coverage*)
+    printf 'coverage compiler %s\n' "${RUSTUP_TOOLCHAIN:-unset}" >> "$GATE_TEST_LOG" ;;
 esac
 """
 
@@ -51,6 +59,8 @@ class GateTests(unittest.TestCase):
         self.root = Path(self.directory.name) / "repository"
         self.bin = Path(self.directory.name) / "bin"
         (self.root / "scripts").mkdir(parents=True)
+        (self.root / ".github").mkdir()
+        shutil.copyfile(ROOT / ".github/automation.json", self.root / ".github/automation.json")
         self.bin.mkdir()
         for name in ("check-all.sh", "format-lint.sh", "run-checks.sh"):
             shutil.copyfile(ROOT / "scripts" / name, self.root / "scripts" / name)
@@ -99,11 +109,13 @@ class GateTests(unittest.TestCase):
 
     def test_each_phase_failure_propagates_without_running_later_phases(self) -> None:
         phases = [
+            "shared-ci.py cargo-tools verify",
             "format-lint.sh",
             "run-checks.sh rust",
             "run-checks.sh msrv",
             "run-checks.sh dependencies",
             "run-checks.sh documentation",
+            "shared-ci.py run --event local --task coverage",
             "shared-ci.py run --event local --task api-development",
         ]
         for index, phase in enumerate(phases):
@@ -233,7 +245,7 @@ class GateTests(unittest.TestCase):
         )
         return fixtures
 
-    def test_complete_gate_discovers_policy_once_and_retains_both_default_builds(self) -> None:
+    def test_quality_discovers_policy_once_and_retains_both_default_builds(self) -> None:
         self.prepare_real_policy_with_synthetic_fixtures()
         for mode in ("--fix", "--check"):
             with self.subTest(mode=mode):
@@ -246,6 +258,18 @@ class GateTests(unittest.TestCase):
                 self.assertEqual(
                     commands.count("policy-discovery scripts/test-repository-policy.py"), 1
                 )
+                self.assertIn(
+                    "python3 scripts/shared-ci.py cargo-tools verify --repository-root . "
+                    "--package cargo-llvm-cov --require-candidate",
+                    commands,
+                )
+                self.assertIn(
+                    "python3 scripts/shared-ci.py run --event local --task coverage "
+                    f"--automation-sha {AUTOMATION_SHA} "
+                    "--report-json target/coverage-task.json",
+                    commands,
+                )
+                self.assertIn("coverage compiler 1.98.1", commands)
                 self.assertIn(
                     "python3 scripts/shared-ci.py run --event local --task api-development "
                     "--report-json target/api-development-task.json",

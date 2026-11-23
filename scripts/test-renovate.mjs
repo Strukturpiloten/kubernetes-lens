@@ -146,6 +146,7 @@ const files = new Map(
   await Promise.all(
     [
       ...workflowFiles,
+      "scripts/cargo-llvm-cov.version",
       "scripts/renovate-tool.json",
       "scripts/kind-vm-image.json",
       "rust-toolchain.toml",
@@ -267,6 +268,17 @@ function expected(input = files) {
           }),
         );
       }
+    } else if (file === "scripts/cargo-llvm-cov.version") {
+      const version = text.trimEnd();
+      assert.match(version, /^(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){2}$/);
+      assert.equal(text, `${version}\n`, "the exact version ends with one LF");
+      out.push(
+        key(file, {
+          depName: "cargo-llvm-cov",
+          currentValue: version,
+          datasource: "crate",
+        }),
+      );
     } else if (file === "Cargo.toml") {
       // Independent finite Cargo declaration inventory, including exact inline-table pins.
       for (const section of text.matchAll(
@@ -338,7 +350,23 @@ function ownership(actual, expectedPins = expected()) {
 }
 const actual = await inventory();
 ownership(actual);
-const rustApiRows = actual.filter(
+const coverageFile = "scripts/cargo-llvm-cov.version";
+const coverageRows = actual.filter((row) => row.dep.depName === "cargo-llvm-cov");
+assert.equal(coverageRows.length, 1, "actual manager extraction must find one coverage pin");
+const [coverageRow] = coverageRows;
+assert.equal(coverageRow.file, coverageFile);
+assert.equal(coverageRow.manager, "custom.regex");
+const coverageText = files.get(coverageFile);
+assert(
+  !rawConfig.customManagers.some((manager) => manager.depNameTemplate === "cargo-llvm-cov"),
+  "the shared preset owns the coverage tool declaration",
+);
+const nativeCargo = await cargo.extractPackageFile(files.get("Cargo.toml"), "Cargo.toml", {});
+assert(
+  !nativeCargo.deps.some((dep) => dep.depName === "cargo-llvm-cov"),
+  "the coverage tool must stay outside ordinary Cargo dependency extraction",
+);
+const sharedRustRows = actual.filter(
   (row) =>
     row.file === ".github/workflows/ci.yml" &&
     row.manager === "github-actions" &&
@@ -346,12 +374,12 @@ const rustApiRows = actual.filter(
     /shared-rust-(?:ci|semver)\.yml@/.test(row.dep.replaceString ?? ""),
 );
 assert.equal(
-  rustApiRows.length,
-  3,
-  "quality, API and retained MSRV references have unique native owners",
+  sharedRustRows.length,
+  4,
+  "quality, API, coverage and MSRV references have unique native owners",
 );
 assert(
-  rustApiRows.every(
+  sharedRustRows.every(
     (row) =>
       row.manager === "github-actions" &&
       row.dep.depName === "Strukturpiloten/boxferry" &&
@@ -556,6 +584,27 @@ assert.equal(
 const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "kubernetes-lens-renovate-"));
 try {
   GlobalConfig.set({ localDir: scratch });
+  await fs.mkdir(path.join(scratch, path.dirname(coverageFile)), { recursive: true });
+  await fs.writeFile(path.join(scratch, coverageFile), coverageText);
+  const [coverageMajor, coverageMinor, coveragePatch] = coverageRow.dep.currentValue.split(".");
+  const coverageReplacement = `${coverageMajor}.${coverageMinor}.${Number(coveragePatch) + 1}`;
+  const coverageUpdated = await doAutoReplace(
+    {
+      ...coverageRow.extraction,
+      ...coverageRow.dep,
+      manager: "regex",
+      packageFile: coverageFile,
+      depIndex: coverageRow.extraction.deps.indexOf(coverageRow.dep),
+      newValue: coverageReplacement,
+      updateType: "patch",
+      ...coverageRow.definition,
+    },
+    coverageText,
+    false,
+  );
+  assert.equal(coverageUpdated, `${coverageReplacement}\n`);
+  const coverageAfter = new Map([[coverageFile, coverageUpdated]]);
+  ownership(await inventory(coverageAfter), expected(coverageAfter));
   const sharedRows = actual.filter((row) => row.dep.datasource === "github-digest");
   assert(sharedRows.length >= 2, "both shared tools and policy commits must have owners");
   for (const row of [sharedRows[0], actual.find((r) => r.dep.depType === "action"), hostedAction]) {
@@ -778,6 +827,15 @@ function assertAutomatic(value) {
   assert.equal(value.dependencyDashboardApproval, false, "no hidden Dashboard approval gate");
 }
 for (const updateType of ["major", "minor", "patch", "pin", "digest", "pinDigest"]) {
+  const coveragePolicy = await policy({
+    ...coverageRow.dep,
+    manager: coverageRow.manager,
+    packageFile: coverageFile,
+    updateType,
+  });
+  assert.notEqual(coveragePolicy.enabled, false);
+  assertAutomatic(coveragePolicy);
+  assert.equal(coveragePolicy.minimumReleaseAge, "3 days");
   for (const [name, groupName] of [
     ["jiff-tzdb", "Native timezone data"],
     ["base64", "Native binary codecs"],

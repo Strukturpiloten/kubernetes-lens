@@ -9,6 +9,7 @@ it. See [ADR 0102](decisions/0102-shared-workflow-adoption.md) and the
 | Contract                                   | Canonical definition                | KubernetesLens exception                                                                                       |
 | ------------------------------------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Rust quality and minimum version           | BoxFerry shared Rust workflow       | Policy retains every existing alias, warning-denying Rustdoc, and package validation; minimum comes from Cargo |
+| Rust source coverage                       | BoxFerry shared Rust workflow       | Candidate tool declaration plus trusted commands and ratchet                                                   |
 | Dependency/license policy                  | BoxFerry shared dependency workflow | All features remain checked                                                                                    |
 | Change planning and required gate          | BoxFerry locked Python package      | Repository policy owns job membership and documentation roots                                                  |
 | Python automation                          | Shared uv, Ruff, ty and lockfile    | Local pyproject config covers automation entrypoints; native fixture controls retain independent source tests  |
@@ -82,3 +83,17 @@ use the shared tool inventory. Native qualification and repository administratio
 retain their separate evidence requirements. DockerLens adopted the same listener
 boundary in [#216](https://github.com/Strukturpiloten/docker-lens/pull/216).
 Track the remaining callers in [BoxFerry #552](https://github.com/Strukturpiloten/boxferry/issues/552).
+
+KubernetesLens [#108](https://github.com/Strukturpiloten/kubernetes-lens/issues/108) starts
+from `c2954c5aefb0518aa41c95b2b4b25d84897dfdc2`. The candidate declares its coverage tool in
+`scripts/cargo-llvm-cov.version`. The local gate and hosted `coverage` job use the same strict shared Cargo
+tool verifier and task policy. The PR and queue planner reads the exact trusted base, with the
+historical transition in [ADR 0104](decisions/0104-shared-rust-coverage.md). Main, manual and
+reusable release CI use the complete policy, including coverage and an exact success receipt.
+
+First merge [BoxFerry #708](https://github.com/Strukturpiloten/boxferry/issues/708) and verify
+its distribution to `automation-v1`. A separate pin-only KubernetesLens PR must then advance
+every matching automation reference, including the dependency eligibility listener, to the
+admitted SHA on main. Verify that revision on main before rebasing #108 to add
+`scripts/cargo-llvm-cov.version` and enable coverage. The previous trusted-base reader cannot
+evaluate a version file introduced by the same PR that advances the automation pin.

@@ -186,3 +186,4 @@ conformance remain separate.
 merge-queue planning, and automated dependency admission while preserving unpublished releases.
 
 - [ADR 0103](0103-direct-api-jobs-and-trusted-policy-transition.md): Direct API jobs and exact trusted-policy transition.
+- [ADR 0104](0104-shared-rust-coverage.md) covers shared Rust coverage and its trusted-policy transition.

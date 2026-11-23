@@ -118,7 +118,8 @@ def validate(files: dict[str, str]) -> None:
     )
     prerequisite = re.search(r"^    needs:\s*\[([^]]+)\]", aggregate, re.M)
     assert prerequisite, "aggregate must declare every planned job dependency"
-    assert {name.strip() for name in prerequisite.group(1).split(",")} == {
+    needs = prerequisite.group(1).strip().removesuffix(",").split(",")
+    assert {name.strip() for name in needs} == {
         "validation-plan",
         *policy["jobs"],
     }
@@ -324,11 +325,9 @@ class RepositoryPolicyTests(unittest.TestCase):
         )
 
     def test_aggregate_dependency_cannot_disappear_while_job_still_exists(self) -> None:
-        self.rejected(
-            ".github/workflows/ci.yml",
-            "[validation-plan, rust, api, msrv, dependencies, documentation, lockfile-release-age]",
-            "[validation-plan, msrv, dependencies, documentation, lockfile-release-age]",
-        )
+        for job in ("rust", "api", "coverage"):
+            with self.subTest(job=job):
+                self.rejected(".github/workflows/ci.yml", f"        {job},\n", "")
 
     def test_protected_aggregate_name_cannot_drift_disappear_or_duplicate(self) -> None:
         name = "    name: Required CI\n"
