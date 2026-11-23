@@ -862,7 +862,7 @@ class OfficialReceiptTests(unittest.TestCase):
         manifest = tomllib.loads((MATERIALIZER.REPOSITORY / "Cargo.toml").read_text())
         package = manifest["package"]
         self.assertEqual(package["license"], "MPL-2.0")
-        self.assertFalse(package["publish"])
+        self.assertEqual(package["publish"], ["crates-io"])
         self.assertTrue(package["include"])
         protected = ["fixtures/official/inventory.json", "fixtures/official/license/fixture-license.txt",
                      "fixtures/official/upstream/chart.tgz", "fixtures/official/derived/source.yaml",

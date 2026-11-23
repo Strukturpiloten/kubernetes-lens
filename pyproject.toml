@@ -3,6 +3,8 @@
 target-version = "py313"
 line-length = 100
 include = [
+  "scripts/release-proof.py",
+  "scripts/release-authorization.py",
   "scripts/shared-ci.py",
   "scripts/validation-plan.py",
   "scripts/ci-api-transition.py",
@@ -21,6 +23,8 @@ python-version = "3.13"
 
 [tool.ty.src]
 include = [
+  "scripts/release-proof.py",
+  "scripts/release-authorization.py",
   "scripts/shared-ci.py",
   "scripts/validation-plan.py",
   "scripts/ci-api-transition.py",

@@ -3,6 +3,12 @@ name: Release validation
 
 on:
   workflow_dispatch:
+    inputs:
+      validation_only:
+        description: Prepare and verify the crate without publication (leave enabled until maintainer release approval).
+        type: boolean
+        default: true
+        required: false
 
 permissions:
   contents: read
@@ -10,7 +16,7 @@ permissions:
   statuses: read
 
 concurrency:
-  group: release-validation-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
@@ -27,6 +33,7 @@ jobs:
   release-gate:
     name: Complete exact-candidate release gate
     needs: validate
+    if: always()
     uses: Strukturpiloten/boxferry/.github/workflows/shared-release-validation.yml@cf3578f47416e1b27b770fe4a81918844fb2d58b # automation-v1 interface v1
     with:
       candidate_sha: ${{ github.sha }}
@@ -36,7 +43,7 @@ jobs:
       needs_json: ${{ toJSON(needs) }}
 
   inventory:
-    name: Validate private crate inventory
+    name: Validate single-crate inventory
     needs: release-gate
     uses: Strukturpiloten/boxferry/.github/workflows/shared-release-inventory.yml@cf3578f47416e1b27b770fe4a81918844fb2d58b # automation-v1 interface v1
     permissions:
@@ -49,3 +56,136 @@ jobs:
       validation_sha: ${{ needs.release-gate.outputs.candidate_sha }}
       validation_result: ${{ needs.release-gate.result }}
       published_api_candidate_sha: ${{ needs.release-gate.outputs.published_api_candidate_sha }}
+
+  package:
+    name: Prepare credential-free package and proof
+    needs: [release-gate, inventory]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      candidate_sha: ${{ steps.proof.outputs.candidate_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Strukturpiloten/boxferry
+          # renovate: datasource=github-digest depName=Strukturpiloten/boxferry currentValue=automation-v1
+          ref: cf3578f47416e1b27b770fe4a81918844fb2d58b
+          path: _automation
+          persist-credentials: false
+      - uses: ./_automation/.github/actions/shared-python
+      - name: Install configured Rust toolchain
+        working-directory: source
+        run: rustup show active-toolchain
+      - name: Validate publication preparation without credentials
+        uses: ./_automation/.github/actions/shared-crate-publish
+        with:
+          candidate-sha: ${{ github.sha }}
+          automation-sha: cf3578f47416e1b27b770fe4a81918844fb2d58b
+          release-config: ${{ github.workspace }}/source/scripts/release-policy.json
+          package: kubernetes-lens
+          validation-sha: ${{ needs.release-gate.outputs.candidate_sha }}
+          validation-result: ${{ needs.release-gate.result }}
+          validation-only: "true"
+      - name: Package and record exact candidate proof
+        id: proof
+        working-directory: source
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+          AUTOMATION_SHA: cf3578f47416e1b27b770fe4a81918844fb2d58b
+          PUBLISHED_API_SHA: ${{ needs.release-gate.outputs.published_api_candidate_sha }}
+        run: |
+          set -euo pipefail
+          uv run --locked --project ../_automation/automation python scripts/release-proof.py
+          printf 'candidate_sha=%s\n' "${CANDIDATE_SHA}" >> "${GITHUB_OUTPUT}"
+      - name: Retain prepared crate and proof
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: prepared-crate-${{ github.sha }}
+          path: |
+            source/target/package/*.crate
+            source/target/package/*.crate.sha256
+            source/target/package/release-proof.json
+          if-no-files-found: error
+
+  publication-authorization:
+    name: Require existing external release protections
+    if: inputs.validation_only == false
+    needs: [release-gate, inventory, package]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Refuse missing or unprotected release environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: python3 scripts/release-authorization.py
+
+  publish:
+    name: Publish maintainer-approved crate
+    needs: [release-gate, inventory, package, publication-authorization]
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'Strukturpiloten/kubernetes-lens' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      inputs.validation_only == false &&
+      needs.release-gate.result == 'success' &&
+      needs.inventory.result == 'success' &&
+      needs.package.result == 'success' &&
+      needs.publication-authorization.result == 'success' &&
+      needs.package.outputs.candidate_sha == github.sha &&
+      needs.release-gate.outputs.published_api_candidate_sha == github.sha
+    environment: release
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Strukturpiloten/boxferry
+          # renovate: datasource=github-digest depName=Strukturpiloten/boxferry currentValue=automation-v1
+          ref: cf3578f47416e1b27b770fe4a81918844fb2d58b
+          path: _automation
+          persist-credentials: false
+      - uses: ./_automation/.github/actions/shared-python
+      - name: Install configured Rust toolchain
+        working-directory: source
+        run: rustup show active-toolchain
+      - name: Recheck external protections after environment approval
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: python3 scripts/release-authorization.py
+      - name: Publish exact approved candidate through shared mechanics
+        uses: ./_automation/.github/actions/shared-crate-publish
+        with:
+          candidate-sha: ${{ github.sha }}
+          automation-sha: cf3578f47416e1b27b770fe4a81918844fb2d58b
+          release-config: ${{ github.workspace }}/source/scripts/release-policy.json
+          package: kubernetes-lens
+          validation-sha: ${{ needs.release-gate.outputs.candidate_sha }}
+          validation-result: ${{ needs.release-gate.result }}
+          validation-only: "false"
+          bootstrap-token: ${{ secrets.CARGO_REGISTRY_BOOTSTRAP_TOKEN }}

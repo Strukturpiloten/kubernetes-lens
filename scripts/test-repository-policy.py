@@ -90,7 +90,7 @@ def validate(files: dict[str, str]) -> None:
     assert package["name"] == "kubernetes-lens"
     assert package["edition"] == "2024" and package["rust-version"] == "1.98.1"
     assert tomllib.loads(files["clippy.toml"])["msrv"] == package["rust-version"]
-    assert package["license"] == "MPL-2.0" and package["publish"] is False
+    assert package["license"] == "MPL-2.0" and package["publish"] == ["crates-io"]
     assert package["repository"] == "https://github.com/Strukturpiloten/kubernetes-lens"
     assert hashlib.sha256(files["LICENSE"].encode()).hexdigest() == LICENSE_SHA256
     for section in ("dependencies", "dev-dependencies", "build-dependencies"):
@@ -180,7 +180,9 @@ def validate(files: dict[str, str]) -> None:
     ):
         workflow = files[name]
         assert workflow.startswith("---\n")
-        assert not re.search(r"^\s+(?:contents|packages|id-token|actions):\s*write", workflow, re.M)
+        assert not re.search(r"^\s+(?:contents|packages|actions):\s*write", workflow, re.M)
+        if name.endswith("ci.yml"):
+            assert not re.search(r"^\s+id-token:\s*write", workflow, re.M)
         assert not re.search(
             r"cargo publish|git tag|gh release create|kubectl apply|helm (?:install|upgrade)",
             workflow,
@@ -213,7 +215,9 @@ def validate(files: dict[str, str]) -> None:
     manual = (
         files[".github/workflows/release.yml"].split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
     )
-    assert manual.strip() == "workflow_dispatch:"
+    assert manual.strip().startswith("workflow_dispatch:")
+    assert "default: true" in manual
+    assert not re.search(r"^  (?:push|pull_request|schedule):", manual, re.M)
     assert "uses: ./.github/workflows/ci.yml" in files[".github/workflows/release.yml"]
     release_policy = json.loads(files["scripts/release-policy.json"])
     assert release_policy == {
@@ -221,9 +225,41 @@ def validate(files: dict[str, str]) -> None:
         "repository": "Strukturpiloten/kubernetes-lens",
         "packages": ["kubernetes-lens"],
         "required_jobs": ["validate"],
-        "publication_enabled": False,
-    }, "unpublished release validation cannot authorize publication"
+        "publication_enabled": True,
+        "bootstrap_version": "0.1.0",
+    }, "only the explicit approved initial-publication path is configured"
     validate_release_inventory(files[".github/workflows/release.yml"], automation["revision"])
+    release_source = (
+        "\n".join(
+            line for line in files[".github/workflows/release.yml"].splitlines() if line.strip()
+        )
+        + "\n"
+    )
+    release_jobs = workflow_block(release_source, "jobs", 0)
+    publisher = workflow_block(release_jobs, "publish", 2)
+    assert "environment: release" in publisher
+    for condition in (
+        "github.event_name == 'workflow_dispatch'",
+        "github.repository == 'Strukturpiloten/kubernetes-lens'",
+        "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+        "inputs.validation_only == false",
+        "needs.release-gate.result == 'success'",
+        "needs.inventory.result == 'success'",
+        "needs.package.result == 'success'",
+        "needs.package.outputs.candidate_sha == github.sha",
+        "needs.release-gate.outputs.published_api_candidate_sha == github.sha",
+    ):
+        assert condition in publisher
+    assert "needs: [release-gate, inventory, package, publication-authorization]" in publisher
+    assert "needs.publication-authorization.result == 'success'" in publisher
+    assert "uses: ./_automation/.github/actions/shared-crate-publish" in publisher
+    assert 'validation-only: "false"' in publisher
+    assert "bootstrap-token: ${{ secrets.CARGO_REGISTRY_BOOTSTRAP_TOKEN }}" in publisher
+    preparation = workflow_block(release_jobs, "package", 2)
+    assert 'validation-only: "true"' in preparation
+    assert "secrets." not in preparation and "id-token:" not in preparation
+    assert "python scripts/release-proof.py" in preparation
+    assert "id-token:" not in files[".github/workflows/release.yml"].split("\n  publish:")[0]
     assert "candidate_sha: ${{ steps.gate.outputs.candidate_sha }}" in ci
     automation = json.loads(files[".github/automation.json"])
     assert automation["repository"] == "Strukturpiloten/boxferry" and automation["interface"] == 1
@@ -331,10 +367,23 @@ class RepositoryPolicyTests(unittest.TestCase):
             validate(changed)
 
     def test_publication_and_privilege_mutations_fail(self) -> None:
-        self.rejected("Cargo.toml", "publish = false", "publish = true")
+        self.rejected("Cargo.toml", 'publish = ["crates-io"]', "publish = true")
         self.rejected("release-plz.toml", "git_tag_enable = false", "git_tag_enable = true")
         self.rejected(".github/workflows/ci.yml", "contents: read", "contents: write")
         self.rejected(".github/workflows/release.yml", "workflow_dispatch:", "push:")
+
+    def test_publisher_cannot_bypass_approval_or_exact_proofs(self) -> None:
+        for old, new in (
+            ("default: true", "default: false"),
+            ("environment: release", "environment: unprotected"),
+            ("inputs.validation_only == false", "inputs.validation_only != true"),
+            ("needs.package.result == 'success'", "true"),
+            ("needs.package.outputs.candidate_sha == github.sha", "true"),
+            ("needs.release-gate.outputs.published_api_candidate_sha == github.sha", "true"),
+            ('validation-only: "true"', 'validation-only: "false"'),
+        ):
+            with self.subTest(old=old):
+                self.rejected(".github/workflows/release.yml", old, new)
 
     def test_license_msrv_and_manager_selection_are_hard_contracts(self) -> None:
         self.rejected("LICENSE", "Mozilla Public License", "Other License")
@@ -461,8 +510,8 @@ class RepositoryPolicyTests(unittest.TestCase):
     def test_shared_release_gate_cannot_enable_publication_or_skip_exact_candidate(self) -> None:
         self.rejected(
             "scripts/release-policy.json",
-            '"publication_enabled": false',
             '"publication_enabled": true',
+            '"publication_enabled": false',
         )
         self.rejected(
             ".github/workflows/ci.yml",

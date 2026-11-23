@@ -1282,5 +1282,174 @@ for name in ("rust-quality", "msrv", "coverage"):
                 verify(path, self.git(root, "rev-parse", "HEAD"))
 
 
+class ReleaseAdoptionTests(unittest.TestCase):
+    def test_actual_shared_producer_preparation_and_future_publish_contract(self) -> None:
+        bootstrap = runpy.run_path(str(ROOT / "scripts/shared-ci.py"))
+        revision = json.loads((ROOT / ".github/automation.json").read_text())["revision"]
+        project = bootstrap["prepare_implementation"](ROOT, revision)
+        with patch.object(sys, "path", [str(project / "src"), *sys.path]):
+            from boxferry_ci import release
+
+        policy = release.load_policy(
+            ROOT / "scripts/release-policy.json", "Strukturpiloten/kubernetes-lens"
+        )
+        metadata = subprocess.check_output(
+            ["cargo", "metadata", "--locked", "--offline", "--no-deps", "--format-version", "1"],
+            cwd=ROOT,
+            text=True,
+        )
+        packages, dependencies = release.publication_inventory(json.loads(metadata), policy, ROOT)
+        self.assertEqual(list(packages), ["kubernetes-lens"])
+        self.assertEqual(dependencies, {"kubernetes-lens": set()})
+        initial_metadata = json.loads(metadata)
+        for package in initial_metadata["packages"]:
+            if package["name"] == "kubernetes-lens":
+                package["version"] = "0.1.0"
+        bootstrap_metadata = json.dumps(initial_metadata)
+        sha = "a" * 40
+        needs: dict[str, Any] = {
+            "validate": {
+                "result": "success",
+                "outputs": {
+                    "candidate_sha": sha,
+                    "published_api_candidate_sha": sha,
+                },
+            }
+        }
+        self.assertEqual(release.verify_gate(policy, needs, sha), sha)
+        for result in ("failure", "cancelled", "skipped"):
+            with self.assertRaises(release.ReleaseError):
+                release.verify_gate(
+                    policy, {"validate": needs["validate"] | {"result": result}}, sha
+                )
+        for field in ("candidate_sha", "published_api_candidate_sha"):
+            altered = copy.deepcopy(needs)
+            altered["validate"]["outputs"][field] = "b" * 40
+            with self.assertRaises(release.ReleaseError):
+                release.verify_gate(policy, altered, sha)
+        arguments = [
+            "--repository-root",
+            str(ROOT),
+            "--config",
+            str(ROOT / "scripts/release-policy.json"),
+            "--candidate-sha",
+            sha,
+            "--automation-sha",
+            revision,
+            "--package",
+            "kubernetes-lens",
+            "--validation-sha",
+            sha,
+            "--validation-result",
+            "success",
+        ]
+        context = {
+            "GITHUB_REPOSITORY": "Strukturpiloten/kubernetes-lens",
+            "GITHUB_SHA": sha,
+            "GITHUB_EVENT_NAME": "workflow_dispatch",
+            "GITHUB_REF": "refs/heads/main",
+            "BOXFERRY_DEFAULT_BRANCH": "main",
+            "CARGO_REGISTRY_TOKEN": "fake-contract-only",
+        }
+        # Source checkout identity and registry transport are test seams; execute the real
+        # policy, inventory, context, bootstrap-version and command dispatch logic.
+        with (
+            patch.dict("os.environ", context, clear=True),
+            patch.object(release, "verify_bindings"),
+            patch.object(
+                release.subprocess, "check_output", return_value=bootstrap_metadata
+            ) as cargo,
+            patch.object(release, "registry_status", return_value=404) as registry,
+            patch.object(release, "publish_crate") as publish,
+        ):
+            self.assertEqual(release.main(["prepare-crate", *arguments]), 0)
+            registry.assert_not_called()
+            publish.assert_not_called()
+            for mode in ("prepare-crate", "publish-crate"):
+                self.assertEqual(
+                    release.main(
+                        [mode, *arguments, "--validation-only", "false", "--bootstrap", "true"]
+                    ),
+                    0,
+                )
+            publish.assert_called_once_with(ROOT, "kubernetes-lens", "0.1.0")
+            publish.reset_mock()
+            for package in initial_metadata["packages"]:
+                if package["name"] == "kubernetes-lens":
+                    package["version"] = "0.1.1"
+            cargo.return_value = json.dumps(initial_metadata)
+            with self.assertRaises(SystemExit):
+                release.main(
+                    [
+                        "prepare-crate",
+                        *arguments,
+                        "--validation-only",
+                        "false",
+                        "--bootstrap",
+                        "true",
+                    ]
+                )
+            for mode in ("prepare-crate", "publish-crate"):
+                self.assertEqual(release.main([mode, *arguments, "--validation-only", "false"]), 0)
+            publish.assert_called_once_with(ROOT, "kubernetes-lens", "0.1.1")
+            with self.assertRaises(SystemExit):
+                release.main(["publish-crate", *arguments])
+            with patch.dict("os.environ", {"GITHUB_EVENT_NAME": "push"}):
+                with self.assertRaises(SystemExit):
+                    release.main(["prepare-crate", *arguments, "--validation-only", "false"])
+
+    def test_external_release_authorization_refuses_absent_or_weak_settings(self) -> None:
+        verify = runpy.run_path(str(ROOT / "scripts/release-authorization.py"))["verify"]
+        environment = {
+            "name": "release",
+            "can_admins_bypass": False,
+            "protection_rules": [
+                {
+                    "type": "required_reviewers",
+                    "prevent_self_review": True,
+                    "reviewers": [{"type": "User", "reviewer": {"login": "maintainer"}}],
+                }
+            ],
+            "deployment_branch_policy": {
+                "protected_branches": True,
+                "custom_branch_policies": False,
+            },
+        }
+        verify(environment, {"protected": True}, {}, "main")
+        shared = environment | {
+            "can_admins_bypass": True,
+            "protection_rules": [
+                {"type": "required_reviewers", "prevent_self_review": False, "reviewers": [1]}
+            ],
+            "deployment_branch_policy": {
+                "protected_branches": False,
+                "custom_branch_policies": True,
+            },
+        }
+        policies = {
+            "branch_policies": [{"name": "main", "type": "branch"}, {"name": "v*", "type": "tag"}]
+        }
+        verify(shared, {"protected": True}, policies, "main")
+        with self.assertRaises(ValueError):
+            verify(shared, {"protected": True}, {}, "main")
+        for changes in (
+            {"name": "other"},
+            {"protection_rules": []},
+            {"deployment_branch_policy": None},
+            {
+                "protection_rules": [
+                    {"type": "required_reviewers", "prevent_self_review": True, "reviewers": []}
+                ]
+            },
+        ):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                verify(environment | changes, {"protected": True}, {}, "main")
+        for branch in ({}, {"protected": False}):
+            with self.assertRaises(ValueError):
+                verify(environment, branch, {}, "main")
+        with self.assertRaises(ValueError):
+            verify({}, {}, {}, "main")
+
+
 if __name__ == "__main__":
     unittest.main()
