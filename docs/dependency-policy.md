@@ -31,6 +31,7 @@ dependencies. Software publication remains a separate maintainer decision.
 | Shared implementation, manifest, and preset SHAs | Shared exact-path custom managers                                 |
 | Official Renovate OCI version and index digest   | Repository custom manager                                         |
 | Qualified Fedora CoreOS QEMU image               | Exact-path routine updates disabled; integrity extractor retained |
+| Candidate Cargo coverage tool                    | Exact-path shared crate manager                                   |
 | Python and downloaded check-tool integrity       | BoxFerry shared automation inventory                              |
 
 Every shared adoption reference advances atomically in one Renovate group. Executed pins remain

@@ -1,12 +1,21 @@
 {
   "schema": 2,
   "repository": "Strukturpiloten/kubernetes-lens",
-  "jobs": ["rust", "api", "msrv", "dependencies", "documentation", "lockfile-release-age"],
+  "jobs": [
+    "rust",
+    "api",
+    "coverage",
+    "msrv",
+    "dependencies",
+    "documentation",
+    "lockfile-release-age"
+  ],
   "profile_jobs": {
     "prose": ["documentation", "lockfile-release-age"],
     "executable-docs": [
       "rust",
       "api",
+      "coverage",
       "msrv",
       "dependencies",
       "documentation",
@@ -38,6 +47,34 @@
         ["cargo", "ci-doctest"],
         ["env", "RUSTDOCFLAGS=-D warnings", "cargo", "ci-doc"],
         ["cargo", "package", "--locked", "--allow-dirty"]
+      ]
+    },
+    "coverage": {
+      "timeout_seconds": 1800,
+      "commands": [
+        ["cargo", "llvm-cov", "clean", "--locked"],
+        [
+          "cargo",
+          "llvm-cov",
+          "--locked",
+          "--no-clean",
+          "--workspace",
+          "--all-features",
+          "--all-targets",
+          "--summary-only",
+          "--fail-under-regions",
+          "80",
+          "--fail-under-functions",
+          "76",
+          "--fail-under-lines",
+          "85",
+          "--",
+          "--exact",
+          "--skip",
+          "external_kind_runtime_pure_contracts_are_part_of_the_gate",
+          "--skip",
+          "repository_policy"
+        ]
       ]
     },
     "msrv": {

@@ -55,6 +55,7 @@ def validate_policy_execution_contract(
     assert set(policy["jobs"]) == {
         "rust",
         "api",
+        "coverage",
         "msrv",
         "dependencies",
         "documentation",
@@ -88,7 +89,7 @@ def validate_policy_execution_contract(
 
 
 def validate_strict_rust_callers(ci: str, revision: str) -> None:
-    for job, task in (("rust", "rust-quality"), ("msrv", "msrv")):
+    for job, task in (("rust", "rust-quality"), ("coverage", "coverage"), ("msrv", "msrv")):
         match = re.search(rf"(?ms)^  {job}:\n(.*?)(?=^  [a-z][a-z-]*:\n|\Z)", ci)
         assert match is not None, f"missing configured Rust job {job}"
         block = match[1]
@@ -109,7 +110,15 @@ def validate_strict_rust_callers(ci: str, revision: str) -> None:
 class SharedAutomationTests(unittest.TestCase):
     def test_direct_quality_api_calls_preserve_commands_and_exact_gate_contract(self) -> None:
         policy = json.loads((ROOT / "scripts/validation-policy.json").read_text())
-        jobs = ["rust", "api", "msrv", "dependencies", "documentation", "lockfile-release-age"]
+        jobs = [
+            "rust",
+            "api",
+            "coverage",
+            "msrv",
+            "dependencies",
+            "documentation",
+            "lockfile-release-age",
+        ]
         self.assertEqual(policy["jobs"], jobs)
         self.assertEqual(
             policy["profile_jobs"],
@@ -125,7 +134,7 @@ class SharedAutomationTests(unittest.TestCase):
             ["validation-plan", *jobs, "pr-gate"],
         )
         rust = ci.split("\n  rust:\n", 1)[1].split("\n  api:\n", 1)[0]
-        api = ci.split("\n  api:\n", 1)[1].split("\n  msrv:\n", 1)[0]
+        api = ci.split("\n  api:\n", 1)[1].split("\n  coverage:\n", 1)[0]
         self.assertIn("shared-rust-ci.yml@", rust)
         self.assertIn("task: rust-quality", rust)
         self.assertIn(
@@ -139,11 +148,10 @@ class SharedAutomationTests(unittest.TestCase):
             "api_purpose: ${{ inputs.api_purpose || 'development' }}",
         ):
             self.assertIn(declaration, api)
-        self.assertIn(
-            "needs: [validation-plan, rust, api, msrv, dependencies, documentation, "
-            "lockfile-release-age]",
-            ci,
-        )
+        aggregate = ci.split("\n  pr-gate:\n", 1)[1]
+        needs = re.search(r"needs:\s*\[([^]]+)\]", aggregate)
+        assert needs is not None
+        self.assertEqual(re.findall(r"[a-z][a-z-]+", needs[1]), ["validation-plan", *jobs])
         self.assertIn("timeout-minutes: 10", ci.split("\n  pr-gate:\n")[1])
         self.assertIn("id: gate\n        timeout-minutes: 5", ci)
         self.assertIn("python scripts/ci-api-transition.py", ci)
@@ -215,7 +223,7 @@ class SharedAutomationTests(unittest.TestCase):
         ci = (ROOT / ".github/workflows/ci.yml").read_text()
         revision = str(LOAD_CONFIG(ROOT)["revision"])
         validate_strict_rust_callers(ci, revision)
-        for job in ("rust", "msrv"):
+        for job in ("rust", "coverage", "msrv"):
             match = re.search(rf"(?ms)^  {job}:\n.*?(?=^  [a-z][a-z-]*:\n|\Z)", ci)
             assert match is not None
             for replacement in ("", "      require_configured_task: false\n"):
@@ -722,8 +730,11 @@ class ApiTransitionTests(unittest.TestCase):
         project = root / "target/boxferry-automation" / self.source / "automation"
         return {**os.environ, "PYTHONPATH": str(project / "src"), "PYTHONDONTWRITEBYTECODE": "1"}
 
+    def jobs(self, policy_version: int) -> tuple[str, ...]:
+        return self.bridge["POLICY_JOBS"][self.bridge[f"P{policy_version}"]]
+
     def fixture(
-        self, *, legacy: bool, profile: str = "full", event: str = "pull_request"
+        self, *, policy_version: int, change: str = "rust", event: str = "pull_request"
     ) -> TransitionCase:
         root = self.directory / f"consumer-{len(list(self.directory.iterdir()))}"
         (root / "scripts").mkdir(parents=True)
@@ -731,20 +742,26 @@ class ApiTransitionTests(unittest.TestCase):
         shutil.copyfile(ROOT / ".github/automation.json", root / ".github/automation.json")
         (root / "docs/public").mkdir(parents=True)
         (root / "docs/public/page.md").write_text("# Page\n\nOriginal prose.\n")
+        pin = root / "scripts/cargo-llvm-cov.version"
+        pin.write_bytes((ROOT / "scripts/cargo-llvm-cov.version").read_bytes())
         current = (ROOT / "scripts/validation-policy.json").read_bytes()
-        old = (ROOT / "scripts/fixtures/ci-api-transition/p5-policy.json.txt").read_bytes()
         policy = root / "scripts/validation-policy.json"
-        policy.write_bytes(old if legacy else current)
+        historic = ROOT / f"scripts/fixtures/ci-api-transition/p{policy_version}-policy.json.txt"
+        policy.write_bytes(current if policy_version == 7 else historic.read_bytes())
         self.git(root, "init", "--quiet", "--template=")
         self.git(root, "add", ".")
         self.git(root, "commit", "--quiet", "-m", "trusted policy fixture")
         base = self.git(root, "rev-parse", "HEAD")
         if event in {"pull_request", "merge_group"}:
-            if profile == "prose":
+            if change in {"prose", "pin-and-prose"}:
                 (root / "docs/public/page.md").write_text("# Page\n\nChanged prose.\n")
-            else:
+            if change == "rust":
                 policy.write_bytes(current)
-                (root / "unknown-input").write_text("forces full validation\n")
+                (root / "src").mkdir()
+                (root / "src/lib.rs").write_text("// Rust candidate fixture\n")
+            if change in {"pin", "pin-and-prose"}:
+                major, minor, patch = (int(part) for part in pin.read_text().strip().split("."))
+                pin.write_text(f"{major}.{minor}.{patch + 1}\n")
             self.git(root, "add", ".")
             self.git(root, "commit", "--quiet", "-m", "exact candidate fixture")
         tested = self.git(root, "rev-parse", "HEAD")
@@ -762,23 +779,21 @@ class ApiTransitionTests(unittest.TestCase):
         case = TransitionCase(
             root, trusted / "scripts/validation-policy.json", base, tested, event, "", {}
         )
-        result = self.canonical("plan", *self.arguments(case))
+        plan_output = root / "plan-output"
+        result = self.canonical("plan", *self.arguments(case), "--github-output", str(plan_output))
         self.assertEqual(result.returncode, 0, result.stderr)
         case.plan = result.stdout.strip()
         plan = json.loads(case.plan)
         jobs = plan["jobs"]
-        outputs = {
-            "plan": case.plan,
-            "profile": plan["profile"],
-            **{
-                "select_" + name.replace("-", "_"): str(selected).lower()
-                for name, selected in jobs.items()
-            },
-        }
+        outputs = dict(line.split("=", 1) for line in plan_output.read_text().splitlines())
         case.needs = {"validation-plan": {"result": "success", "outputs": outputs}}
         for name in self.bridge["JOBS"]:
-            selected = jobs.get(name, jobs["rust"])
-            child = {"candidate_sha": tested} if selected and name in {"rust", "api"} else {}
+            selected = jobs.get(name, name == "api" and jobs["rust"])
+            child = (
+                {"candidate_sha": tested}
+                if selected and name in {"rust", "api", "coverage"}
+                else {}
+            )
             case.needs[name] = {"result": "success" if selected else "skipped", "outputs": child}
         return case
 
@@ -837,7 +852,9 @@ from boxferry_ci.__main__ import _task
 from boxferry_ci.contracts import ContractError
 from boxferry_ci.policy import load_policy
 policy = load_policy(Path(sys.argv[1]))
-for name in ("rust-quality", "msrv"):
+coverage = argparse.Namespace(task="coverage", command="run", require_configured_task=False)
+assert _task(coverage, policy) == policy.tasks["coverage"]
+for name in ("rust-quality", "msrv", "coverage"):
     configured = policy.tasks[name]
     assert configured.timeout_seconds == 1800
     for mode in ("run", "check-task"):
@@ -864,7 +881,7 @@ for name in ("rust-quality", "msrv"):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def configured_task(
-        self, case: TransitionCase, task: str, mode: str
+        self, case: TransitionCase, task: str, mode: str, *, local: bool = False
     ) -> subprocess.CompletedProcess[str]:
         tools = case.root / "task-tools"
         tools.mkdir(exist_ok=True)
@@ -877,16 +894,28 @@ for name in ("rust-quality", "msrv"):
             "'rustdocflags': os.environ.get('RUSTDOCFLAGS')}) + '\\n')\n"
         )
         cargo.chmod(0o755)
+        source_arguments = self.arguments(case)
+        if local:
+            source_arguments = [
+                "--repository-root",
+                str(case.root),
+                "--config",
+                str(case.root / "scripts/validation-policy.json"),
+                "--event",
+                "local",
+                "--automation-sha",
+                self.source,
+            ]
         return subprocess.run(
             [
                 sys.executable,
                 "-m",
                 "boxferry_ci",
                 mode,
-                *self.arguments(case),
+                *source_arguments,
                 "--task",
                 task,
-                *(["--require-configured-task"] if mode == "run" else []),
+                *(["--require-configured-task"] if mode == "run" and not local else []),
                 "--report-json",
                 str(case.root / "task-report.json"),
             ],
@@ -905,9 +934,9 @@ for name in ("rust-quality", "msrv"):
 
     def test_selected_producer_executes_exact_configured_rust_tasks(self) -> None:
         policy = json.loads((ROOT / "scripts/validation-policy.json").read_text())
-        for task in ("rust-quality", "msrv"):
+        for task in ("rust-quality", "msrv", "coverage"):
             with self.subTest(task=task):
-                case = self.fixture(legacy=False, event="workflow_dispatch")
+                case = self.fixture(policy_version=7, event="workflow_dispatch")
                 marker = case.root / "task-commands.jsonl"
                 # A candidate's different task must never replace trusted-base commands.
                 candidate = json.loads((case.root / "scripts/validation-policy.json").read_text())
@@ -938,8 +967,8 @@ for name in ("rust-quality", "msrv"):
 
     def test_selected_producer_refuses_invalid_trusted_tasks_before_execution(self) -> None:
         policy = json.loads((ROOT / "scripts/validation-policy.json").read_text())
-        for task in ("rust-quality", "msrv"):
-            case = self.fixture(legacy=False, event="workflow_dispatch")
+        for task in ("rust-quality", "msrv", "coverage"):
+            case = self.fixture(policy_version=7, event="workflow_dispatch")
             valid = policy["tasks"][task]
             mutations = {
                 "missing": None,
@@ -972,15 +1001,53 @@ for name in ("rust-quality", "msrv"):
                             self.assertIn("not explicitly configured", report["cause"])
                         self.assertFalse((case.root / "task-commands.jsonl").exists())
 
+    def test_local_coverage_uses_policy_and_rejects_missing_or_invalid_tasks(self) -> None:
+        case = self.fixture(policy_version=7, event="workflow_dispatch")
+        policy_path = case.root / "scripts/validation-policy.json"
+        policy = json.loads(policy_path.read_text())
+        coverage = policy["tasks"]["coverage"]
+        report_path = case.root / "task-report.json"
+        marker = case.root / "task-commands.jsonl"
+        for local in (False, True):
+            with self.subTest(local=local):
+                result = self.configured_task(case, "coverage", "run", local=local)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                report = json.loads(report_path.read_text())
+                self.assertEqual([step["argv"] for step in report["results"]], coverage["commands"])
+                self.assertTrue(marker.exists())
+                marker.unlink()
+        for invalid in (None, {**coverage, "commands": [coverage["commands"][0], []]}):
+            with self.subTest(definition=invalid):
+                candidate = copy.deepcopy(policy)
+                if invalid is None:
+                    del candidate["tasks"]["coverage"]
+                else:
+                    candidate["tasks"]["coverage"] = invalid
+                policy_path.write_text(json.dumps(candidate))
+                result = self.configured_task(case, "coverage", "run", local=True)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                report = json.loads(report_path.read_text())
+                self.assertEqual(report["status"], "infrastructure")
+                self.assertIn("coverage", report["cause"])
+                self.assertFalse(marker.exists())
+
     def test_actual_old_and_new_canonical_plan_gate_paths_and_release_outputs(self) -> None:
-        for legacy in (True, False):
+        for policy_version in (5, 6, 7):
             for event in ("pull_request", "merge_group"):
                 for profile in ("full", "prose"):
-                    with self.subTest(legacy=legacy, event=event, profile=profile):
-                        case = self.fixture(legacy=legacy, profile=profile, event=event)
+                    with self.subTest(policy=policy_version, event=event, profile=profile):
+                        case = self.fixture(
+                            policy_version=policy_version,
+                            change="prose" if profile == "prose" else "rust",
+                            event=event,
+                        )
                         plan = json.loads(case.plan)
                         self.assertEqual(plan["profile"], profile)
-                        self.assertEqual(len(plan["jobs"]), 5 if legacy else 6)
+                        self.assertEqual(len(plan["jobs"]), policy_version)
+                        self.assertEqual(
+                            plan["jobs"].get("coverage"),
+                            (profile == "full") if policy_version == 7 else None,
+                        )
                         self.assertEqual(self.execute(case), (0, f"candidate_sha={case.tested}\n"))
                         if profile == "full":
                             case.needs["api"]["outputs"]["published_api_candidate_sha"] = (
@@ -999,30 +1066,70 @@ for name in ("rust-quality", "msrv"):
                             json.dumps(case.needs),
                             case.tested,
                             "development",
-                            legacy=legacy,
+                            trusted_jobs=self.jobs(policy_version),
                         )
                         self.assertFalse(published)
                         expected = {
                             name: outcome
                             for name, outcome in case.needs.items()
-                            if not legacy or name != "api"
+                            if name == "validation-plan" or name in self.jobs(policy_version)
                         }
                         self.assertEqual(json.loads(projected), expected)
-                        if not legacy:
+                        if policy_version == 7:
                             self.assertEqual(projected, json.dumps(case.needs))
         for event in ("push", "workflow_dispatch", "workflow_call"):
-            case = self.fixture(legacy=False, event=event)
+            case = self.fixture(policy_version=7, event=event)
+            self.assertTrue(json.loads(case.plan)["jobs"]["coverage"])
             case.needs["api"]["outputs"]["published_api_candidate_sha"] = case.tested
             self.assertEqual(
                 self.execute(case, "published"),
                 (0, f"candidate_sha={case.tested}\npublished_api_candidate_sha={case.tested}\n"),
             )
 
+    def test_coverage_pin_change_selects_coverage_even_with_prose(self) -> None:
+        for event in ("pull_request", "merge_group"):
+            for change in ("pin", "pin-and-prose"):
+                with self.subTest(event=event, change=change):
+                    case = self.fixture(policy_version=7, change=change, event=event)
+                    plan = json.loads(case.plan)
+                    self.assertEqual(plan["profile"], "full")
+                    self.assertIs(plan["jobs"]["coverage"], True)
+                    self.assertEqual(
+                        case.needs["validation-plan"]["outputs"]["select_coverage"], "true"
+                    )
+                    self.assertEqual(self.execute(case), (0, f"candidate_sha={case.tested}\n"))
+                    case.needs["coverage"] = {"result": "skipped", "outputs": {}}
+                    self.assertEqual(self.execute(case), (1, ""))
+
+    def test_coverage_failure_skip_or_forged_selection_refuses_aggregate_proof(self) -> None:
+        case = self.fixture(policy_version=7)
+        for result in ("failure", "cancelled", "skipped"):
+            with self.subTest(result=result):
+                case.needs["coverage"] = {"result": result, "outputs": {}}
+                self.assertEqual(self.execute(case), (1, ""))
+        plan = json.loads(case.plan)
+        plan["jobs"]["coverage"] = False
+        case.plan = json.dumps(plan)
+        case.needs["validation-plan"]["outputs"].update(plan=case.plan, select_coverage="false")
+        self.assertEqual(self.execute(case), (1, ""))
+
+        case = self.fixture(policy_version=7, change="prose")
+        case.needs["coverage"] = {
+            "result": "success",
+            "outputs": {"candidate_sha": case.tested},
+        }
+        self.assertEqual(self.execute(case), (1, ""))
+
+        case = self.fixture(policy_version=6)
+        case.needs["validation-plan"]["outputs"]["select_coverage"] = "true"
+        self.assertEqual(self.execute(case), (1, ""))
+
     def test_every_child_failure_missing_or_mixed_proof_refuses_before_canonical_gate(self) -> None:
-        for legacy in (True, False):
-            case = self.fixture(legacy=legacy)
+        for policy_version in (5, 6, 7):
+            case = self.fixture(policy_version=policy_version)
             baseline = copy.deepcopy(case.needs)
-            for name in ("rust", "api"):
+            selected = ("rust", "api", "coverage") if policy_version == 7 else ("rust", "api")
+            for name in selected:
                 for result in ("failure", "cancelled", "skipped", "unknown", None):
                     case.needs = copy.deepcopy(baseline)
                     case.needs[name]["result"] = result
@@ -1032,7 +1139,7 @@ for name in ("rust-quality", "msrv"):
                             json.dumps(case.needs),
                             case.tested,
                             "development",
-                            legacy=legacy,
+                            trusted_jobs=self.jobs(policy_version),
                         )
                 for receipt in ("", "b" * 40, None, True):
                     case.needs = copy.deepcopy(baseline)
@@ -1043,14 +1150,14 @@ for name in ("rust-quality", "msrv"):
                             json.dumps(case.needs),
                             case.tested,
                             "development",
-                            legacy=legacy,
+                            trusted_jobs=self.jobs(policy_version),
                         )
             case.needs = copy.deepcopy(baseline)
             self.assertNotEqual(self.execute(case, "published")[0], 0)
             self.assertEqual(self.execute(case, "unknown")[1], "")
 
     def test_original_plan_bytes_reach_actual_gate_and_invalid_api_never_reaches_it(self) -> None:
-        case = self.fixture(legacy=True)
+        case = self.fixture(policy_version=5)
         case.plan = " \n" + case.plan + "\n "
         case.needs["validation-plan"]["outputs"]["plan"] = case.plan
         output = self.directory / "delegated-output"
@@ -1082,7 +1189,7 @@ for name in ("rust-quality", "msrv"):
         self.assertEqual(command[command.index("--plan-json") + 1], case.plan)
         self.assertEqual(
             json.loads(command[command.index("--needs-json") + 1]),
-            {name: value for name, value in case.needs.items() if name != "api"},
+            {name: value for name, value in case.needs.items() if name not in {"api", "coverage"}},
         )
         output.unlink()
         case.needs["api"]["result"] = "cancelled"
@@ -1101,15 +1208,23 @@ for name in ("rust-quality", "msrv"):
         )
 
     def test_raw_inventory_plan_identity_selections_and_serialization_are_closed(self) -> None:
-        case = self.fixture(legacy=True)
+        case = self.fixture(policy_version=5)
         baseline = copy.deepcopy(case.needs)
         for missing in baseline:
             needs = {name: value for name, value in baseline.items() if name != missing}
             with self.assertRaises(ValueError):
-                self.proof(case.plan, json.dumps(needs), case.tested, "development", legacy=True)
+                self.proof(
+                    case.plan,
+                    json.dumps(needs),
+                    case.tested,
+                    "development",
+                    trusted_jobs=self.jobs(5),
+                )
         needs = {**baseline, "unexpected": {"result": "success", "outputs": {}}}
         with self.assertRaises(ValueError):
-            self.proof(case.plan, json.dumps(needs), case.tested, "development", legacy=True)
+            self.proof(
+                case.plan, json.dumps(needs), case.tested, "development", trusted_jobs=self.jobs(5)
+            )
         for key, value in (
             ("tested_sha", "b" * 40),
             ("repository", "attacker/repo"),
@@ -1122,23 +1237,27 @@ for name in ("rust-quality", "msrv"):
                     json.dumps(baseline),
                     case.tested,
                     "development",
-                    legacy=True,
+                    trusted_jobs=self.jobs(5),
                 )
         # Same parsed plan but different original bytes cannot silently replace the plan output.
         with self.assertRaises(ValueError):
             self.proof(
-                " " + case.plan, json.dumps(baseline), case.tested, "development", legacy=True
+                " " + case.plan,
+                json.dumps(baseline),
+                case.tested,
+                "development",
+                trusted_jobs=self.jobs(5),
             )
         case.needs["documentation"]["result"] = "failure"
         self.assertEqual(self.execute(case)[1], "")  # Real canonical gate refuses after API proof.
 
     def test_trusted_blob_hash_custody_and_initial_contract_cannot_be_substituted(self) -> None:
-        case = self.fixture(legacy=True)
+        case = self.fixture(policy_version=5)
         old = case.config.read_bytes()
         case.config.write_bytes((ROOT / "scripts/validation-policy.json").read_bytes())
         self.assertEqual(
             self.execute(case)[1], ""
-        )  # Known P6 in P5 worktree is still not B's blob.
+        )  # Known P7 in P5 worktree is still not the trusted blob.
         case.config.write_bytes(old + b"\n")
         self.assertNotEqual(self.execute(case)[0], 0)
         for mutation in ("filtered", "missing-quality", "wrong-repository", "wrong-schema"):

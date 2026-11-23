@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exact Kubernetes P5/P6 compatibility into the unchanged canonical gate."""
+"""Bind Rust and API proofs across exact trusted Kubernetes policy revisions."""
 
 from __future__ import annotations
 
@@ -17,8 +17,10 @@ REPOSITORY = "Strukturpiloten/kubernetes-lens"
 POLICY_PATH = "scripts/validation-policy.json"
 P5 = "09bb7a6a9dffb8a4cb478901fcdb936fde9e6c78143161a7f66a9d1f64cb250f"
 P6 = "571f587e7fa1682fc73bce768eaca2888ea54f52e95e734a977ebfcc23ae4ee7"
-LEGACY_JOBS = ("rust", "msrv", "dependencies", "documentation", "lockfile-release-age")
-JOBS = ("rust", "api", *LEGACY_JOBS[1:])
+P7 = "82b8d9bf5192e0d46a4ac5a24113343700c298edc0d44622664a2bb4f64854f4"
+COMMON_JOBS = ("msrv", "dependencies", "documentation", "lockfile-release-age")
+JOBS = ("rust", "api", "coverage", *COMMON_JOBS)
+POLICY_JOBS = {P5: ("rust", *COMMON_JOBS), P6: ("rust", "api", *COMMON_JOBS), P7: JOBS}
 RAW_NEEDS = {"validation-plan", *JOBS}
 SHA = re.compile(r"[a-f0-9]{40}\Z")
 LIMIT = 256 * 1024
@@ -60,7 +62,7 @@ def git(root: Path, *arguments: str) -> bytes:
     return result.stdout
 
 
-def trusted_policy(config: Path, policy_sha: str) -> bool:
+def trusted_policy(config: Path, policy_sha: str) -> tuple[str, ...]:
     require(SHA.fullmatch(policy_sha) is not None, "invalid trusted policy SHA")
     require(not config.is_symlink(), "trusted policy must be a regular tracked file")
     config = config.resolve(strict=True)
@@ -83,25 +85,25 @@ def trusted_policy(config: Path, policy_sha: str) -> bool:
     content = git(root, "show", f"{policy_sha}:{POLICY_PATH}")
     require(config.read_bytes() == content, "trusted policy working bytes differ from its Git blob")
     digest = hashlib.sha256(content).hexdigest()
-    require(digest in {P5, P6}, "unknown trusted policy; coordinated review required")
+    require(digest in POLICY_JOBS, "unknown trusted policy; coordinated review required")
     policy = metadata(content.decode(), "trusted policy")
     require(
         type(policy.get("schema")) is int and policy["schema"] == 2,
         "unsupported trusted policy schema",
     )
     require(policy.get("repository") == REPOSITORY, "trusted policy repository mismatch")
-    legacy = digest == P5
+    jobs = POLICY_JOBS[digest]
     require(
-        policy.get("jobs") == list(LEGACY_JOBS if legacy else JOBS),
+        policy.get("jobs") == list(jobs),
         "trusted policy inventory mismatch",
     )
-    return legacy
+    return jobs
 
 
 def joint_proof(
-    plan_json: str, needs_json: str, tested: str, purpose: str, *, legacy: bool
+    plan_json: str, needs_json: str, tested: str, purpose: str, *, trusted_jobs: tuple[str, ...]
 ) -> tuple[str, bool]:
-    """Validate actual child outcomes before removing only the old policy's extra API row."""
+    """Verify each child before projecting needs into the original trusted plan."""
     require(SHA.fullmatch(tested) is not None, "invalid tested candidate")
     require(purpose in {"development", "published"}, "unknown API purpose")
     plan = metadata(plan_json, "validation plan")
@@ -111,13 +113,12 @@ def joint_proof(
     )
     jobs = mapping(plan.get("jobs"), "plan jobs")
     require(
-        set(jobs) == set(LEGACY_JOBS if legacy else JOBS)
-        and all(type(value) is bool for value in jobs.values()),
+        set(jobs) == set(trusted_jobs) and all(type(value) is bool for value in jobs.values()),
         "invalid plan selections",
     )
-    require(legacy or jobs["api"] == jobs["rust"], "API and quality selections must agree")
+    require(jobs.get("api", jobs["rust"]) == jobs["rust"], "API and quality selections must agree")
     needs = metadata(needs_json, "raw needs")
-    require(set(needs) == RAW_NEEDS, "raw aggregate must contain the exact seven dependencies")
+    require(set(needs) == RAW_NEEDS, "raw aggregate must contain the exact workflow dependencies")
     for name, value in needs.items():
         outcome = mapping(value, f"{name} outcome")
         require(set(outcome) == {"result", "outputs"}, f"invalid {name} outcome fields")
@@ -146,10 +147,11 @@ def joint_proof(
             outputs.get("select_" + job.replace("-", "_")) == str(selected).lower(),
             "validation plan selector mismatch",
         )
-    if legacy:
-        require(outputs.get("select_api", "") == "", "P5 has no independent API selector")
-    selected = jobs["rust"] is True
-    for name in ("rust", "api"):
+    for name in set(JOBS) - jobs.keys():
+        require(outputs.get(f"select_{name}", "") == "", f"unexpected {name} selector")
+    for name in ("rust", "api", "coverage"):
+        # P5 included API in rust. Pre-coverage policies have no coverage task.
+        selected = jobs.get(name, name == "api" and jobs["rust"]) is True
         outcome = mapping(needs[name], f"{name} outcome")
         child = mapping(outcome["outputs"], f"{name} outputs")
         allowed = (
@@ -168,12 +170,17 @@ def joint_proof(
         "published_api_candidate_sha", ""
     )
     if purpose == "published":
-        require(selected and published == tested, "published purpose lacks actual API proof")
+        require(
+            jobs["rust"] is True and published == tested, "published purpose lacks actual API proof"
+        )
     else:
         require(published == "", "development cannot carry published API proof")
-    if legacy:
-        projected = {name: outcome for name, outcome in needs.items() if name != "api"}
-        require(set(projected) == {"validation-plan", *LEGACY_JOBS}, "invalid legacy projection")
+    if trusted_jobs != JOBS:
+        projected = {
+            name: outcome
+            for name, outcome in needs.items()
+            if name == "validation-plan" or name in trusted_jobs
+        }
         return json.dumps(projected, separators=(",", ":")), purpose == "published"
     return needs_json, purpose == "published"
 
@@ -197,17 +204,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--github-output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        legacy = trusted_policy(args.config, args.policy_sha)
+        jobs = trusted_policy(args.config, args.policy_sha)
         require(
-            not legacy or args.event in {"pull_request", "merge_group"},
-            "P5 compatibility is only for outstanding exact PR/queue bases",
+            jobs == JOBS or args.event in {"pull_request", "merge_group"},
+            "historical compatibility is only for exact PR/queue bases",
         )
         require(
             os.environ.get("GITHUB_SHA") == args.tested_sha,
             "tested candidate does not match the actual workflow SHA",
         )
         needs, published = joint_proof(
-            args.plan_json, args.needs_json, args.tested_sha, args.api_purpose, legacy=legacy
+            args.plan_json, args.needs_json, args.tested_sha, args.api_purpose, trusted_jobs=jobs
         )
         command = [
             sys.executable,
@@ -231,12 +238,10 @@ def main(argv: list[str] | None = None) -> int:
             stream.write(result)
         return 0
     except (TransitionError, json.JSONDecodeError) as error:
-        print(f"API transition refused: {error}", file=sys.stderr)
+        print(f"CI proof refused: {error}", file=sys.stderr)
         return 1
     except (OSError, subprocess.SubprocessError) as error:
-        print(
-            f"API transition acquisition/validation failed: {type(error).__name__}", file=sys.stderr
-        )
+        print(f"CI proof acquisition/validation failed: {type(error).__name__}", file=sys.stderr)
         return 1
 
 

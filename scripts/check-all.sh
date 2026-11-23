@@ -28,7 +28,7 @@ fi
 msrv="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["rust-version"])')"
 rustup run "${msrv}" rustc --version > /dev/null
 node -e "require('node:fs').accessSync('.ci-tools/renovate/package.json')"
-current_step='format/lint'
+current_step='coverage tool preflight'
 report_failure() {
   local failed_status="$?"
   printf 'KubernetesLens complete validation failed in %s (exit %s).\n' \
@@ -36,12 +36,20 @@ report_failure() {
   exit "${failed_status}"
 }
 trap report_failure ERR
+coverage_selection="$(python3 scripts/shared-ci.py cargo-tools verify --repository-root . --package cargo-llvm-cov --require-candidate)"
+coverage_channel="$(python3 -c 'import json, sys; print(json.load(sys.stdin)["rust_channel"])' <<< "${coverage_selection}")"
+current_step='format/lint'
 bash scripts/format-lint.sh "${mode}"
 for phase in rust msrv dependencies documentation; do
   current_step="${phase}"
   printf '\nComplete validation phase: %s\n' "${phase}"
   bash scripts/run-checks.sh "${phase}"
 done
+current_step='coverage'
+printf '\nComplete validation phase: %s\n' "${current_step}"
+automation_revision="$(python3 -c 'import json; print(json.load(open(".github/automation.json"))["revision"])')"
+RUSTUP_TOOLCHAIN="${coverage_channel}" python3 scripts/shared-ci.py run --event local --task coverage \
+  --automation-sha "${automation_revision}" --report-json target/coverage-task.json
 current_step='api-development'
 printf '\nComplete validation phase: %s\n' "${current_step}"
 python3 scripts/shared-ci.py run --event local --task api-development --report-json target/api-development-task.json

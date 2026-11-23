@@ -44,6 +44,7 @@ jobs:
       profile: ${{ steps.plan.outputs.profile }}
       select_rust: ${{ steps.plan.outputs.select_rust }}
       select_api: ${{ steps.plan.outputs.select_api }}
+      select_coverage: ${{ steps.plan.outputs.select_coverage }}
       select_msrv: ${{ steps.plan.outputs.select_msrv }}
       select_dependencies: ${{ steps.plan.outputs.select_dependencies }}
       select_documentation: ${{ steps.plan.outputs.select_documentation }}
@@ -118,6 +119,19 @@ jobs:
       api_purpose: ${{ inputs.api_purpose || 'development' }}
       initial_api_contract: true
       release_type: ""
+
+  coverage:
+    name: Rust coverage
+    needs: validation-plan
+    if: needs.validation-plan.outputs.select_coverage == 'true'
+    uses: Strukturpiloten/boxferry/.github/workflows/shared-rust-ci.yml@cf3578f47416e1b27b770fe4a81918844fb2d58b # automation-v1 interface v1
+    with:
+      candidate_sha: ${{ github.sha }}
+      automation_sha: cf3578f47416e1b27b770fe4a81918844fb2d58b
+      policy_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+      config_path: scripts/validation-policy.json
+      task: coverage
+      require_configured_task: true
 
   msrv:
     name: Minimum supported Rust
@@ -222,7 +236,17 @@ jobs:
   pr-gate:
     name: Required CI
     if: always()
-    needs: [validation-plan, rust, api, msrv, dependencies, documentation, lockfile-release-age]
+    needs:
+      [
+        validation-plan,
+        rust,
+        api,
+        coverage,
+        msrv,
+        dependencies,
+        documentation,
+        lockfile-release-age,
+      ]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
@@ -255,7 +279,7 @@ jobs:
         run: test "$(git -C _automation rev-parse HEAD)" = "${AUTOMATION_SHA}"
       - name: Install locked shared Python tooling
         uses: ./_automation/.github/actions/shared-python
-      - name: Require joint API proof and every selected check
+      - name: Require exact Rust and API proofs and every selected check
         id: gate
         timeout-minutes: 5
         env:

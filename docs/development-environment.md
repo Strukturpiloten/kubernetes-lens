@@ -1,9 +1,9 @@
 # Development environment
 
 Use the existing BoxFerry development container and its mounted KubernetesLens sibling checkout.
-This repository intentionally has no standalone `.devcontainer`, installer, feature lock, Kubernetes
-tool matrix or duplicated file-quality inventory. BoxFerry owns the workspace container and pins;
-its tooling setup does not make this library depend on BoxFerry product crates.
+BoxFerry owns the workspace container, installer, feature lock, Kubernetes tool matrix and
+file-quality inventory. KubernetesLens declares its coverage tool in
+`scripts/cargo-llvm-cov.version`.
 
 The bootstrap CI checks out the immutable BoxFerry revision recorded in [parity](bootstrap-parity.md)
 and provisions only repository-check tools from that canonical inventory. No separate image build
@@ -38,3 +38,7 @@ Use `python3 scripts/validation-plan.py run-local` for feedback, never as public
 
 The complete gate requires MSRV 1.98.1 already installed; a missing toolchain fails preflight.
 It accepts only worktree-local CARGO_TARGET_DIR. Keep build artifacts, caches and local graphs ignored.
+Coverage requires the `llvm-tools-preview` rustup component for the configured Rust channel
+and the exact Cargo subcommand declared in `scripts/cargo-llvm-cov.version`. The local gate verifies
+the active tool. The hosted job installs and verifies the candidate's declaration through the
+shared Cargo tool installer.
