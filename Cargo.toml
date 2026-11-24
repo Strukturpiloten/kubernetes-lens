@@ -49,7 +49,7 @@ base64 = { version = "=0.22.1", default-features = false }
 jiff-tzdb = { version = "=1.0.0", default-features = false }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["raw_value"] }
-yaml-rust2 = { version = "=0.13.1", default-features = false }
+yaml-rust2 = { version = "=0.13.2", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "=0.2.191"
