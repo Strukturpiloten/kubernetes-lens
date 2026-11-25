@@ -23,6 +23,11 @@ separate obligations. See [ADR 0071](decisions/0071-bounded-owned-retirement-evi
 
 The documentation phase also runs actual Prettier against the production file-check script
 with conflicting workspace configurations and fail-closed owning-config controls.
+It also executes the selected markdownlint-cli2, rejects unrelated PATH formatters,
+preserves explicit ignores, and checks dirty-input/lint failure statuses. The ordinary
+test copies the production launcher and real consumer automation manifest. Before producer
+admission only, `KUBERNETES_LENS_TEST_SHARED_CI` can select an explicitly labeled development
+fixture launcher; results from that override are not immutable-source admission evidence.
 
 Rust check, Clippy, test, doctest, Rustdoc, MSRV, cargo-deny, and local package validation run against
 the locked package. Offline native unit/integration tests and doctests verify the delivered

@@ -6,22 +6,37 @@ recorded once in `.github/automation.json`; executed workflows and Renovate pres
 it. See [ADR 0102](decisions/0102-shared-workflow-adoption.md) and the
 [shared guide](https://github.com/Strukturpiloten/boxferry/blob/main/docs/automation.md).
 
-| Contract                                   | Canonical definition                | KubernetesLens exception                                                                                       |
-| ------------------------------------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Rust quality and minimum version           | BoxFerry shared Rust workflow       | Policy retains every existing alias, warning-denying Rustdoc, and package validation; minimum comes from Cargo |
-| Rust source coverage                       | BoxFerry shared Rust workflow       | Candidate tool declaration plus trusted commands and ratchet                                                   |
-| Dependency/license policy                  | BoxFerry shared dependency workflow | All features remain checked                                                                                    |
-| Change planning and required gate          | BoxFerry locked Python package      | Repository policy owns job membership and documentation roots                                                  |
-| Python automation                          | Shared uv, Ruff, ty and lockfile    | Local pyproject config covers automation entrypoints; native fixture controls retain independent source tests  |
-| Development tools and Kubernetes inventory | BoxFerry development container      | Six check tools use canonical integrity records; no second tool inventory or Kubernetes installer              |
-| Renovate                                   | Shared common and Rust presets      | Exact local OCI/FCOS extractors and native dependency groups remain                                            |
-| Release validation                         | Shared exact-candidate release gate | Unpublished package; explicit protected publication follows ADR 0105                                           |
-| Native qualification                       | KubernetesLens fixture/VM contracts | No cluster, VM, or conformance execution in ordinary CI                                                        |
+| Contract                                   | Canonical definition                 | KubernetesLens exception                                                                                                                    |
+| ------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust quality and minimum version           | BoxFerry shared Rust workflow        | Policy retains every existing alias, warning-denying Rustdoc, and package validation; minimum comes from Cargo                              |
+| Rust source coverage                       | BoxFerry shared Rust workflow        | Candidate tool declaration plus trusted commands and ratchet                                                                                |
+| Dependency/license policy                  | BoxFerry shared dependency workflow  | All features remain checked                                                                                                                 |
+| Change planning and required gate          | BoxFerry locked Python package       | Repository policy owns job membership and documentation roots                                                                               |
+| Python automation                          | Shared uv, Ruff, ty and lockfile     | Local pyproject config covers automation entrypoints; native fixture controls retain independent source tests                               |
+| Prettier and Markdown lint                 | Shared locked npm graph and launcher | Local, prose/full hosted and manual/release documentation tasks call the same consumer file-check script with explicit owning configuration |
+| Development tools and Kubernetes inventory | BoxFerry development container       | Six check tools use canonical integrity records; no second tool inventory or Kubernetes installer                                           |
+| Renovate                                   | Shared common and Rust presets       | Exact local OCI/FCOS extractors and native dependency groups remain                                                                         |
+| Release validation                         | Shared exact-candidate release gate  | Unpublished package; explicit protected publication follows ADR 0105                                                                        |
+| Native qualification                       | KubernetesLens fixture/VM contracts  | No cluster, VM, or conformance execution in ordinary CI                                                                                     |
 
 Pure prose runs file/link checks and dependency admission without Rust builds, native fixture
 suites, or Renovate OCI extraction. Executable/unknown changes and full events preserve complete
 validation. PR and merge-queue selection uses trusted base policy; only planned skips are valid.
 The local pre-publication gate and main/manual/release checks remain complete.
+
+Formatter migration #123 starts at consumer commit
+`280808e9bc739113e1cc193bd1300ffd83088b4e`. Local `check-files.sh`, `format-lint.sh`,
+`check-all.sh`, the policy's prose/full documentation tasks and hosted `setup-ci-tools.sh`
+now use the selected shared acquisition instead of PATH formatter discovery or a separate
+`.ci-tools/node` npm installation. The installer retains its six canonical binaries and
+Cargo-installed Zizmor. There is no consumer npm manifest, lock, image, or formatter Renovate
+extractor to remove; the existing grouped automation revision remains the only update owner.
+The interface-1 launcher is synchronized once for concurrent cold dispatch. The consumer
+selects the admitted BoxFerry #728 formatter provider through `.github/automation.json`
+and its grouped workflow and Renovate references. BoxFerry owns package versions and the
+npm lock; KubernetesLens retains its product tests, file lists, configuration and ignores.
+Development fixture checks are provisional and do not establish a hosted gate, image
+qualification, or completed fleet rollout under BoxFerry #723.
 
 Local phase commands and shared task lists execute the policy fixture suite once through
 `cargo ci-test`. Both retain default-feature policy-target build/link checks with
