@@ -31,11 +31,10 @@ print(matches[0])
 PY
 )"
 readonly zizmor_version
-mkdir -p "${install_root}/bin" "${install_root}/node"
+mkdir -p "${install_root}/bin"
 python3 "${canonical_tools}" --destination "${install_root}/bin" \
   --tools tombi shfmt shellcheck hadolint actionlint lychee
 # Zizmor remains the shared Cargo --locked pin, with registry/lockfile integrity.
 cargo install --locked --version "${zizmor_version}" --root "${install_root}" zizmor
-cp "${shared_root}/package.json" "${shared_root}/package-lock.json" "${install_root}/node/"
-npm ci --ignore-scripts --no-audit --no-fund --prefix "${install_root}/node"
-printf '%s\n' "${install_root}/bin" "${install_root}/node/node_modules/.bin" >> "${GITHUB_PATH}"
+python3 "${repository_root}/scripts/shared-ci.py" node-tool --cwd "${repository_root}" --install-only
+printf '%s\n' "${install_root}/bin" >> "${GITHUB_PATH}"

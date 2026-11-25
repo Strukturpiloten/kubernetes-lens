@@ -37,8 +37,12 @@ class SharedToolTests(unittest.TestCase):
         self.dockerfile.write_text("ARG ZIZMOR_VERSION=2.3.4\n")
         self.inventory = self.shared / "automation/tool-artifacts.json"
         self.inventory.write_text('{"schema": 1}\n')
-        for name in ("package.json", "package-lock.json"):
-            (self.shared / name).write_text("{}\n")
+        (self.repository / "scripts/shared-ci.py").write_text(
+            "import os, sys\n"
+            "with open(os.environ['MOCK_COMMANDS'], 'a') as log:\n"
+            "    log.write('shared-node ' + ' '.join(sys.argv[1:]) + '\\n')\n"
+            "raise SystemExit(13 if os.environ.get('MOCK_FAILURE') == 'node' else 0)\n"
+        )
         self.installer = self.shared / "automation/src/boxferry_ci/tooling.py"
         self.installer.write_text(
             "import json, os, sys\n"
@@ -104,15 +108,16 @@ class SharedToolTests(unittest.TestCase):
             commands[1],
             f"cargo install --locked --version 2.3.4 --root {self.repository / '.ci-tools'} zizmor",
         )
-        self.assertIn("npm ci --ignore-scripts --no-audit --no-fund", commands[2])
+        self.assertEqual(
+            commands[2], f"shared-node node-tool --cwd {self.repository} --install-only"
+        )
         self.assertEqual(len(commands), 3)
-        self.assertEqual((self.repository / ".ci-tools/node/package-lock.json").read_text(), "{}\n")
+        self.assertFalse((self.repository / ".ci-tools/node").exists())
         self.assertTrue(all((self.repository / ".ci-tools/bin" / name).is_file() for name in TOOLS))
         self.assertEqual(
             self.path_output.read_text().splitlines(),
             [
                 str(self.repository / ".ci-tools/bin"),
-                str(self.repository / ".ci-tools/node/node_modules/.bin"),
             ],
         )
 
@@ -151,8 +156,8 @@ class SharedToolTests(unittest.TestCase):
         self.assertEqual(len(self.log.read_text().splitlines()), 2)
         self.assertFalse(self.path_output.exists())
 
-    def test_npm_failure_prevents_path_export(self) -> None:
-        result = self.run_setup(MOCK_FAILURE="npm")
+    def test_shared_node_failure_prevents_path_export(self) -> None:
+        result = self.run_setup(MOCK_FAILURE="node")
         self.assertEqual(result.returncode, 13)
         self.assertEqual(len(self.log.read_text().splitlines()), 3)
         self.assertFalse(self.path_output.exists())

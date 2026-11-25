@@ -30,6 +30,19 @@ contacting a platform API. The actual-engine regression suite fails if RE2 is un
 contained package version/source image does not match the immutable pin. CI uses the same artifact.
 After source preparation the regression suite itself requires no registry or platform access.
 
+File checks acquire Prettier and markdownlint-cli2 through the same immutable automation
+revision as the other shared tasks. A prepared BoxFerry sibling or formatter on PATH is
+not required. Run individual commands from an ordinary checkout with
+`python3 scripts/shared-ci.py node-tool --cwd "$PWD" prettier --config "$PWD/.prettierrc.json" --ignore-path "$PWD/.prettierignore" --check README.md`
+or `python3 scripts/shared-ci.py node-tool --cwd "$PWD" markdownlint-cli2 --config "$PWD/.markdownlint.json" :README.md`.
+Initial acquisition requires Git, Python, Node/npm and network access; managed calls use
+the producer's locked npm graph under ignored `target/boxferry-node-tools/`. Other file
+tools still come from the shared development container or the hosted canonical installer.
+KubernetesLens owns no Dockerfile or image; the BoxFerry workspace image supplies the
+development environment. Image qualification belongs to that producer, including offline,
+read-only, non-root execution. The consumer keeps its explicit 100-column configuration,
+preserved prose, file lists, YAML markers, ignores and native checks unchanged.
+
 Run `cargo ci-check`, `cargo ci-clippy`, `cargo ci-test`, `cargo ci-doctest`, `cargo ci-doc`, and
 `cargo ci-policy` for focused work. The policy alias runs a Cargo integration harness that delegates the repository Python contracts.
 `./scripts/format-lint.sh --fix` formats/lints only and caps Clippy at two jobs unless

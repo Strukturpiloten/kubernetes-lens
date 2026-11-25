@@ -9,7 +9,7 @@ if [[ "$#" -gt 1 || ("${mode}" != '--fix' && "${mode}" != '--check') ]]; then
   printf 'Usage: %s [--check|--fix]\n' "$0" >&2
   exit 2
 fi
-for tool in actionlint cargo cargo-deny git lychee markdownlint-cli2 node prettier python3 realpath rustup shellcheck shfmt tombi zizmor; do
+for tool in actionlint cargo cargo-deny git lychee node python3 realpath rustup shellcheck shfmt tombi zizmor; do
   command -v "${tool}" > /dev/null || {
     printf 'Missing required tool %s; use the shared BoxFerry development environment.\n' "${tool}" >&2
     exit 2

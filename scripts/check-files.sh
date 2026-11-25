@@ -15,7 +15,14 @@ if [[ "${mode}" != "--check" && "${mode}" != "--fix" ]]; then
 fi
 readonly mode
 
-required_tools=(git hadolint markdownlint-cli2 prettier shellcheck shfmt tombi)
+for config in .prettierrc.json .prettierignore .markdownlint.json; do
+  if [[ ! -f "${repository_root}/${config}" ]]; then
+    printf 'Missing owning file-check configuration: %s\n' "${repository_root}/${config}" >&2
+    exit 2
+  fi
+done
+
+required_tools=(git hadolint python3 shellcheck shfmt tombi)
 missing_tools=()
 for tool in "${required_tools[@]}"; do
   if ! command -v "${tool}" > /dev/null 2>&1; then
@@ -98,12 +105,12 @@ check_yaml_document_markers() {
 
 if [[ "${mode}" == "--fix" ]]; then
   printf '\nFormat Markdown\n'
-  run prettier --config "${repository_root}/.prettierrc.json" --write --ignore-path .prettierignore --ignore-unknown "${markdown_files[@]}"
-  run markdownlint-cli2 --fix "${markdown_literals[@]}"
+  run python3 scripts/shared-ci.py node-tool --cwd "${repository_root}" prettier --config "${repository_root}/.prettierrc.json" --write --ignore-path "${repository_root}/.prettierignore" --ignore-unknown "${markdown_files[@]}"
+  run python3 scripts/shared-ci.py node-tool --cwd "${repository_root}" markdownlint-cli2 --config "${repository_root}/.markdownlint.json" --fix "${markdown_literals[@]}"
 
   if ((${#structured_files[@]} != 0)); then
     printf '\nFormat JSON and YAML\n'
-    run prettier --config "${repository_root}/.prettierrc.json" --write --ignore-path .prettierignore --ignore-unknown "${structured_files[@]}"
+    run python3 scripts/shared-ci.py node-tool --cwd "${repository_root}" prettier --config "${repository_root}/.prettierrc.json" --write --ignore-path "${repository_root}/.prettierignore" --ignore-unknown "${structured_files[@]}"
   fi
 
   if ((${#toml_files[@]} != 0)); then
@@ -118,14 +125,14 @@ if [[ "${mode}" == "--fix" ]]; then
 fi
 
 printf '\nLint Markdown\n'
-run markdownlint-cli2 "${markdown_literals[@]}"
+run python3 scripts/shared-ci.py node-tool --cwd "${repository_root}" markdownlint-cli2 --config "${repository_root}/.markdownlint.json" "${markdown_literals[@]}"
 
 printf '\nCheck Markdown formatting\n'
-run prettier --config "${repository_root}/.prettierrc.json" --check --ignore-path .prettierignore --ignore-unknown "${markdown_files[@]}"
+run python3 scripts/shared-ci.py node-tool --cwd "${repository_root}" prettier --config "${repository_root}/.prettierrc.json" --check --ignore-path "${repository_root}/.prettierignore" --ignore-unknown "${markdown_files[@]}"
 
 if ((${#structured_files[@]} != 0)); then
   printf '\nCheck JSON and YAML formatting and syntax\n'
-  run prettier --config "${repository_root}/.prettierrc.json" --check --ignore-path .prettierignore --ignore-unknown "${structured_files[@]}"
+  run python3 scripts/shared-ci.py node-tool --cwd "${repository_root}" prettier --config "${repository_root}/.prettierrc.json" --check --ignore-path "${repository_root}/.prettierignore" --ignore-unknown "${structured_files[@]}"
 fi
 
 if ((${#yaml_document_files[@]} != 0)); then
