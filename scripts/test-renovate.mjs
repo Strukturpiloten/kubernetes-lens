@@ -9,7 +9,49 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const manifest = JSON.parse(await fs.readFile(path.join(root, ".github/automation.json"), "utf8"));
+assert.match(manifest.revision, /^[a-f0-9]{40}$/, "shared automation must be immutable");
+const prepared = spawnSync(
+  "python3",
+  [
+    "-c",
+    [
+      "from pathlib import Path",
+      "import json, runpy, sys",
+      "root = Path(sys.argv[1])",
+      "launcher = runpy.run_path(str(root / 'scripts/prepare-renovate.py'))",
+      "with launcher['selected_project']() as project:",
+      "    presets = project.parent / 'renovate-presets'",
+      "    print(json.dumps({'pin': (project / 'renovate-runtime.json').read_text(),",
+      "        'presets': {name: json.loads((presets / (name + '.json')).read_text())",
+      "                    for name in ('common', 'rust')}}))",
+    ].join("\n"),
+    root,
+  ],
+  { encoding: "utf8", timeout: 180_000, maxBuffer: 1_048_576 },
+);
+assert.equal(prepared.status, 0, prepared.stderr || prepared.error?.message);
+const selectedSource = JSON.parse(prepared.stdout);
+const runtimePin = JSON.parse(selectedSource.pin);
+assert.deepEqual(Object.keys(runtimePin), ["image"]);
+const toolImage = runtimePin.image;
+const imageMatch = toolImage.match(
+  /^(ghcr\.io\/renovatebot\/renovate):([0-9]+\.[0-9]+\.[0-9]+)@(sha256:[a-f0-9]{64})$/,
+);
+assert(imageMatch, "producer runtime must declare an exact official version and digest");
+const [, toolName, toolVersion, toolDigest] = imageMatch;
+
 const renovateRoot = path.join(root, ".ci-tools/renovate");
+assert.equal(
+  (await fs.readFile(path.join(renovateRoot, "source-image.txt"), "utf8")).trim(),
+  toolImage,
+  "extracted runtime must record the same reviewed immutable OCI source",
+);
+const runtimePackage = JSON.parse(
+  await fs.readFile(path.join(renovateRoot, "package.json"), "utf8"),
+);
+assert.equal(runtimePackage.name, "renovate", "the extracted package must be Renovate");
+assert.equal(runtimePackage.version, toolVersion, "test runtime must match the exact Renovate pin");
 const require = createRequire(path.join(renovateRoot, "package.json"));
 const load = (name) => import(pathToFileURL(path.join(renovateRoot, "dist", name)));
 const { parse } = require("yaml");
@@ -29,20 +71,6 @@ const actions = await load("modules/manager/github-actions/extract.js");
 const rust = await load("modules/manager/rust-toolchain/extract.js");
 const cargo = await load("modules/manager/cargo/extract.js");
 const rawConfig = JSON.parse(await fs.readFile(path.join(root, ".github/renovate.json"), "utf8"));
-const toolImage = JSON.parse(
-  await fs.readFile(path.join(root, "scripts/renovate-tool.json"), "utf8"),
-).image;
-const toolVersion = toolImage.split(":")[1].split("@")[0];
-assert.equal(
-  (await fs.readFile(path.join(renovateRoot, "source-image.txt"), "utf8")).trim(),
-  toolImage,
-  "extracted runtime must record the same reviewed immutable OCI source",
-);
-assert.equal(
-  JSON.parse(await fs.readFile(path.join(renovateRoot, "package.json"), "utf8")).version,
-  toolVersion,
-  "test runtime must match the exact declared Renovate pin",
-);
 assert.equal(
   regexEngineStatus.type,
   "available",
@@ -69,36 +97,13 @@ function presetCacheKey(reference) {
     ? presetCacheKeys.buildCacheKey("preset", reference)
     : `preset:${reference}`;
 }
-const manifest = JSON.parse(await fs.readFile(path.join(root, ".github/automation.json"), "utf8"));
-assert.match(manifest.revision, /^[a-f0-9]{40}$/, "shared automation must be immutable");
-const prepared = spawnSync(
-  "python3",
-  [
-    "-c",
-    [
-      "from pathlib import Path",
-      "import runpy, sys",
-      "root = Path(sys.argv[1])",
-      "launcher = runpy.run_path(str(root / 'scripts/shared-ci.py'))",
-      "config = launcher['load_config'](root)",
-      "print(launcher['prepare_implementation'](root, config['revision']))",
-    ].join("\n"),
-    root,
-  ],
-  { encoding: "utf8", timeout: 180_000, maxBuffer: 1_048_576 },
-);
-assert.equal(prepared.status, 0, prepared.stderr || prepared.error?.message);
-const presetRoot = path.join(path.dirname(prepared.stdout.trim()), "renovate-presets");
 for (const reference of rawConfig.extends) {
   const match = reference.match(
     /^github>Strukturpiloten\/boxferry\/\/renovate-presets\/(common|rust)#([a-f0-9]{40})$/,
   );
   assert(match, "only reviewed immutable shared presets are accepted");
   assert.equal(match[2], manifest.revision, "preset and implementation must advance together");
-  cachePreset(
-    `preset:${reference}`,
-    JSON.parse(await fs.readFile(path.join(presetRoot, `${match[1]}.json`), "utf8")),
-  );
+  cachePreset(`preset:${reference}`, selectedSource.presets[match[1]]);
 }
 const validated = await validateConfig("repository", rawConfig);
 assert.deepEqual(
@@ -123,7 +128,9 @@ assert(
   "restricted manager list must enable custom.regex",
 );
 for (const manager of config.customManagers) {
-  for (const pattern of manager.matchStrings) regEx(pattern);
+  if (manager.customType === "regex") {
+    for (const pattern of manager.matchStrings) regEx(pattern);
+  }
   for (const pattern of manager.managerFilePatterns) {
     assert.equal(typeof pattern, "string");
     assert(pattern.length > 0);
@@ -132,13 +139,12 @@ for (const manager of config.customManagers) {
   }
 }
 
-const sharedManagerIndex = config.customManagers.findIndex((manager) =>
-  manager.matchStrings.some((pattern) => pattern.includes("currentValue=automation-v1")),
+const sharedManagerIndex = config.customManagers.findIndex(
+  (manager) =>
+    manager.customType === "regex" &&
+    manager.matchStrings.some((pattern) => pattern.includes("currentValue=automation-v1")),
 );
-const toolManagerIndex = config.customManagers.findIndex(
-  (manager) => manager.datasourceTemplate === "docker",
-);
-assert(sharedManagerIndex >= 0 && toolManagerIndex >= 0, "shared and image owners must exist");
+assert(sharedManagerIndex >= 0, "shared automation references must have an owner");
 const workflowFiles = (await fs.readdir(path.join(root, ".github/workflows")))
   .filter((f) => /\.ya?ml$/.test(f))
   .map((f) => `.github/workflows/${f}`);
@@ -147,7 +153,6 @@ const files = new Map(
     [
       ...workflowFiles,
       "scripts/cargo-llvm-cov.version",
-      "scripts/renovate-tool.json",
       "scripts/kind-vm-image.json",
       "rust-toolchain.toml",
       "Cargo.toml",
@@ -179,14 +184,21 @@ async function inventory(input = files, cfg = config) {
         out.push({ file, manager, dep, extraction: result });
       }
     }
-    if (cfg.enabledManagers.includes("custom.regex"))
-      for (const definition of cfg.customManagers) {
-        if (!definition.managerFilePatterns.some((pattern) => matchRegexOrGlob(file, pattern)))
-          continue;
-        const result = custom.extractPackageFile(content, file, definition);
-        for (const dep of result?.deps ?? [])
-          out.push({ file, manager: "custom.regex", dep, extraction: result, definition });
-      }
+    for (const definition of cfg.customManagers) {
+      const manager = `custom.${definition.customType}`;
+      if (
+        !cfg.enabledManagers.includes(manager) ||
+        !definition.managerFilePatterns.some((pattern) => matchRegexOrGlob(file, pattern))
+      )
+        continue;
+      const implementation =
+        definition.customType === "regex"
+          ? custom
+          : await load(`modules/manager/custom/${definition.customType}/index.js`);
+      const result = await implementation.extractPackageFile(content, file, definition);
+      for (const dep of result?.deps ?? [])
+        out.push({ file, manager, dep, extraction: result, definition });
+    }
   }
   return out;
 }
@@ -314,20 +326,6 @@ function expected(input = files) {
           datasource: "custom.fcos-qemu-x86_64-stable",
         }),
       );
-    } else if (file === "scripts/renovate-tool.json") {
-      const image = JSON.parse(text).image;
-      const match = image.match(
-        /^(ghcr\.io\/renovatebot\/renovate):([0-9.]+)@(sha256:[a-f0-9]{64})$/,
-      );
-      assert(match, "operational image must have one immutable version/digest pair");
-      out.push(
-        key(file, {
-          depName: match[1],
-          currentValue: match[2],
-          currentDigest: match[3],
-          datasource: "docker",
-        }),
-      );
     }
   }
   return out.sort();
@@ -350,6 +348,20 @@ function ownership(actual, expectedPins = expected()) {
 }
 const actual = await inventory();
 ownership(actual);
+const legacyRuntimePin = "scripts/renovate-tool.json";
+await assert.rejects(fs.access(path.join(root, legacyRuntimePin)), { code: "ENOENT" });
+assert.deepEqual(await inventory(new Map([[legacyRuntimePin, selectedSource.pin]])), []);
+assert(!actual.some((row) => row.dep.depName === toolName));
+
+const producerPin = "automation/renovate-runtime.json";
+const imageRows = await inventory(new Map([[producerPin, selectedSource.pin]]));
+assert.equal(imageRows.length, 1, "the producer's exact pin has one shared manager");
+const [imageRow] = imageRows;
+assert.equal(imageRow.manager, "custom.regex");
+assert.equal(imageRow.dep.datasource, "docker");
+assert.equal(imageRow.dep.depName, toolName);
+assert.equal(imageRow.dep.currentValue, toolVersion);
+assert.equal(imageRow.dep.currentDigest, toolDigest);
 const coverageFile = "scripts/cargo-llvm-cov.version";
 const coverageRows = actual.filter((row) => row.dep.depName === "cargo-llvm-cov");
 assert.equal(coverageRows.length, 1, "actual manager extraction must find one coverage pin");
@@ -437,6 +449,25 @@ const withoutCustom = structuredClone(config);
 withoutCustom.enabledManagers = withoutCustom.enabledManagers.filter((m) => m !== "custom.regex");
 const missingCustom = await inventory(files, withoutCustom);
 assert.throws(() => ownership(missingCustom));
+const jsonataFile = "test-custom-manager.json";
+const jsonataInput = new Map([
+  [jsonataFile, '{"packages":[{"name":"fixture/dep","version":"1.2.3"}]}'],
+]);
+const withJsonata = structuredClone(config);
+withJsonata.customManagers.push({
+  customType: "jsonata",
+  fileFormat: "json",
+  managerFilePatterns: [jsonataFile],
+  matchStrings: ['packages.{"depName": name, "currentValue": version}'],
+  datasourceTemplate: "github-tags",
+});
+assert.deepEqual(await inventory(jsonataInput, withJsonata), []);
+withJsonata.enabledManagers.push("custom.jsonata");
+const jsonataRows = await inventory(jsonataInput, withJsonata);
+assert.deepEqual(
+  jsonataRows.map(({ manager, dep }) => [manager, dep.depName, dep.currentValue, dep.datasource]),
+  [["custom.jsonata", "fixture/dep", "1.2.3", "github-tags"]],
+);
 assert.throws(() => ownership([...actual, actual.find((r) => r.manager === "custom.regex")]));
 assert.throws(() =>
   ownership([
@@ -479,7 +510,9 @@ assert.deepEqual(
   "historical evidence and nested upstream pins must not auto-advance",
 );
 assert(
-  !config.customManagers.some((m) => m.matchStrings.some((s) => /1\\\.20|checksum|FROM /.test(s))),
+  !config.customManagers.some(
+    (m) => m.customType === "regex" && m.matchStrings.some((s) => /1\\\.20|checksum|FROM /.test(s)),
+  ),
   "future compatibility anchors and upstream checksums are not local custom-manager pins",
 );
 
@@ -709,12 +742,13 @@ try {
   const absentRenderer = rendererOriginal.replace(/^nix =.*\n/m, "");
   await fs.writeFile(path.join(scratch, rendererRow.file), absentRenderer);
   assert.equal(await doAutoReplace(rendererUpgrade, absentRenderer, false), absentRenderer);
-  const imageRow = actual.find((row) => row.dep.datasource === "docker");
-  const originalImage = files.get(imageRow.file);
+  const originalImage = selectedSource.pin;
+  const [toolMajor, toolMinor, toolPatch] = toolVersion.split(".");
+  const nextToolVersion = `${toolMajor}.${toolMinor}.${Number(toolPatch) + 1}`;
   await fs.mkdir(path.join(scratch, path.dirname(imageRow.file)), {
     recursive: true,
   });
-  for (const newValue of [toolVersion, "44.139.1"]) {
+  for (const newValue of [toolVersion, nextToolVersion]) {
     await fs.writeFile(path.join(scratch, imageRow.file), originalImage);
     const newDigest = "sha256:" + "a".repeat(64);
     const updated = await doAutoReplace(
@@ -726,15 +760,12 @@ try {
         depIndex: 0,
         newValue,
         newDigest,
+        ...imageRow.definition,
       },
       originalImage,
       false,
     );
-    const after = custom.extractPackageFile(
-      updated,
-      imageRow.file,
-      config.customManagers[toolManagerIndex],
-    );
+    const after = custom.extractPackageFile(updated, imageRow.file, imageRow.definition);
     assert.equal(
       after.deps[0].currentValue,
       newValue,
@@ -875,9 +906,10 @@ for (const updateType of ["major", "minor", "patch", "pin", "digest", "pinDigest
   });
   assertAutomatic(compiler);
   assert.equal(compiler.groupName, "Rust toolchain");
-  for (const row of actual.filter((row) =>
-    ["github-digest", "github-runners", "docker"].includes(row.dep.datasource),
-  )) {
+  for (const row of [
+    ...actual.filter((row) => ["github-digest", "github-runners"].includes(row.dep.datasource)),
+    imageRow,
+  ]) {
     const result = await policy({
       ...row.dep,
       manager: row.manager,
@@ -892,10 +924,20 @@ for (const updateType of ["major", "minor", "patch", "pin", "digest", "pinDigest
       row.dep.datasource === "github-digest"
         ? "Shared BoxFerry automation"
         : row.dep.datasource === "docker"
-          ? "Operational test tools"
+          ? "Renovate native test runtime"
           : "GitHub-hosted runners",
     );
-    if (row.dep.datasource === "docker") assert.equal(result.pinDigests, true);
+    if (row === imageRow) {
+      assert.equal(result.pinDigests, true);
+      assert.equal(result.minimumReleaseAgeBehaviour, "timestamp-optional");
+      const movedImage = await policy({
+        ...row.dep,
+        manager: row.manager,
+        packageFile: "another/renovate-runtime.json",
+        updateType,
+      });
+      assert.notEqual(movedImage.minimumReleaseAgeBehaviour, "timestamp-optional");
+    }
   }
 }
 for (const name of [
@@ -1092,8 +1134,9 @@ for (const manager of config.customManagers)
 assert.equal(BigInt(liveFacts.theorem.aggregate_upper), 2n ** 48n);
 assert(BigInt(liveFacts.theorem.aggregate_upper) < 32767n * 9999999999n);
 
-const vmManager = config.customManagers.find((m) =>
-  m.managerFilePatterns.includes("/^scripts/kind-vm-image\\.json$/"),
+const vmManager = config.customManagers.find(
+  (m) =>
+    m.customType === "regex" && m.managerFilePatterns.includes("/^scripts/kind-vm-image\\.json$/"),
 );
 assert(vmManager, "VM image must have exactly one exact-path owner");
 const vmRows = actual.filter((r) => r.file === vmFile);

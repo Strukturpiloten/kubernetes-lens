@@ -205,7 +205,7 @@ jobs:
         run: uv run --locked --project _automation/automation ty check
       - name: Extract the immutable official Renovate runtime with its actual RE2 engine
         if: needs.validation-plan.outputs.profile != 'prose'
-        run: bash scripts/install-renovate-tool.sh
+        run: python3 scripts/prepare-renovate.py --engine docker
       - name: Run selected documentation checks from trusted policy
         env:
           TASK: ${{ needs.validation-plan.outputs.profile == 'prose' && 'documentation-prose' || 'documentation' }}

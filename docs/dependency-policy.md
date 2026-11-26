@@ -23,16 +23,16 @@ dependencies. Software publication remains a separate maintainer decision.
 
 ## Sole owners
 
-| Declaration                                      | Renovate owner                                                    |
-| ------------------------------------------------ | ----------------------------------------------------------------- |
-| Cargo dependencies and Cargo.lock                | Native Cargo manager                                              |
-| Normal Rust toolchain                            | Native rust-toolchain manager                                     |
-| Action/workflow SHAs and hosted runners          | Native github-actions manager                                     |
-| Shared implementation, manifest, and preset SHAs | Shared exact-path custom managers                                 |
-| Official Renovate OCI version and index digest   | Repository custom manager                                         |
-| Qualified Fedora CoreOS QEMU image               | Exact-path routine updates disabled; integrity extractor retained |
-| Candidate Cargo coverage tool                    | Exact-path shared crate manager                                   |
-| Python and downloaded check-tool integrity       | BoxFerry shared automation inventory                              |
+| Declaration                                      | Renovate owner                                                       |
+| ------------------------------------------------ | -------------------------------------------------------------------- |
+| Cargo dependencies and Cargo.lock                | Native Cargo manager                                                 |
+| Normal Rust toolchain                            | Native rust-toolchain manager                                        |
+| Action/workflow SHAs and hosted runners          | Native github-actions manager                                        |
+| Shared implementation, manifest, and preset SHAs | Shared exact-path custom managers                                    |
+| Official Renovate OCI version and index digest   | BoxFerry's exact-path manager for `automation/renovate-runtime.json` |
+| Qualified Fedora CoreOS QEMU image               | Exact-path routine updates disabled; integrity extractor retained    |
+| Candidate Cargo coverage tool                    | Exact-path shared crate manager                                      |
+| Python and downloaded check-tool integrity       | BoxFerry shared automation inventory                                 |
 
 Every shared adoption reference advances atomically in one Renovate group. Executed pins remain
 full immutable SHAs; `automation-v1` is discovery only. The initial infrastructure pin comment

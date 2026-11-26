@@ -143,11 +143,10 @@ class GateTests(unittest.TestCase):
             self.assertEqual(self.run_script("check-all.sh", *arguments).returncode, 2)
             self.assertEqual(self.commands(), [])
 
-    def test_missing_msrv_or_renovate_cannot_become_a_success(self) -> None:
-        for failure in ("rustup run 1.98.1", "node -e"):
-            result = self.run_script("check-all.sh", "--check", GATE_TEST_FAILURE=failure)
-            self.assertEqual(result.returncode, 17)
-            self.assertFalse(any(line.startswith("bash ") for line in self.commands()))
+    def test_missing_msrv_cannot_become_a_success(self) -> None:
+        result = self.run_script("check-all.sh", "--check", GATE_TEST_FAILURE="rustup run 1.98.1")
+        self.assertEqual(result.returncode, 17)
+        self.assertFalse(any(line.startswith("bash ") for line in self.commands()))
 
     def test_local_preflight_and_msrv_phase_follow_manifest(self) -> None:
         for minimum in ("1.98.1", "1.99.0"):
@@ -217,7 +216,6 @@ class GateTests(unittest.TestCase):
             ".github/workflows/dependency-eligibility.yml",
             ".github/automation.json",
             "scripts/release-policy.json",
-            "scripts/renovate-tool.json",
             "LICENSE",
             "scripts/test-repository-policy.py",
         ]
@@ -277,6 +275,10 @@ class GateTests(unittest.TestCase):
                 )
                 self.assertNotIn("python3 scripts/test-repository-policy.py", commands)
                 self.assertIn("python3 scripts/test-check-all.py", commands)
+                self.assertLess(
+                    commands.index("python3 scripts/prepare-renovate.py --engine podman"),
+                    commands.index("node scripts/test-renovate.mjs"),
+                )
                 self.assertIn("node scripts/test-renovate.mjs", commands)
 
     def test_compile_only_policy_commands_do_not_execute_python(self) -> None:
@@ -429,6 +431,11 @@ class GateTests(unittest.TestCase):
             (
                 "documentation",
                 "python3 scripts/test-compatibility-ledger.py",
+                "node scripts/test-renovate.mjs",
+            ),
+            (
+                "documentation",
+                "python3 scripts/prepare-renovate.py --engine podman",
                 "node scripts/test-renovate.mjs",
             ),
         ):

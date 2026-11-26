@@ -25,6 +25,27 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parent.parent
 BOOTSTRAP = runpy.run_path(str(ROOT / "scripts/shared-ci.py"))
 LOAD_CONFIG = cast(Callable[[Path], dict[str, object]], BOOTSTRAP["load_config"])
+PREPARE = cast(Callable[[Path, str], Path], BOOTSTRAP["prepare_implementation"])
+VALIDATE_CACHE = cast(Callable[[Path], None], BOOTSTRAP["validate_cache"])
+AUTOMATION_CACHE = Path("target/boxferry-automation")
+
+
+def prepare_fixture_source(root: Path, revision: str, *, seed: Path = ROOT) -> Path:
+    """Verify and export the pin in a fixture that owns its source for its whole lifetime."""
+    # The launcher publishes the object store by rename and then only reads it. Its
+    # exported tree is replaced on each dispatch and must never seed a fixture.
+    cache = seed / AUTOMATION_CACHE
+    for entry in (cache.parent, cache):
+        if entry.is_symlink() or (entry.exists() and not entry.is_dir()):
+            raise BOOTSTRAP["BootstrapError"](
+                "shared automation cache path must be a real directory"
+            )
+    objects = cache / f"{revision}.git"
+    if objects.exists() or objects.is_symlink():
+        VALIDATE_CACHE(objects)
+        (root / AUTOMATION_CACHE).mkdir(parents=True)
+        shutil.copytree(objects, root / AUTOMATION_CACHE / objects.name, symlinks=True)
+    return PREPARE(root, revision)
 
 
 def validate_policy_execution_contract(
@@ -337,14 +358,13 @@ class SharedAutomationTests(unittest.TestCase):
                     return archive.read_bytes()
                 return revision if arguments[0] == "rev-parse" else ""
 
-            prepare = cast(Callable[[Path, str], Path], BOOTSTRAP["prepare_implementation"])
             with patch.dict(
-                cast(FunctionType, prepare).__globals__,
+                cast(FunctionType, PREPARE).__globals__,
                 validate_cache=lambda _: None,
                 run_git=git_response,
             ):
                 for _ in range(2):
-                    project = prepare(root, revision)
+                    project = PREPARE(root, revision)
                     data_path = project.parent / ".devcontainer/Dockerfile"
                     self.assertEqual(data_path.read_bytes(), metadata)
                     self.assertEqual(data_path.stat().st_mode & 0o777, 0o644)
@@ -675,14 +695,14 @@ class TransitionCase:
 
 
 class ApiTransitionTests(unittest.TestCase):
-    project: ClassVar[Path]
+    source_root: ClassVar[Path]
     source: ClassVar[str]
 
     @classmethod
     def setUpClass(cls) -> None:
         cls.source = str(LOAD_CONFIG(ROOT)["revision"])
-        prepare = cast(Callable[[Path, str], Path], BOOTSTRAP["prepare_implementation"])
-        cls.project = prepare(ROOT, cls.source)
+        cls.source_root = Path(cls.enterClassContext(tempfile.TemporaryDirectory()))
+        prepare_fixture_source(cls.source_root, cls.source)
 
     def setUp(self) -> None:
         self.bridge = runpy.run_path(str(ROOT / "scripts/ci-api-transition.py"))
@@ -690,6 +710,26 @@ class ApiTransitionTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.directory = Path(self.temporary.name)
+
+    def test_oversized_warm_seed_is_rejected_before_copy(self) -> None:
+        seed = self.directory / "seed"
+        selected = prepare_fixture_source(seed, self.source, seed=self.source_root)
+        objects = seed / AUTOMATION_CACHE / f"{self.source}.git"
+        size = sum(path.stat().st_size for path in objects.rglob("*") if path.is_file())
+        extra = objects / "over-budget"
+        extra.write_bytes(b"x")
+        rejected = self.directory / "rejected"
+        with patch.dict(cast(FunctionType, PREPARE).__globals__, MAX_CACHE_BYTES=size):
+            with patch.object(
+                shutil, "copytree", side_effect=AssertionError("oversized seed copy started")
+            ) as copytree:
+                with self.assertRaisesRegex(ValueError, "object cache exceeds its size budget"):
+                    prepare_fixture_source(rejected, self.source, seed=seed)
+                copytree.assert_not_called()
+            self.assertFalse(rejected.exists())
+            extra.unlink()
+            project = prepare_fixture_source(self.directory / "valid", self.source, seed=seed)
+        self.assertEqual((project / "uv.lock").read_bytes(), (selected / "uv.lock").read_bytes())
 
     @staticmethod
     def git(root: Path, *args: str) -> str:
@@ -727,7 +767,7 @@ class ApiTransitionTests(unittest.TestCase):
         )
 
     def environment(self, root: Path) -> dict[str, str]:
-        project = root / "target/boxferry-automation" / self.source / "automation"
+        project = root / AUTOMATION_CACHE / self.source / "automation"
         return {**os.environ, "PYTHONPATH": str(project / "src"), "PYTHONDONTWRITEBYTECODE": "1"}
 
     def jobs(self, policy_version: int) -> tuple[str, ...]:
@@ -768,14 +808,7 @@ class ApiTransitionTests(unittest.TestCase):
         trusted = root / "_policy"
         self.git(root, "clone", "--quiet", "--no-hardlinks", str(root), str(trusted))
         self.git(trusted, "checkout", "--quiet", "--detach", base)
-        cache = root / "target/boxferry-automation"
-        cache.mkdir(parents=True)
-        shutil.copytree(
-            ROOT / "target/boxferry-automation" / (self.source + ".git"),
-            cache / (self.source + ".git"),
-        )
-        prepare = cast(Callable[[Path, str], Path], BOOTSTRAP["prepare_implementation"])
-        prepare(root, self.source)
+        prepare_fixture_source(root, self.source, seed=self.source_root)
         case = TransitionCase(
             root, trusted / "scripts/validation-policy.json", base, tested, event, "", {}
         )
@@ -872,7 +905,7 @@ for name in ("rust-quality", "msrv", "coverage"):
         result = subprocess.run(
             [sys.executable, "-c", script, str(ROOT / "scripts/validation-policy.json")],
             cwd=ROOT,
-            env=self.environment(ROOT),
+            env=self.environment(self.source_root),
             capture_output=True,
             text=True,
             check=False,
@@ -1284,9 +1317,10 @@ for name in ("rust-quality", "msrv", "coverage"):
 
 class ReleaseAdoptionTests(unittest.TestCase):
     def test_actual_shared_producer_preparation_and_future_publish_contract(self) -> None:
-        bootstrap = runpy.run_path(str(ROOT / "scripts/shared-ci.py"))
-        revision = json.loads((ROOT / ".github/automation.json").read_text())["revision"]
-        project = bootstrap["prepare_implementation"](ROOT, revision)
+        revision = str(LOAD_CONFIG(ROOT)["revision"])
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        project = prepare_fixture_source(root, revision)
+        self.enterContext(patch.dict(sys.modules))
         with patch.object(sys, "path", [str(project / "src"), *sys.path]):
             from boxferry_ci import release
 

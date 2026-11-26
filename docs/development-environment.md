@@ -19,16 +19,20 @@ separate pending work in #62; ordinary CI, manual and release validation do not 
 
 Prerequisites: the shared Rust/file-quality tools, Git, Python 3.11 or newer (standard-library tomllib),
 Node from the shared environment and Podman for local operational artifact extraction.
-Run `KUBERNETES_LENS_CONTAINER_ENGINE=podman ./scripts/install-renovate-tool.sh` once. Hosted
-GitHub extraction uses its explicit Docker backend; no runtime fallback is selected.
+The complete local gate prepares the Renovate runtime during documentation checks. For a focused
+run, use `python3 scripts/prepare-renovate.py --engine podman` followed by
+`node scripts/test-renovate.mjs`. Hosted full documentation checks use the same launcher with
+`--engine docker`.
 The immutable shared bootstrap provisions checksum-verified uv and the locked project supplies
 its reviewed Python version and hashed Ruff/ty requirements. Six downloaded check binaries use
 the same canonical tool-artifacts inventory and installer; Zizmor retains its shared Cargo lock
 and Node tools use the shared npm lock. This repository declares no second tool-version inventory.
-It extracts the verified official OCI runtime into ignored `.ci-tools`, without starting Renovate or
-contacting a platform API. The actual-engine regression suite fails if RE2 is unavailable or if the
-contained package version/source image does not match the immutable pin. CI uses the same artifact.
-After source preparation the regression suite itself requires no registry or platform access.
+The launcher verifies the BoxFerry commit selected by `.github/automation.json` and runs its
+Renovate installer with its own OCI pin. The installer verifies the image digest, the contained
+package version and native RE2, then records the source image in ignored `.ci-tools/renovate`.
+It extracts from a stopped container and removes the container before installing the result.
+The regression suite checks the local runtime against the same pin and runs without registry or
+platform access once the shared source and runtime are available.
 
 File checks acquire Prettier and markdownlint-cli2 through the same immutable automation
 revision as the other shared tasks. A prepared BoxFerry sibling or formatter on PATH is

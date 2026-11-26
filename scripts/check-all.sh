@@ -27,7 +27,6 @@ if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
 fi
 msrv="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["rust-version"])')"
 rustup run "${msrv}" rustc --version > /dev/null
-node -e "require('node:fs').accessSync('.ci-tools/renovate/package.json')"
 current_step='coverage tool preflight'
 report_failure() {
   local failed_status="$?"

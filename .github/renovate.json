@@ -30,19 +30,6 @@
     {
       "customType": "regex",
       "description": [
-        "Update the immutable official Renovate operational-test image as one version/digest pair"
-      ],
-      "managerFilePatterns": ["/^scripts/renovate-tool\\.json$/"],
-      "matchStrings": [
-        "\"image\":\\s*\"(?<depName>ghcr\\.io/renovatebot/renovate):(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)@(?<currentDigest>sha256:[a-f0-9]{64})\""
-      ],
-      "datasourceTemplate": "docker",
-      "versioningTemplate": "docker",
-      "autoReplaceStringTemplate": "\"image\": \"{{{depName}}}:{{{newValue}}}@{{{newDigest}}}\""
-    },
-    {
-      "customType": "regex",
-      "description": [
         "One owned rootful-kind Fedora CoreOS QEMU base image; exact operational path only"
       ],
       "managerFilePatterns": ["/^scripts/kind-vm-image\\.json$/"],
@@ -69,15 +56,6 @@
       "matchDepTypes": ["uses-with"],
       "matchPackageNames": ["actions/node-versions"],
       "enabled": false
-    },
-    {
-      "description": [
-        "Keep operational tool-image tag/digest and actual-engine evidence with automated compatibility and integrity checks"
-      ],
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/renovatebot/renovate"],
-      "groupName": "Operational test tools",
-      "pinDigests": true
     },
     {
       "description": [

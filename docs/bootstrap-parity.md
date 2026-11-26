@@ -15,7 +15,7 @@ it. See [ADR 0102](decisions/0102-shared-workflow-adoption.md) and the
 | Python automation                          | Shared uv, Ruff, ty and lockfile     | Local pyproject config covers automation entrypoints; native fixture controls retain independent source tests                               |
 | Prettier and Markdown lint                 | Shared locked npm graph and launcher | Local, prose/full hosted and manual/release documentation tasks call the same consumer file-check script with explicit owning configuration |
 | Development tools and Kubernetes inventory | BoxFerry development container       | Six check tools use canonical integrity records; no second tool inventory or Kubernetes installer                                           |
-| Renovate                                   | Shared common and Rust presets       | Exact local OCI/FCOS extractors and native dependency groups remain                                                                         |
+| Renovate                                   | Shared presets and OCI runtime       | KubernetesLens owns native assertions, the exact FCOS extractor and native dependency groups                                                |
 | Release validation                         | Shared exact-candidate release gate  | Unpublished package; explicit protected publication follows ADR 0105                                                                        |
 | Native qualification                       | KubernetesLens fixture/VM contracts  | No cluster, VM, or conformance execution in ordinary CI                                                                                     |
 
@@ -37,6 +37,22 @@ and its grouped workflow and Renovate references. BoxFerry owns package versions
 npm lock; KubernetesLens retains its product tests, file lists, configuration and ignores.
 Development fixture checks are provisional and do not establish a hosted gate, image
 qualification, or completed fleet rollout under BoxFerry #723.
+
+The Renovate runtime migration in [#122](https://github.com/Strukturpiloten/kubernetes-lens/issues/122)
+starts from KubernetesLens `2b27d579a6ef0080b37f5a4f0924c6aa383fc03c` and uses the already
+selected BoxFerry `0aece357141870375bb872d5fd258a4e12961850`. The BoxFerry installer and
+`automation/renovate-runtime.json` supply the same 44.139.0 image and digest as the former local
+pin. The complete local gate and standalone documentation phase pass Podman explicitly. Full PR,
+merge-queue, main and manual documentation jobs pass Docker explicitly. Release validation calls
+the same CI workflow. Both engines install into checkout-local `.ci-tools/renovate`. The
+trusted documentation task list retains its original regression entry point. The real Renovate
+suite checks the producer's tag/digest replacement and registry observation rule alongside the
+consumer's own extraction, replacement and effective policy.
+
+On 2026-11-26, local Podman 6.2.0 extracted the pinned image into a checkout without a
+prepared runtime. The source marker matched the selected pin, the package reported 44.139.0,
+and the native suite passed extraction, replacement and effective-rule checks for 72 local pins.
+The acquisition left no stopped extraction container. Hosted evidence is pending.
 
 Local phase commands and shared task lists execute the policy fixture suite once through
 `cargo ci-test`. Both retain default-feature policy-target build/link checks with

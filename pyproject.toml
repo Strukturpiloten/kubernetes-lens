@@ -6,12 +6,14 @@ include = [
   "scripts/release-proof.py",
   "scripts/release-authorization.py",
   "scripts/shared-ci.py",
+  "scripts/prepare-renovate.py",
   "scripts/validation-plan.py",
   "scripts/ci-api-transition.py",
   "scripts/test-validation-plan.py",
   "scripts/test-shared-automation.py",
   "scripts/test-repository-policy.py",
   "scripts/test-check-all.py",
+  "scripts/test-renovate-tool.py",
   "scripts/test-ci-tools.py",
 ]
 
@@ -26,12 +28,14 @@ include = [
   "scripts/release-proof.py",
   "scripts/release-authorization.py",
   "scripts/shared-ci.py",
+  "scripts/prepare-renovate.py",
   "scripts/validation-plan.py",
   "scripts/ci-api-transition.py",
   "scripts/test-validation-plan.py",
   "scripts/test-shared-automation.py",
   "scripts/test-repository-policy.py",
   "scripts/test-check-all.py",
+  "scripts/test-renovate-tool.py",
   "scripts/test-ci-tools.py",
 ]
 
