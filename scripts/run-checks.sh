@@ -34,6 +34,7 @@ case "${1:-}" in
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-renovate-tool.py
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/compatibility-ledger.py
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-compatibility-ledger.py
+    python3 scripts/prepare-renovate.py --engine podman
     node scripts/test-renovate.mjs
     mapfile -d '' markdown_files < <(git ls-files --cached --others --exclude-standard -z -- '*.md')
     lychee --config lychee.toml --root-dir . --offline "${markdown_files[@]}"

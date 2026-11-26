@@ -10,6 +10,8 @@ its accepted adoption history is retained.
 BoxFerry owns the shared workflow implementation, Python tooling, and Renovate presets.
 KubernetesLens owns its native tests and validation policy; it gains no dependency on BoxFerry
 product crates. Consumers use immutable full commit SHAs and one atomic Renovate update group.
+The selected revision also owns the Renovate test runtime installer and its official OCI pin.
+KubernetesLens runs its own Renovate compatibility assertions with that runtime.
 Until the first infrastructure release exists, an honest automation interface comment accompanies
 these full-SHA pins. A branch is used only to discover updates and is never executed as a pin.
 

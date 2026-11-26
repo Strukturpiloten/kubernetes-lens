@@ -20,6 +20,8 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -244,18 +246,25 @@ def prepare_implementation(repository_root: Path, revision: str) -> Path:
     return destination / "automation"
 
 
+@contextmanager
+def locked_export(root: Path) -> Generator[int]:
+    """Hold custody of the verified export while preparing or consuming it."""
+    cache = root / "target/boxferry-automation"
+    for path in (root / "target", cache):
+        if path.is_symlink():
+            raise BootstrapError("shared automation cache must not follow symlinks")
+        path.mkdir(exist_ok=True)
+    descriptor = os.open(cache / "dispatch.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        yield descriptor
+
+
 def main(argv: list[str] | None = None) -> int:
     """Serialize export replacement and dispatch, including concurrent cold callers."""
     root = Path(__file__).resolve().parent.parent
-    cache = root / "target/boxferry-automation"
     try:
-        for path in (root / "target", cache):
-            if path.is_symlink():
-                raise BootstrapError("shared automation cache must not follow symlinks")
-            path.mkdir(exist_ok=True)
-        descriptor = os.open(cache / "dispatch.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-        with os.fdopen(descriptor, "w") as held:
-            fcntl.flock(held, fcntl.LOCK_EX)
+        with locked_export(root) as descriptor:
             return dispatch(argv, descriptor)
     except (BootstrapError, OSError) as error:
         print(f"Shared CI bootstrap failed: {error}", file=sys.stderr)

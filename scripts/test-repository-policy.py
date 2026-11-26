@@ -32,7 +32,6 @@ def snapshot() -> dict[str, str]:
         ".github/workflows/dependency-eligibility.yml",
         ".github/automation.json",
         "scripts/release-policy.json",
-        "scripts/renovate-tool.json",
         "LICENSE",
     ]
     return {name: (ROOT / name).read_text() for name in paths}
@@ -295,10 +294,7 @@ def validate(files: dict[str, str]) -> None:
         "  pull-requests: read",
         "  statuses: write",
     }
-    tool = json.loads(files["scripts/renovate-tool.json"])
-    assert re.fullmatch(
-        r"ghcr\.io/renovatebot/renovate:[0-9]+\.[0-9]+\.[0-9]+@sha256:[a-f0-9]{64}", tool["image"]
-    )
+    assert ci.count("run: python3 scripts/prepare-renovate.py --engine docker") == 1
 
 
 INVENTORY_FIXTURE_REVISION = "1" * 40
@@ -601,9 +597,15 @@ class RepositoryPolicyTests(unittest.TestCase):
                     ".github/workflows/dependency-eligibility.yml", "@" + revision, "@" + invalid
                 )
 
-    def test_fake_published_history_or_duplicate_inventory_fails(self) -> None:
+    def test_fake_published_history_fails(self) -> None:
         self.rejected("CHANGELOG.md", "## [Unreleased]", "## [Unreleased]\n\n## [0.1.0]")
-        self.rejected("scripts/renovate-tool.json", "@sha256:", "@sha256-invalid:")
+
+    def test_hosted_renovate_requires_docker(self) -> None:
+        self.rejected(
+            ".github/workflows/ci.yml",
+            "prepare-renovate.py --engine docker",
+            "prepare-renovate.py --engine podman",
+        )
 
 
 REQUIRED_OFFICIAL_FIXTURE_TEST_IDS = {
