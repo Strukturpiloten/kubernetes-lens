@@ -34,10 +34,10 @@ jobs:
     name: Complete exact-candidate release gate
     needs: validate
     if: always()
-    uses: Strukturpiloten/boxferry/.github/workflows/shared-release-validation.yml@0aece357141870375bb872d5fd258a4e12961850 # automation-v1 interface v1
+    uses: Strukturpiloten/boxferry/.github/workflows/shared-release-validation.yml@5c2ea1a8f0f4bcbd2636d99d47674188972400a9 # automation-v1 interface v1
     with:
       candidate_sha: ${{ github.sha }}
-      automation_sha: 0aece357141870375bb872d5fd258a4e12961850
+      automation_sha: 5c2ea1a8f0f4bcbd2636d99d47674188972400a9
       policy_sha: ${{ github.sha }}
       config_path: scripts/release-policy.json
       needs_json: ${{ toJSON(needs) }}
@@ -45,12 +45,12 @@ jobs:
   inventory:
     name: Validate single-crate inventory
     needs: release-gate
-    uses: Strukturpiloten/boxferry/.github/workflows/shared-release-inventory.yml@0aece357141870375bb872d5fd258a4e12961850 # automation-v1 interface v1
+    uses: Strukturpiloten/boxferry/.github/workflows/shared-release-inventory.yml@5c2ea1a8f0f4bcbd2636d99d47674188972400a9 # automation-v1 interface v1
     permissions:
       contents: read
     with:
       candidate_sha: ${{ github.sha }}
-      automation_sha: 0aece357141870375bb872d5fd258a4e12961850
+      automation_sha: 5c2ea1a8f0f4bcbd2636d99d47674188972400a9
       policy_sha: ${{ github.sha }}
       config_path: scripts/release-policy.json
       validation_sha: ${{ needs.release-gate.outputs.candidate_sha }}
@@ -76,7 +76,7 @@ jobs:
         with:
           repository: Strukturpiloten/boxferry
           # renovate: datasource=github-digest depName=Strukturpiloten/boxferry currentValue=automation-v1
-          ref: 0aece357141870375bb872d5fd258a4e12961850
+          ref: 5c2ea1a8f0f4bcbd2636d99d47674188972400a9
           path: _automation
           persist-credentials: false
       - uses: ./_automation/.github/actions/shared-python
@@ -87,7 +87,7 @@ jobs:
         uses: ./_automation/.github/actions/shared-crate-publish
         with:
           candidate-sha: ${{ github.sha }}
-          automation-sha: 0aece357141870375bb872d5fd258a4e12961850
+          automation-sha: 5c2ea1a8f0f4bcbd2636d99d47674188972400a9
           release-config: ${{ github.workspace }}/source/scripts/release-policy.json
           package: kubernetes-lens
           validation-sha: ${{ needs.release-gate.outputs.candidate_sha }}
@@ -98,7 +98,7 @@ jobs:
         working-directory: source
         env:
           CANDIDATE_SHA: ${{ github.sha }}
-          AUTOMATION_SHA: 0aece357141870375bb872d5fd258a4e12961850
+          AUTOMATION_SHA: 5c2ea1a8f0f4bcbd2636d99d47674188972400a9
           PUBLISHED_API_SHA: ${{ needs.release-gate.outputs.published_api_candidate_sha }}
         run: |
           set -euo pipefail
@@ -165,7 +165,7 @@ jobs:
         with:
           repository: Strukturpiloten/boxferry
           # renovate: datasource=github-digest depName=Strukturpiloten/boxferry currentValue=automation-v1
-          ref: 0aece357141870375bb872d5fd258a4e12961850
+          ref: 5c2ea1a8f0f4bcbd2636d99d47674188972400a9
           path: _automation
           persist-credentials: false
       - uses: ./_automation/.github/actions/shared-python
@@ -182,7 +182,7 @@ jobs:
         uses: ./_automation/.github/actions/shared-crate-publish
         with:
           candidate-sha: ${{ github.sha }}
-          automation-sha: 0aece357141870375bb872d5fd258a4e12961850
+          automation-sha: 5c2ea1a8f0f4bcbd2636d99d47674188972400a9
           release-config: ${{ github.workspace }}/source/scripts/release-policy.json
           package: kubernetes-lens
           validation-sha: ${{ needs.release-gate.outputs.candidate_sha }}
