@@ -57,4 +57,4 @@ nix = { version = "=0.32.0", features = ["ptrace", "process", "signal", "user", 
 rustix = { version = "=1.1.6", features = ["process", "net", "fs", "pipe"], optional = true }
 command-fds = { version = "=0.3.3", optional = true }
 close_fds = { version = "=0.3.2", optional = true }
-sha2 = { version = "=0.11.1", default-features = false, optional = true }
+sha2 = { version = "=0.11.2", default-features = false, optional = true }
